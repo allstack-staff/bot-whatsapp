@@ -1,0 +1,18 @@
+{
+  "name": "whatsapp-connect",
+  "version": "1.0.0",
+  "description": "",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "tsc && pm2 start ./dist/connect.js",
+    "stop": "pm2 stop all"
+  },
+  "keywords": [],
+  "author": "GkIgor",
+  "license": "ISC",
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.4.0",
+    "pm2": "^5.3.0"
+  }
+}
