@@ -1,7 +1,9 @@
 import { BaileysSocket } from '../types/BaileysSocket';
 
 const whitelist = [
-  /* uma whitelist de remoteJids, coloque os rjids desejados aqui */
+  "557798780834@s.whatsapp.net",
+  "556286268745@s.whatsapp.net",
+  "5511972137919@s.whatsapp.net"
 ]
 export const ban = async(socket: BaileysSocket, arJid: string, grJid: string, rJid: string, motivo: string) => {
 
