@@ -46,11 +46,6 @@ export async function bot() {
         : undefined;
 
       if (grouprJid) {
-        if (
-          grouprJid === "120363084400589228@g.us" ||
-          grouprJid === "120363029900825529@g.us" ||
-          grouprJid === "120363042733129991@g.us"
-        )
           await ban(
             socket,
             m.messages[0].key.participant!.trim(),
@@ -58,8 +53,7 @@ export async function bot() {
             usuario,
             motivo,
           );
-        else
-          await socket.sendMessage(grouprJid, { text: "Ops, grupo errado." });
+
       } else {
         !(await socket.sendMessage(m.messages[0].key.remoteJid!, {
           text: "estamos numa conversa pessoal.",
