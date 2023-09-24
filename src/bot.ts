@@ -53,7 +53,10 @@ export async function bot() {
             usuario,
             motivo,
           );
+<<<<<<< HEAD
 
+=======
+>>>>>>> b3cd4ef (modified somethings)
       } else {
         !(await socket.sendMessage(m.messages[0].key.remoteJid!, {
           text: "estamos numa conversa pessoal.",
