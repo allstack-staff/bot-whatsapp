@@ -1,22 +1,19 @@
 import { BaileysSocket } from '../types/BaileysSocket';
 
-const whitelist = [
-  "557798780834@s.whatsapp.net",
-  "556286268745@s.whatsapp.net",
-  "5511972137919@s.whatsapp.net"
-]
-export const ban = async(socket: BaileysSocket, arJid: string, grJid: string, rJid: string, motivo: string) => {
 
-  if (whitelist.includes(arJid)) {
+export const ban = async(socket: BaileysSocket, arJid: string, grJid: string, rJid: string, motivo: string) => {
+  const metadata = await socket.groupMetadata(grJid);
+  const admins = metadata.participants.filter(x => x.admin).map(x => x.id);
+  if (admins.includes(arJid)) {
   try {
-      if (whitelist.includes(rJid)) {
-        await socket.sendMessage(grJid, {text: "Um administrador não pode ser banido."});
+      if (arJid === rJid) {
+        await socket.sendMessage(grJid, { text: "Você não pode banir a si mesmo!"});
         return;
       }
     await socket.groupParticipantsUpdate(grJid, [rJid], 'remove');
     await socket.sendMessage(grJid, {text: `
-O usúario @${rJid.split('@')[0]} foi banido.
-Motivo: ${motivo}
+O usuário @${rJid.split('@')[0]} foi banido.
+Motivo:${motivo}
 `, mentions: [rJid]})
   } catch (e) {
     await socket.sendMessage(grJid, {text: `Erro interno do servidor: ${e}.`})

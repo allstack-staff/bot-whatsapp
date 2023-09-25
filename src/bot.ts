@@ -2,7 +2,9 @@ import { connect } from "./conn";
 import { hello } from "./commands/hello";
 import { rules } from "./commands/regras";
 import { ban } from "./commands/ban";
-
+import { black } from "./commands/black"; 
+import { makeadmin } from "./commands/makeadmin";
+import { defaultgpt } from "./commands/gpt";
 export async function bot() {
   const socket = await connect();
 
@@ -26,7 +28,27 @@ export async function bot() {
       ? m.messages[0].message?.conversation
       : m.messages[0].message?.extendedTextMessage?.text;
 
-    if (message && message.startsWith("$asb:regras")) {
+    if (message && message.startsWith("$asb:makeadmin")) {
+      const groupJid = m.messages[0].key.remoteJid!.endsWith("@g.us")
+      ? m.messages[0].key.remoteJid
+      : undefined;
+
+      if (groupJid) {
+        await makeadmin(socket, groupJid, m.messages[0].key.participant!);
+        } else {
+        await socket.sendMessage(m.messages[0].key.remoteJid!, { text: "Estamos em uma conversa pessoal."});
+      }
+  
+    } else if (message && message.startsWith("$asb:gpt")){
+
+      await defaultgpt(socket, m.messages[0].key.remoteJid!, m.messages[0],m.messages[0].key,  message.slice(9));
+    } else if (message && message.startsWith("$asb:bc")) {
+      try {
+       await black(socket, m.messages[0].key.remoteJid!, m.messages[0].key, m.messages[0], message.slice(15))
+      } catch(e) {
+        await socket.sendMessage(m.messages[0].key.remoteJid!, { text: `Erro interno: ${e}`})
+      }
+    } else if (message && message.startsWith("$asb:regras")) {
       await rules(socket, m.messages[0].key.remoteJid!);
     } else if (
       message &&
@@ -68,4 +90,10 @@ export async function bot() {
       );
     }
   });
+
+  socket.ev.on('group-participants.update', async ({id, participants, action}) => {
+    if (action === 'add') {
+      await rules(socket, id);
+    }
+  }) 
 }
