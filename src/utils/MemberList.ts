@@ -3,7 +3,7 @@ import fs from 'fs';
 
 /*
  *ATENÇÃO:
- * essa funcionalidade está em desenvolvimento e tem erros, por tanto, não é pra ser usada agora.
+ * essa funcionalidade está em desenvolvimento.
  *
  */
 
@@ -19,14 +19,16 @@ export class MemberList {
   constructor(file: string) {
     
     fs.readFile(file, 'utf-8', (err, buf) => {
+      setTimeout(() => {
       if (err) throw err;
       this.#list = buf.split("\n").filter(x => /\d+\@s\.whatsapp\.net/.test(x));
-    })
+    }, 500)
+    });
     this.#name = file;
   }
   
   get list() {
-    return this.#list ? Array.from(this.#list) : null;
+    return Array.from(this.#list)
   }
 
   get name() {
@@ -48,6 +50,20 @@ export class MemberList {
   }
 
   saveList(): void {
-    fs.writeFileSync(this.#name, this.#list.join("\n")); 
+    fs.writeFile(this.#name, this.#list.join("\n"), err => {
+      if (err) throw err;
+
+    }); 
+  }
+
+  replace(file: string): void {
+    fs.readFile(file, 'utf-8', (err, buf) => {
+      setTimeout(() => {
+        if (err) throw err;
+
+        this.#list = buf.split("\n").filter(x => /\d+\@s\.whatsapp\.net/.test(x));
+      }, 500);
+    })
+    this.#name = file;
   }
 }

@@ -15,7 +15,7 @@
   "dependencies": {
     "@types/node": "^20.6.5",
     "@whiskeysockets/baileys": "^6.4.1",
-    "asb-gpt": "github:https://github.com/allstack-staff/asb-gpt",
+    "asb-gpt": "file:../asb-gpt",
     "dotenv": "^16.3.1",
     "nodemon": "^3.0.1",
     "qrcode-terminal": "^0.12.0",
