@@ -133,7 +133,7 @@ export async function bot() {
       if (action === "add") {
         
         if (participants && blacklist.includes(participants[0])) {
-          await ban(socket, "557798780834@s.whatsapp.net", id, participants[0], "já foi banido.");
+          await ban(socket, socket.user!.id, id, participants[0], "já foi banido.");
         }
         
         await rules(socket, id);
