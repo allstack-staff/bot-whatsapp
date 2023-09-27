@@ -6,7 +6,8 @@
   "devDependencies": {},
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "run": "tsc && node dist/main.js",
+    "build": "tsc",
+    "start": "node dist/main.js",
     "dev": "ts-node src/main.ts"
   },
   "keywords": [],
