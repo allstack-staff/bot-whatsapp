@@ -1,12 +1,10 @@
-import fs from 'fs';
-
+import fs from "fs";
 
 /*
  *ATENÇÃO:
  * essa funcionalidade está em desenvolvimento.
  *
  */
-
 
 /*
  * Sistema de gestao de membros.
@@ -17,18 +15,15 @@ export class MemberList {
   #name!: string;
 
   constructor(file: string) {
-    
-    fs.readFile(file, 'utf-8', (err, buf) => {
-      setTimeout(() => {
-      if (err) throw err;
-      this.#list = buf.split("\n").filter(x => /\d+\@s\.whatsapp\.net/.test(x));
-    }, 500)
-    });
     this.#name = file;
+    this.#mount(file);
   }
-  
+
+  #mount(file: string): void {
+    this.#list = fs.readFileSync(file, 'utf8').split("\n").filter(x => /\d+\@s\.whatsapp\.net/.test(x));
+  }
   get list() {
-    return Array.from(this.#list)
+    return Array.from(this.#list);
   }
 
   get name() {
@@ -49,21 +44,12 @@ export class MemberList {
     return this.#list.pop();
   }
 
-  saveList(): void {
-    fs.writeFile(this.#name, this.#list.join("\n"), err => {
-      if (err) throw err;
-
-    }); 
+  saveMembersList(): void {
+    fs.writeFileSync(this.#name, this.#list.join("\n"));
   }
 
   replace(file: string): void {
-    fs.readFile(file, 'utf-8', (err, buf) => {
-      setTimeout(() => {
-        if (err) throw err;
-
-        this.#list = buf.split("\n").filter(x => /\d+\@s\.whatsapp\.net/.test(x));
-      }, 500);
-    })
+    this.#mount(file);
     this.#name = file;
   }
 }

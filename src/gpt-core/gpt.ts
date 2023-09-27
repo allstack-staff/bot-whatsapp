@@ -1,5 +1,5 @@
-import { GPT } from 'asb-gpt';
-import { GPTBot } from './GPTBot';
+import { GPT } from "asb-gpt";
+import { GPTBot } from "./GPTBot";
 
 export class Gpt implements GPTBot {
   gpt_instance: GPT;
@@ -9,12 +9,10 @@ export class Gpt implements GPTBot {
   }
 
   config(): void {
-    this.gpt_instance.setHistory(
-      {role: "system", content: "oi ChatGPT!"}
-    );
+    this.gpt_instance.setHistory({ role: "system", content: "oi ChatGPT!" });
   }
 
-  async send(text: string): Promise<{ role: string; content: string; }> {
-     return await this.gpt_instance.defaultRequestChat(text); 
+  async send(text: string): Promise<{ role: string; content: string }> {
+    return await this.gpt_instance.defaultRequestChat(text);
   }
 }

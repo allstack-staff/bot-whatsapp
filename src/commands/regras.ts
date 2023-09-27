@@ -1,4 +1,4 @@
-import { BaileysSocket } from '../types/BaileysSocket';
+import { BaileysSocket } from "../types/BaileysSocket";
 
 const regras = `
 Comunidade que aproxima devs experientes (chamados mentores) de menos experientes, para dicas e aprendizados.
@@ -17,10 +17,10 @@ REGRAS:
 3. SOMOS ISENTOS DE QUAISQUER AÇÕES DOS MEMBROS DESTA COMUNIDADE. TODA E QUALQUER AÇÃO, É DE RESPONSABILIDADE DO PRÓPRIO MEMBRO.
 `;
 
-export const rules = async(socket: BaileysSocket, rJid: string) => {
+export const rules = async (socket: BaileysSocket, rJid: string) => {
   if (rJid === "120363138200204540@g.us") {
-    await socket.sendMessage(rJid, {text: "Aqui não tem regras não rapaz."});
+    await socket.sendMessage(rJid, { text: "Aqui não tem regras não rapaz." });
     return;
   }
-  await socket.sendMessage(rJid, {text: regras});
-}
+  await socket.sendMessage(rJid, { text: regras });
+};
