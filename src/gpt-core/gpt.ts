@@ -10,11 +10,12 @@ export class Gpt implements GPTBot {
 
   config(): void {
     this.gpt_instance.setHistory(
-      {role: "system", content: "oi ChatGPT!"}
+      { role: "system", content: "oi ChatGPT!" }
     );
   }
 
   async send(text: string): Promise<{ role: string; content: string; }> {
-     return await this.gpt_instance.defaultRequestChat(text); 
+    return await this.gpt_instance.defaultRequestChat(text);
+
   }
 }
