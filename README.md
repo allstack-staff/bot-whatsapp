@@ -2,7 +2,10 @@
 
 Um bot de whatsapp que combina serviços administrativos e ChatGPT!
 
-TODO: mostrar as features
+tipos de comando:
+ - $asb : Responde com uma mensagem generica
+ - $asb::comando : comando acessivel apenas pra admins (veja a sessão comandos para vê-los)
+ - $asb:comando : comando acessivel pra todos.
 
 ## Instalando
 
@@ -19,8 +22,13 @@ Para configurar o projeto, siga os seguintes passos:
 
 1. Crie um arquivo `.env` no diretorio raiz do projeto, contendo uma chave da OpenAI:
     ```
-    API_KEY=A SUA CHAVE DA API
+    API_KEY=SUA CHAVE DA OPENAI
     ```
 
 2. Após iniciar o projeto, leia o qrcode que vai aparecer no terminal com o seu whatsapp.
+
+
+Outras seções:
+  1. [Comandos](./comandos.md)
+
 
