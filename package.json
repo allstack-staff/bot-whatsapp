@@ -3,10 +3,9 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
-  "devDependencies": {},
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "tsc",
+    "build": "tsc --build",
     "start": "node dist/main.js",
     "dev": "ts-node src/main.ts"
   },
@@ -14,13 +13,16 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@types/node": "^20.6.5",
     "@whiskeysockets/baileys": "^6.4.1",
     "asb-gpt": "file:../asb-gpt",
     "dotenv": "^16.3.1",
+    "qrcode-terminal": "^0.12.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.2.2",
+    "@types/node": "^20.6.5",
     "nodemon": "^3.0.1",
-    "qrcode-terminal": "^0.12.0",
     "ts-node": "^10.9.1",
-    "typescript": "^5.2.2"
+    "pm2": "^5.3.0"
   }
 }
