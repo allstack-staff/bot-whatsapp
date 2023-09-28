@@ -1,5 +1,6 @@
 import { BaileysSocket } from "../types/BaileysSocket";
 import { MemberList } from './internal/MemberList';
+import path from 'path';
 
 let instance: MemberList;
 
@@ -12,7 +13,7 @@ export const ban = async (
 ) => {
 
   if (!instance) {
-    instance = new MemberList("./internal/blacklist.txt");
+    instance = new MemberList(path.resolve(__dirname, "internal", "blacklist.txt"));
   }
 
   const metadata = await socket.groupMetadata(grJid);
