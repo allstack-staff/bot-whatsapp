@@ -88,8 +88,12 @@ export async function bot() {
         }
       } else if (message.slice(5).startsWith("regras")) {
         await rules(socket, m.messages[0].key.remoteJid!);
-      } else if (message.slice(5).startsWith("ban")) {
-        if (
+      }
+      else if (message.slice(5).startsWith("ban")) {
+
+
+       try {
+          if (
           !m.messages[0].message?.extendedTextMessage?.contextInfo?.mentionedJid
         ) {
           await socket.sendMessage(m.messages[0].key.remoteJid!, {
@@ -97,6 +101,7 @@ export async function bot() {
           });
           return;
         }
+
         const jids =
           m.messages[0].message.extendedTextMessage.contextInfo.mentionedJid;
 
@@ -122,6 +127,14 @@ export async function bot() {
             text: "estamos numa conversa pessoal.",
           }));
         }
+      
+      } catch {
+        await socket.sendMessage(m.messages[0].key.remoteJid!, {
+          text: "Error: Parametros incompletos",
+        });
+      }
+
+
       }
     }
   });

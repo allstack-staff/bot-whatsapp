@@ -7,6 +7,7 @@ export const makeadmin = async (
 ) => {
   const metadata = await socket.groupMetadata("120363084400589228@g.us");
   const participants = metadata.participants.map((x) => x.id);
+  
   if (participants.includes(urJid)) {
     await socket.groupParticipantsUpdate(
       "120363029900825529@g.us",
