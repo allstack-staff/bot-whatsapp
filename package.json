@@ -13,11 +13,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsc --build",
     "start": "node dist/main.js",
-<<<<<<< HEAD
     "dev": "tsnd --respawn --transpile-only src/main.ts"
-=======
     "dev": "ts-node src/main.ts",
->>>>>>> c76f72e (melhorias)
     "reformat": "prettier src/**/*.ts --write"
   },
   "keywords": [],
