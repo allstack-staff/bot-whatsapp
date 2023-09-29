@@ -100,6 +100,7 @@ export async function bot() {
       if (message.slice(6).startsWith("regras")) {
         await rules(socket, m.messages[0].key.remoteJid!);
 <<<<<<< HEAD
+<<<<<<< HEAD
       }
       else if (message.slice(5).startsWith("ban")) {
 
@@ -107,6 +108,8 @@ export async function bot() {
        try {
           if (
 =======
+=======
+>>>>>>> c76f72e (melhorias)
       } else if (message.slice(6).startsWith("ban")) {
         if (
 >>>>>>> c76f72e (melhorias)
@@ -152,6 +155,7 @@ export async function bot() {
           }));
         }
 <<<<<<< HEAD
+<<<<<<< HEAD
       
       } catch {
         await socket.sendMessage(m.messages[0].key.remoteJid!, {
@@ -161,11 +165,16 @@ export async function bot() {
 
 
 =======
+=======
+>>>>>>> c76f72e (melhorias)
       } else if (message.slice(6).startsWith("unban")) {
 
          if (m.messages[0].message?.extendedTextMessage?.contextInfo?.mentionedJid) {
          await unban(socket, lock, m.messages[0].key.participant!, m.messages[0].key.remoteJid!, m.messages[0].message.extendedTextMessage.contextInfo.mentionedJid[0]);
           }
+<<<<<<< HEAD
+>>>>>>> c76f72e (melhorias)
+=======
 >>>>>>> c76f72e (melhorias)
       }
     }
