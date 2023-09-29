@@ -1,0 +1,3 @@
+Changelog do codigo:
+  1. melhorado o suporta a lista de membros
+  2. adicionada a feature de blacklist

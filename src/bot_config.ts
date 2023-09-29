@@ -3,7 +3,9 @@ import { BlackClown } from "./gpt-core/blackclown";
 import { Gpt } from "./gpt-core/gpt";
 import { GPTBot } from "./gpt-core/GPTBot";
 require("dotenv").config();
-
+/*
+ * Configuração dos bots GPT
+ */
 export const blackclown = () => {
   const instance = new BlackClown(new GPT({ apikey: process.env.API_KEY }));
   instance.config();
