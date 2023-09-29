@@ -254,6 +254,14 @@
   resolved "https://registry.npmjs.org/@types/node/-/node-10.17.60.tgz"
   integrity sha512-F0KIgDJfy2nA3zMLmWGKxcH2ZVEtCZXHHdOQs2gSaQ27+lNeEfGxzkIw90aXswATX7AZ33tahPbzy6KAfUreVw==
 
+<<<<<<< HEAD
+=======
+"@types/node@^20.7.1":
+  version "20.7.1"
+  resolved "https://registry.yarnpkg.com/@types/node/-/node-20.7.1.tgz#06d732ead0bd5ad978ef0ea9cbdeb24dc8717514"
+  integrity sha512-LT+OIXpp2kj4E2S/p91BMe+VgGX2+lfO+XTpfXhh+bCk2LkQtHZSub8ewFBMGP5ClysPjTDFa4sMI8Q3n4T0wg==
+
+>>>>>>> c76f72e (melhorias)
 "@wasm-audio-decoders/common@9.0.1":
   version "9.0.1"
   resolved "https://registry.npmjs.org/@wasm-audio-decoders/common/-/common-9.0.1.tgz"
@@ -297,11 +305,14 @@
     uuid "^9.0.0"
     ws "^8.13.0"
 
+<<<<<<< HEAD
 abbrev@1:
   version "1.1.1"
   resolved "https://registry.npmjs.org/abbrev/-/abbrev-1.1.1.tgz"
   integrity sha512-nne9/IiQ/hzIhY6pdDnbBtz7DjPTKrY00P/zvPSm5pOFkl6xuGrGnXn/VtTNNfNtAfZ9/1RtehkszU9qcTii0Q==
 
+=======
+>>>>>>> c76f72e (melhorias)
 acorn-walk@^8.1.1:
   version "8.2.0"
   resolved "https://registry.npmjs.org/acorn-walk/-/acorn-walk-8.2.0.tgz"
@@ -312,6 +323,7 @@ acorn@^8.4.1:
   resolved "https://registry.npmjs.org/acorn/-/acorn-8.10.0.tgz"
   integrity sha512-F0SAmZ8iUtS//m8DmCTA0jlh6TDKkHQyK6xc6V4KDTyZKA9dnvX9/3sRTVQrWm79glUAZbnmmNcdYwUIHWVybw==
 
+<<<<<<< HEAD
 agent-base@^7.0.2, agent-base@^7.1.0:
   version "7.1.0"
   resolved "https://registry.npmjs.org/agent-base/-/agent-base-7.1.0.tgz"
@@ -351,11 +363,14 @@ anymatch@~3.1.2:
     normalize-path "^3.0.0"
     picomatch "^2.0.4"
 
+=======
+>>>>>>> c76f72e (melhorias)
 arg@^4.1.0:
   version "4.1.3"
   resolved "https://registry.npmjs.org/arg/-/arg-4.1.3.tgz"
   integrity sha512-58S9QDqG0Xx27YwPSt9fJxivjYl432YCwfDMfZ+71RAqUrZef7LrKQZ3LHLOwCS4FLNBplP533Zx895SeOCHvA==
 
+<<<<<<< HEAD
 argparse@^1.0.7:
   version "1.0.10"
   resolved "https://registry.npmjs.org/argparse/-/argparse-1.0.10.tgz"
@@ -366,6 +381,11 @@ argparse@^1.0.7:
 asb-gpt@^1.0.7:
   version "1.0.7"
   resolved "https://registry.npmjs.org/asb-gpt/-/asb-gpt-1.0.7.tgz"
+=======
+asb-gpt@^1.0.7:
+  version "1.0.7"
+  resolved "https://registry.yarnpkg.com/asb-gpt/-/asb-gpt-1.0.7.tgz#fffa45dfca5e29680908dc1615b6bf893e89a686"
+>>>>>>> c76f72e (melhorias)
   integrity sha512-o5UVhZBASZdjBl2nLqTvrbqHKIivRmkelWf786FvHNmTYrPwUYkt8E2qCXMnUc7DWjkaHBnZs3wY3HYqmu58uA==
   dependencies:
     axios "^1.5.0"
@@ -439,6 +459,7 @@ audio-type@^2.2.0:
   resolved "https://registry.npmjs.org/audio-type/-/audio-type-2.2.1.tgz"
   integrity sha512-En9AY6EG1qYqEy5L/quryzbA4akBpJrnBZNxeKTqGHC2xT9Qc4aZ8b7CcbOMFTTc/MGdoNyp+SN4zInZNKxMYA==
 
+<<<<<<< HEAD
 axios@^0.21.0:
   version "0.21.4"
   resolved "https://registry.npmjs.org/axios/-/axios-0.21.4.tgz"
@@ -447,6 +468,9 @@ axios@^0.21.0:
     follow-redirects "^1.14.0"
 
 axios@^1.3.3, axios@^1.5.0:
+=======
+axios@^1.3.3:
+>>>>>>> c76f72e (melhorias)
   version "1.5.0"
   resolved "https://registry.npmjs.org/axios/-/axios-1.5.0.tgz"
   integrity sha512-D4DdjDo5CY50Qms0qGQTTw6Q44jl7zRwY7bthds06pUGfChBCTcQs+N743eFWGEd6pRTMd6A+I87aWyFV5wiZQ==
@@ -455,6 +479,7 @@ axios@^1.3.3, axios@^1.5.0:
     form-data "^4.0.0"
     proxy-from-env "^1.1.0"
 
+<<<<<<< HEAD
 balanced-match@^1.0.0:
   version "1.0.2"
   resolved "https://registry.npmjs.org/balanced-match/-/balanced-match-1.0.2.tgz"
@@ -494,6 +519,16 @@ braces@~3.0.2:
   integrity sha512-b8um+L1RzM3WDSzvhm6gIz1yfTbBt6YTlcEKAvsmqCZZFw46z626lVj9j1yEPW33H5H+lBQpZMP1k8l+78Ha0A==
   dependencies:
     fill-range "^7.0.1"
+=======
+axios@^1.5.0:
+  version "1.5.1"
+  resolved "https://registry.yarnpkg.com/axios/-/axios-1.5.1.tgz#11fbaa11fc35f431193a9564109c88c1f27b585f"
+  integrity sha512-Q28iYCWzNHjAm+yEAot5QaAMxhMghWLFVf7rRdwhUI+c2jix2DUXjAHXVi+s1ibs3mjPO/cCgbA++3BjD0vP/A==
+  dependencies:
+    follow-redirects "^1.15.0"
+    form-data "^4.0.0"
+    proxy-from-env "^1.1.0"
+>>>>>>> c76f72e (melhorias)
 
 buffer-from@^1.0.0:
   version "1.1.2"
@@ -508,6 +543,7 @@ cache-manager@^5.2.2:
     lodash.clonedeep "^4.5.0"
     lru-cache "^9.1.2"
 
+<<<<<<< HEAD
 chalk@~3.0.0, chalk@3.0.0:
   version "3.0.0"
   resolved "https://registry.npmjs.org/chalk/-/chalk-3.0.0.tgz"
@@ -543,6 +579,8 @@ cli-tableau@^2.0.0:
   dependencies:
     chalk "3.0.0"
 
+=======
+>>>>>>> c76f72e (melhorias)
 clone@2.x:
   version "2.1.2"
   resolved "https://registry.npmjs.org/clone/-/clone-2.1.2.tgz"
@@ -572,6 +610,7 @@ combined-stream@^1.0.8:
   dependencies:
     delayed-stream "~1.0.0"
 
+<<<<<<< HEAD
 commander@2.15.1:
   version "2.15.1"
   resolved "https://registry.npmjs.org/commander/-/commander-2.15.1.tgz"
@@ -582,6 +621,8 @@ concat-map@0.0.1:
   resolved "https://registry.npmjs.org/concat-map/-/concat-map-0.0.1.tgz"
   integrity sha512-/Srv4dswyQNBfohGpz9o6Yb3Gz3SrUDqBH5rTuhGR7ahtlbYKnVxw2bCFMRljaA7EXHaXZ8wsHdodFvbkhKmqg==
 
+=======
+>>>>>>> c76f72e (melhorias)
 content-type@^1.0.5:
   version "1.0.5"
   resolved "https://registry.npmjs.org/content-type/-/content-type-1.0.5.tgz"
@@ -615,6 +656,7 @@ curve25519-js@^0.0.4:
   resolved "https://registry.npmjs.org/curve25519-js/-/curve25519-js-0.0.4.tgz"
   integrity sha512-axn2UMEnkhyDUPWOwVKBMVIzSQy2ejH2xRGy1wq81dqRwApXfIzfbE3hIX0ZRFBIihf/KDqK158DLwESu4AK1w==
 
+<<<<<<< HEAD
 data-uri-to-buffer@^5.0.1:
   version "5.0.1"
   resolved "https://registry.npmjs.org/data-uri-to-buffer/-/data-uri-to-buffer-5.0.1.tgz"
@@ -645,6 +687,9 @@ debug@^3.2.7:
     ms "^2.1.1"
 
 debug@^4.1.1, debug@^4.3.1, debug@^4.3.4, debug@~4.3.1, debug@4:
+=======
+debug@^4.3.4:
+>>>>>>> c76f72e (melhorias)
   version "4.3.4"
   resolved "https://registry.npmjs.org/debug/-/debug-4.3.4.tgz"
   integrity sha512-PRWFHuSU3eDtQJPvnNY7Jcket1j0t5OuOsFzPPzsekD52Zl8qUfFIPEiswXqIvHWGVHOgX+7G/vCNNhehwxfkQ==
@@ -776,6 +821,7 @@ file-type@^16.5.4:
     strtok3 "^6.2.4"
     token-types "^4.1.1"
 
+<<<<<<< HEAD
 fill-range@^7.0.1:
   version "7.0.1"
   resolved "https://registry.npmjs.org/fill-range/-/fill-range-7.0.1.tgz"
@@ -784,6 +830,9 @@ fill-range@^7.0.1:
     to-regex-range "^5.0.1"
 
 follow-redirects@^1.14.0, follow-redirects@^1.15.0:
+=======
+follow-redirects@^1.15.0:
+>>>>>>> c76f72e (melhorias)
   version "1.15.3"
   resolved "https://registry.npmjs.org/follow-redirects/-/follow-redirects-1.15.3.tgz"
   integrity sha512-1VzOtuEM8pC9SFU1E+8KfTjZyMztRsgEfwQl44z8A25uy13jSzTj6dyK2Df52iV0vgHCfBwLhDWevLn95w5v6Q==
@@ -797,6 +846,7 @@ form-data@^4.0.0:
     combined-stream "^1.0.8"
     mime-types "^2.1.12"
 
+<<<<<<< HEAD
 fs-extra@^8.1.0:
   version "8.1.0"
   resolved "https://registry.npmjs.org/fs-extra/-/fs-extra-8.1.0.tgz"
@@ -816,11 +866,14 @@ function-bind@^1.1.1:
   resolved "https://registry.npmjs.org/function-bind/-/function-bind-1.1.1.tgz"
   integrity sha512-yIovAzMX49sF8Yl58fSCWJ5svSLuaibPxXQJFLmBObTuCr0Mf1KiPopGM9NiFjiYBCbfaa2Fh6breQ6ANVTI0A==
 
+=======
+>>>>>>> c76f72e (melhorias)
 futoin-hkdf@^1.5.1:
   version "1.5.3"
   resolved "https://registry.npmjs.org/futoin-hkdf/-/futoin-hkdf-1.5.3.tgz"
   integrity sha512-SewY5KdMpaoCeh7jachEWFsh1nNlaDjNHZXWqL5IGwtpEYHTgkr2+AMCgNwKWkcc0wpSYrZfR7he4WdmHFtDxQ==
 
+<<<<<<< HEAD
 get-uri@^6.0.1:
   version "6.0.1"
   resolved "https://registry.npmjs.org/get-uri/-/get-uri-6.0.1.tgz"
@@ -905,11 +958,14 @@ iconv-lite@^0.4.4:
   dependencies:
     safer-buffer ">= 2.1.2 < 3"
 
+=======
+>>>>>>> c76f72e (melhorias)
 ieee754@^1.2.1:
   version "1.2.1"
   resolved "https://registry.npmjs.org/ieee754/-/ieee754-1.2.1.tgz"
   integrity sha512-dcyqhDvX1C46lXZcVqCpK+FtMRQVdIMN6/Df5js2zouUsqG7I6sFxitIC+7KYK29KdXOLHdu9zL4sFnoVQnqaA==
 
+<<<<<<< HEAD
 ignore-by-default@^1.0.1:
   version "1.0.1"
   resolved "https://registry.npmjs.org/ignore-by-default/-/ignore-by-default-1.0.1.tgz"
@@ -924,10 +980,14 @@ inflight@^1.0.4:
     wrappy "1"
 
 inherits@^2.0.3, inherits@2:
+=======
+inherits@^2.0.3:
+>>>>>>> c76f72e (melhorias)
   version "2.0.4"
   resolved "https://registry.npmjs.org/inherits/-/inherits-2.0.4.tgz"
   integrity sha512-k/vGaX4/Yla3WzyMCvTQOXYeIHvqOKtnqBduzTHpzpQZzAskKMhZ2K+EnBiSM9zGSoIFeMpXKxa4dYeZIQqewQ==
 
+<<<<<<< HEAD
 ini@^1.3.5:
   version "1.3.8"
   resolved "https://registry.npmjs.org/ini/-/ini-1.3.8.tgz"
@@ -1001,6 +1061,8 @@ lazy@~1.0.11:
   resolved "https://registry.npmjs.org/lazy/-/lazy-1.0.11.tgz"
   integrity sha512-Y+CjUfLmIpoUCCRl0ub4smrYtGGr5AOa2AKOaWelGHOGz33X/Y/KizefGqbkwfz44+cnq/+9habclf8vOmu2LA==
 
+=======
+>>>>>>> c76f72e (melhorias)
 libphonenumber-js@^1.10.20:
   version "1.10.44"
   resolved "https://registry.npmjs.org/libphonenumber-js/-/libphonenumber-js-1.10.44.tgz"
@@ -1033,6 +1095,7 @@ long@^4.0.0:
   resolved "https://registry.npmjs.org/long/-/long-4.0.0.tgz"
   integrity sha512-XsP+KhQif4bjX1kbuSiySJFNAehNxgLb6hPRGJ9QsUr8ajHkuXGdrHmFUTUUXhDwVX2R5bY4JNZEwbUiMhV+MA==
 
+<<<<<<< HEAD
 lru-cache@^6.0.0:
   version "6.0.0"
   resolved "https://registry.npmjs.org/lru-cache/-/lru-cache-6.0.0.tgz"
@@ -1045,6 +1108,8 @@ lru-cache@^7.14.1:
   resolved "https://registry.npmjs.org/lru-cache/-/lru-cache-7.18.3.tgz"
   integrity sha512-jumlc0BIUrS3qJGgIkWZsyfAM7NCWiBcCDhnd+3NNM5KbBmLTgHVfWBcg6W+rLUsIpzpERPsvwUP7CckAQSOoA==
 
+=======
+>>>>>>> c76f72e (melhorias)
 lru-cache@^9.1.2:
   version "9.1.2"
   resolved "https://registry.npmjs.org/lru-cache/-/lru-cache-9.1.2.tgz"
@@ -1072,6 +1137,7 @@ mime-types@^2.1.12:
   dependencies:
     mime-db "1.52.0"
 
+<<<<<<< HEAD
 minimatch@^3.1.1, minimatch@^3.1.2:
   version "3.1.2"
   resolved "https://registry.npmjs.org/minimatch/-/minimatch-3.1.2.tgz"
@@ -1089,6 +1155,8 @@ module-details-from-path@^1.0.3:
   resolved "https://registry.npmjs.org/module-details-from-path/-/module-details-from-path-1.0.3.tgz"
   integrity sha512-ySViT69/76t8VhE1xXHK6Ch4NcDd26gx0MzKXLO+F7NOtnqH68d9zF94nT8ZWSxXh8ELOERsnJO/sWt1xZYw5A==
 
+=======
+>>>>>>> c76f72e (melhorias)
 mpg123-decoder@^0.4.8:
   version "0.4.8"
   resolved "https://registry.npmjs.org/mpg123-decoder/-/mpg123-decoder-0.4.8.tgz"
@@ -1145,6 +1213,7 @@ node-wav@^0.0.2:
   resolved "https://registry.npmjs.org/node-wav/-/node-wav-0.0.2.tgz"
   integrity sha512-M6Rm/bbG6De/gKGxOpeOobx/dnGuP0dz40adqx38boqHhlWssBJZgLCPBNtb9NkrmnKYiV04xELq+R6PFOnoLA==
 
+<<<<<<< HEAD
 nodemon@^3.0.1:
   version "3.0.1"
   resolved "https://registry.npmjs.org/nodemon/-/nodemon-3.0.1.tgz"
@@ -1181,6 +1250,8 @@ nssocket@0.6.0:
     eventemitter2 "~0.4.14"
     lazy "~1.0.11"
 
+=======
+>>>>>>> c76f72e (melhorias)
 ogg-opus-decoder@^1.6.4:
   version "1.6.5"
   resolved "https://registry.npmjs.org/ogg-opus-decoder/-/ogg-opus-decoder-1.6.5.tgz"
@@ -1252,6 +1323,7 @@ peek-readable@^4.1.0:
   resolved "https://registry.npmjs.org/peek-readable/-/peek-readable-4.1.0.tgz"
   integrity sha512-ZI3LnwUv5nOGbQzD9c2iDG6toheuXSZP5esSHBjopsXH4dg19soufvpUGA3uohi5anFtGb2lhAVdHzH6R/Evvg==
 
+<<<<<<< HEAD
 picomatch@^2.0.4, picomatch@^2.2.1:
   version "2.3.1"
   resolved "https://registry.npmjs.org/picomatch/-/picomatch-2.3.1.tgz"
@@ -1271,6 +1343,8 @@ pidusage@~3.0:
   dependencies:
     safe-buffer "^5.2.1"
 
+=======
+>>>>>>> c76f72e (melhorias)
 pino-abstract-transport@v0.5.0:
   version "0.5.0"
   resolved "https://registry.npmjs.org/pino-abstract-transport/-/pino-abstract-transport-0.5.0.tgz"
@@ -1301,6 +1375,7 @@ pino@^7.0.0:
     sonic-boom "^2.2.1"
     thread-stream "^0.15.1"
 
+<<<<<<< HEAD
 pm2-axon-rpc@~0.7.0, pm2-axon-rpc@~0.7.1:
   version "0.7.1"
   resolved "https://registry.npmjs.org/pm2-axon-rpc/-/pm2-axon-rpc-0.7.1.tgz"
@@ -1380,6 +1455,12 @@ pm2@^5.3.0:
     yamljs "0.3.0"
   optionalDependencies:
     pm2-sysmonit "^1.2.8"
+=======
+prettier@^3.0.3:
+  version "3.0.3"
+  resolved "https://registry.yarnpkg.com/prettier/-/prettier-3.0.3.tgz#432a51f7ba422d1469096c0fdc28e235db8f9643"
+  integrity sha512-L/4pUDMxcNa8R/EthV08Zt42WBO4h1rarVtK0K+QJG0X187OLo7l699jWw0GKuwzkPQ//jMFA/8Xm6Fh3J/DAg==
+>>>>>>> c76f72e (melhorias)
 
 process-warning@^1.0.0:
   version "1.0.0"
@@ -1450,11 +1531,14 @@ proxy-from-env@^1.1.0:
   resolved "https://registry.npmjs.org/proxy-from-env/-/proxy-from-env-1.1.0.tgz"
   integrity sha512-D+zkORCbA9f1tdWRK0RaCR3GPv50cMxcrz4X8k5LTSUD1Dkw47mKJEZQNunItRTkWwgtaUSo1RVFRIG9ZXiFYg==
 
+<<<<<<< HEAD
 pstree.remy@^1.1.8:
   version "1.1.8"
   resolved "https://registry.npmjs.org/pstree.remy/-/pstree.remy-1.1.8.tgz"
   integrity sha512-77DZwxQmxKnu3aR542U+X8FypNzbfJ+C5XQDk3uWjWxn6151aIMGthWYRXTqT1E5oJvg+ljaa2OJi+VfvCOQ8w==
 
+=======
+>>>>>>> c76f72e (melhorias)
 qoa-format@^1.0.0:
   version "1.0.0"
   resolved "https://registry.npmjs.org/qoa-format/-/qoa-format-1.0.0.tgz"
@@ -1495,6 +1579,7 @@ readable-web-to-node-stream@^3.0.0:
   dependencies:
     readable-stream "^3.6.0"
 
+<<<<<<< HEAD
 readdirp@~3.6.0:
   version "3.6.0"
   resolved "https://registry.npmjs.org/readdirp/-/readdirp-3.6.0.tgz"
@@ -1502,6 +1587,8 @@ readdirp@~3.6.0:
   dependencies:
     picomatch "^2.2.1"
 
+=======
+>>>>>>> c76f72e (melhorias)
 real-require@^0.1.0:
   version "0.1.0"
   resolved "https://registry.npmjs.org/real-require/-/real-require-0.1.0.tgz"
@@ -1540,6 +1627,7 @@ safe-stable-stringify@^2.1.0:
   resolved "https://registry.npmjs.org/safe-stable-stringify/-/safe-stable-stringify-2.4.3.tgz"
   integrity sha512-e2bDA2WJT0wxseVd4lsDP4+3ONX6HpMXQa1ZhFQ7SU+GjvORCmShbCMltrtIDfkYhVHrOcPtj+KhmDBdPdZD1g==
 
+<<<<<<< HEAD
 "safer-buffer@>= 2.1.2 < 3":
   version "2.1.2"
   resolved "https://registry.npmjs.org/safer-buffer/-/safer-buffer-2.1.2.tgz"
@@ -1583,6 +1671,12 @@ simple-update-notifier@^2.0.0:
   integrity sha512-a2B9Y0KlNXl9u/vsW6sTIu9vGEpfKu2wRV6l1H3XEas/0gUIzGzBoP/IouTcUQbm9JWZLH3COxyn03TYlFax6w==
   dependencies:
     semver "^7.5.3"
+=======
+semaphore-async-await@^1.5.1:
+  version "1.5.1"
+  resolved "https://registry.yarnpkg.com/semaphore-async-await/-/semaphore-async-await-1.5.1.tgz#857bef5e3644601ca4b9570b87e9df5ca12974fa"
+  integrity sha512-b/ptP11hETwYWpeilHXXQiV5UJNJl7ZWWooKRE5eBIYWoom6dZ0SluCIdCtKycsMtZgKWE01/qAw6jblw1YVhg==
+>>>>>>> c76f72e (melhorias)
 
 smart-buffer@^4.2.0:
   version "4.2.0"
@@ -1661,6 +1755,7 @@ strtok3@^6.2.4, strtok3@^6.3.0:
     "@tokenizer/token" "^0.3.0"
     peek-readable "^4.1.0"
 
+<<<<<<< HEAD
 supports-color@^5.5.0:
   version "5.5.0"
   resolved "https://registry.npmjs.org/supports-color/-/supports-color-5.5.0.tgz"
@@ -1685,6 +1780,8 @@ systeminformation@^5.7:
   resolved "https://registry.npmjs.org/systeminformation/-/systeminformation-5.21.9.tgz"
   integrity sha512-7pI4mu9P/2MGDV0T49B52E7IULBGj+kRVk6JSYUj5qfAk7N7C7aNX15fXziqrbgZntc6/jjYzWeb/x41jhg/eA==
 
+=======
+>>>>>>> c76f72e (melhorias)
 thread-stream@^0.15.1:
   version "0.15.2"
   resolved "https://registry.npmjs.org/thread-stream/-/thread-stream-0.15.2.tgz"
@@ -1692,6 +1789,7 @@ thread-stream@^0.15.1:
   dependencies:
     real-require "^0.1.0"
 
+<<<<<<< HEAD
 to-regex-range@^5.0.1:
   version "5.0.1"
   resolved "https://registry.npmjs.org/to-regex-range/-/to-regex-range-5.0.1.tgz"
@@ -1699,6 +1797,8 @@ to-regex-range@^5.0.1:
   dependencies:
     is-number "^7.0.0"
 
+=======
+>>>>>>> c76f72e (melhorias)
 token-types@^4.1.1, token-types@^4.2.1:
   version "4.2.1"
   resolved "https://registry.npmjs.org/token-types/-/token-types-4.2.1.tgz"
@@ -1707,6 +1807,7 @@ token-types@^4.1.1, token-types@^4.2.1:
     "@tokenizer/token" "^0.3.0"
     ieee754 "^1.2.1"
 
+<<<<<<< HEAD
 touch@^3.1.0:
   version "3.1.0"
   resolved "https://registry.npmjs.org/touch/-/touch-3.1.0.tgz"
@@ -1714,6 +1815,8 @@ touch@^3.1.0:
   dependencies:
     nopt "~1.0.10"
 
+=======
+>>>>>>> c76f72e (melhorias)
 ts-node@^10.9.1:
   version "10.9.1"
   resolved "https://registry.npmjs.org/ts-node/-/ts-node-10.9.1.tgz"
@@ -1760,6 +1863,7 @@ typescript@^5.2.2, typescript@>=2.7:
   resolved "https://registry.npmjs.org/typescript/-/typescript-5.2.2.tgz"
   integrity sha512-mI4WrpHsbCIcwT9cF4FZvr80QUeKvsUsUvKDoR+X/7XHQH98xYD8YHZg7ANtz2GtZt/CBq2QJ0thkGJMHfqc1w==
 
+<<<<<<< HEAD
 undefsafe@^2.0.5:
   version "2.0.5"
   resolved "https://registry.npmjs.org/undefsafe/-/undefsafe-2.0.5.tgz"
@@ -1770,6 +1874,8 @@ universalify@^0.1.0:
   resolved "https://registry.npmjs.org/universalify/-/universalify-0.1.2.tgz"
   integrity sha512-rBJeI5CXAlmy1pV+617WB9J63U6XcazHHF2f2dbJix4XzpUF0RS3Zbj0FGIOCAva5P/d/GBOYaACQ1w+0azUkg==
 
+=======
+>>>>>>> c76f72e (melhorias)
 util-deprecate@^1.0.1:
   version "1.0.2"
   resolved "https://registry.npmjs.org/util-deprecate/-/util-deprecate-1.0.2.tgz"
@@ -1815,6 +1921,7 @@ ws@^8.13.0:
   resolved "https://registry.npmjs.org/ws/-/ws-8.14.2.tgz"
   integrity sha512-wEBG1ftX4jcglPxgFCMJmZ2PLtSbJ2Peg6TmpJFTbe9GZYOQCDPdMYu/Tm0/bGZkw8paZnJY45J4K2PZrLYq8g==
 
+<<<<<<< HEAD
 ws@~7.4.0:
   version "7.4.6"
   resolved "https://registry.npmjs.org/ws/-/ws-7.4.6.tgz"
@@ -1833,6 +1940,8 @@ yamljs@0.3.0:
     argparse "^1.0.7"
     glob "^7.0.5"
 
+=======
+>>>>>>> c76f72e (melhorias)
 yn@3.1.1:
   version "3.1.1"
   resolved "https://registry.npmjs.org/yn/-/yn-3.1.1.tgz"

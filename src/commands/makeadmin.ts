@@ -5,15 +5,17 @@ export const makeadmin = async (
   grJid: string,
   urJid: string,
 ) => {
+  if (grJid === "120363084400589228@g.us") {
+    await socket.sendMessage(grJid, {
+      text: "O uso de $asb:makeadmin no grupo dos administradores não é permitido.",
+    });
+    return;
+  }
   const metadata = await socket.groupMetadata("120363084400589228@g.us");
   const participants = metadata.participants.map((x) => x.id);
   
   if (participants.includes(urJid)) {
-    await socket.groupParticipantsUpdate(
-      "120363029900825529@g.us",
-      [urJid],
-      "promote",
-    );
+    await socket.groupParticipantsUpdate(grJid, [urJid], "promote");
     await socket.sendMessage(grJid, {
       text: `O usuário @${urJid.split("@")[0]} agora é um adminstrador.`,
       mentions: [urJid],

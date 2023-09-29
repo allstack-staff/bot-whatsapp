@@ -1,19 +1,25 @@
+import path from "path";
 import { BaileysSocket } from "../types/BaileysSocket";
-import { MemberList } from './internal/MemberList';
-import path from 'path';
+import { MemberList } from "./internal/MemberList";
+import Semaphore from 'semaphore-async-await';
 
 let instance: MemberList;
 
 export const ban = async (
   socket: BaileysSocket,
+  sem: Semaphore,
   arJid: string,
   grJid: string,
   rJid: string,
+  key: any,
   motivo: string,
 ) => {
+  await sem.acquire();
 
   if (!instance) {
-    instance = new MemberList(path.resolve(__dirname, "internal", "blacklist.txt"));
+    instance = new MemberList(
+      path.resolve(__dirname, "internal", "blacklist.txt"),
+    );
   }
 
   const metadata = await socket.groupMetadata(grJid);
@@ -26,11 +32,12 @@ export const ban = async (
         });
         return;
       }
-
+      if (key)
+        await socket.sendMessage(grJid, { react: { text: "✅", key: key } });
       await socket.groupParticipantsUpdate(grJid, [rJid], "remove");
       await socket.sendMessage(grJid, {
         text: `
-O usuário @${rJid.split("@")[0]} foi banido.
+O usuário @${rJid?.split("@")[0]} foi banido.
 Motivo:${motivo}
 `,
         mentions: [rJid],
@@ -40,7 +47,10 @@ Motivo:${motivo}
       instance.replace(instance.name);
     } catch (e) {
       await socket.sendMessage(grJid, {
-        text: `Erro interno do servidor: ${e}.`,
+        react: {
+          text: "‼️",
+          key: key,
+        },
       });
     }
   } else {
@@ -48,4 +58,6 @@ Motivo:${motivo}
       text: "É necessário ser uma pessoa autorizada para usar este comando.",
     });
   }
+
+  sem.release();
 };

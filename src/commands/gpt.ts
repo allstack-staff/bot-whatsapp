@@ -4,8 +4,8 @@ import { gpt, send } from "../bot_config";
 export const defaultgpt = async (
   socket: BaileysSocket,
   rJid: string,
-  m: any,
   key: any,
+  m: any,
   message: string,
 ) => {
   await socket.sendMessage(rJid, { react: { text: "✅", key: key } });

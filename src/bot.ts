@@ -6,23 +6,27 @@ import { black } from "./commands/black";
 import { makeadmin } from "./commands/makeadmin";
 import { defaultgpt } from "./commands/gpt";
 import { demoteFrom } from "./commands/internal/removeFrom";
-
+import { unban } from "./commands/unban";
 import { readFile } from "fs";
+import Semaphore from 'semaphore-async-await';
 import path from 'path';
+
 
 let blacklist: string[] = [];
 
-readFile(path.resolve(".", "src", "commands", "internal", "blacklist.txt"), "utf8", (err, data) => {
+readFile(path.resolve(__dirname, "commands", "internal", "blacklist.txt"), "utf8", (err, data) => {
   if (err) throw err;
 
   blacklist = data.split("\n");
 })
 
+const lock = new Semaphore(1);
+
 export async function bot() {
   const socket = await connect();
 
   socket.ev.on("messages.upsert", async (m) => {
-    //if (m.type === "notify") return;
+    if (m.type === "notify" || m.messages[0].key.remoteJid === "status@broadcast") return;
     console.log(JSON.stringify(m, undefined, 2));
     let message: string | undefined | null;
 
@@ -47,12 +51,13 @@ export async function bot() {
         await hello(
           socket,
           m.messages[0].key.remoteJid!,
-          m.messages[0],
+          m.messages[0].key,
           "Olá! este é o bot utilitário da All Stack Community.",
         );
         return;
-      }
-      if (message.slice(5).startsWith("makeadmin")) {
+      } else if (/^(\$asb)\:(?!\:)/.test(message))  {
+
+       if (message.slice(5).startsWith("makeadmin")) {
         const groupJid = m.messages[0].key.remoteJid!.endsWith("@g.us")
           ? m.messages[0].key.remoteJid
           : undefined;
@@ -68,8 +73,8 @@ export async function bot() {
         await defaultgpt(
           socket,
           m.messages[0].key.remoteJid!,
-          m.messages[0],
           m.messages[0].key,
+          m.messages[0],
           message.slice(9),
         );
       } else if (message.slice(5).startsWith("bc")) {
@@ -83,19 +88,36 @@ export async function bot() {
           );
         } catch (e) {
           await socket.sendMessage(m.messages[0].key.remoteJid!, {
-            text: `Erro interno: ${e}`,
+            react: {
+              text: "‼️",
+              key: m.messages[0]
+            }
           });
         }
-      } else if (message.slice(5).startsWith("regras")) {
+      }
+      } else if (/^(\$asb)\:\:/.test(message)) {
+
+      if (message.slice(6).startsWith("regras")) {
         await rules(socket, m.messages[0].key.remoteJid!);
+<<<<<<< HEAD
       }
       else if (message.slice(5).startsWith("ban")) {
 
 
        try {
           if (
+=======
+      } else if (message.slice(6).startsWith("ban")) {
+        if (
+>>>>>>> c76f72e (melhorias)
           !m.messages[0].message?.extendedTextMessage?.contextInfo?.mentionedJid
         ) {
+          await socket.sendMessage(m.messages[0].key.remoteJid!, {
+            react: {
+              text: "‼️",
+              key: m.messages[0]
+            }
+          })
           await socket.sendMessage(m.messages[0].key.remoteJid!, {
             text: "precisa-se de ter alguem pra banir!",
           });
@@ -117,9 +139,11 @@ export async function bot() {
         if (grouprJid) {
           await ban(
             socket,
+            lock,
             m.messages[0].key.participant!.trim(),
             grouprJid,
             usuario,
+            m.messages[0],
             motivo,
           );
         } else {
@@ -127,6 +151,7 @@ export async function bot() {
             text: "estamos numa conversa pessoal.",
           }));
         }
+<<<<<<< HEAD
       
       } catch {
         await socket.sendMessage(m.messages[0].key.remoteJid!, {
@@ -135,8 +160,16 @@ export async function bot() {
       }
 
 
+=======
+      } else if (message.slice(6).startsWith("unban")) {
+
+         if (m.messages[0].message?.extendedTextMessage?.contextInfo?.mentionedJid) {
+         await unban(socket, lock, m.messages[0].key.participant!, m.messages[0].key.remoteJid!, m.messages[0].message.extendedTextMessage.contextInfo.mentionedJid[0]);
+          }
+>>>>>>> c76f72e (melhorias)
       }
     }
+  }
   });
 
   socket.ev.on(
@@ -146,7 +179,8 @@ export async function bot() {
       if (action === "add") {
         
         if (participants && blacklist.includes(participants[0])) {
-          await ban(socket, socket.user!.id, id, participants[0], "já foi banido.");
+          await ban(socket, lock, socket.user!.id, id, participants[0], undefined, "já foi banido.");
+          return;
         }
         
         await rules(socket, id);

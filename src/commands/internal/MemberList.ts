@@ -2,7 +2,7 @@ import fs from "fs";
 
 /*
  *ATENÇÃO:
- * essa funcionalidade está em desenvolvimento.
+ * essa funcionalidade está em testes.
  *
  */
 
@@ -21,6 +21,7 @@ export class MemberList {
 
   #mount(file: string): void {
     this.#list = fs.readFileSync(file, 'utf8').split("\n").filter(x => /\d+\@s\.whatsapp\.net/.test(x));
+    this.#list = this.#list.filter((x, idx) => this.#list.indexOf(x) === idx)
   }
   get list() {
     return Array.from(this.#list);
@@ -34,14 +35,24 @@ export class MemberList {
     if (!this.#list) return;
 
     if (/\d+\@s\.whatsapp\.net/.test(rJid)) {
-      this.#list.push(rJid);
-    } else {
-      throw new TypeError(`${rJid} is not a valid jid!`);
+      if (!(this.#list.includes(rJid)))
+        this.#list.push(rJid);
     }
   }
 
   pop(): string | undefined {
     return this.#list.pop();
+  }
+
+  rm(rJid: string): void {
+    if (/\d+\@s\.whatsapp\.net/.test(rJid)) {
+        const index = this.#list.indexOf(rJid);
+        if (index === -1) {
+          throw new RangeError("indice invalido!");
+        }
+
+        this.#list.splice(index);
+    } 
   }
 
   saveMembersList(): void {
@@ -51,5 +62,9 @@ export class MemberList {
   replace(file: string): void {
     this.#mount(file);
     this.#name = file;
+  }
+
+  copy(): MemberList {
+    return new MemberList(this.#name);
   }
 }
