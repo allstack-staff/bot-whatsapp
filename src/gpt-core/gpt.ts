@@ -10,7 +10,7 @@ export class Gpt implements GPTBot {
 
   config(): void {
     this.gpt_instance.setHistory(
-      { role: "system", content: "oi ChatGPT!" }
+      { role: "system", content: "Você é um assistente que vai direto ao ponto, sem enrolação." }
     );
   }
 
