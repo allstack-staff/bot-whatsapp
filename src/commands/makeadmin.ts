@@ -16,7 +16,7 @@ export const makeadmin = async (
   
   if (participants.includes(urJid)) {
     await socket.groupParticipantsUpdate(grJid, [urJid], "promote");
-    await socket.sendMessage(grJid, {
+    await socket.sendMessage("120363084400589228@g.us", {
       text: `O usuário @${urJid.split("@")[0]} agora é um adminstrador.`,
       mentions: [urJid],
     });
