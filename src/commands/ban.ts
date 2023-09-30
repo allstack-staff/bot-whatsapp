@@ -1,12 +1,10 @@
-import path from "path";
 import { BaileysSocket } from "../types/BaileysSocket";
 import { MemberList } from "./internal/MemberList";
-import Semaphore from 'semaphore-async-await';
-
-let instance: MemberList;
+import Semaphore from "semaphore-async-await";
 
 export const ban = async (
   socket: BaileysSocket,
+  members: MemberList,
   sem: Semaphore,
   arJid: string,
   grJid: string,
@@ -15,12 +13,6 @@ export const ban = async (
   motivo: string,
 ) => {
   await sem.acquire();
-
-  if (!instance) {
-    instance = new MemberList(
-      path.resolve(__dirname, "internal", "blacklist.txt"),
-    );
-  }
 
   const metadata = await socket.groupMetadata(grJid);
   const admins = metadata.participants.filter((x) => x.admin).map((x) => x.id);
@@ -42,9 +34,9 @@ Motivo:${motivo}
 `,
         mentions: [rJid],
       });
-      instance.add(rJid);
-      instance.saveMembersList();
-      instance.replace(instance.name);
+      members.add(rJid);
+      members.saveMembersList();
+      members.replace(members.name);
     } catch (e) {
       await socket.sendMessage(grJid, {
         react: {

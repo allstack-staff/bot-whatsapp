@@ -9,7 +9,11 @@ export class Gpt implements GPTBot {
   }
 
   config(): void {
-    this.gpt_instance.setHistory({ role: "system", content: "Estamos em um grupo no whatsapp. Você é um assistente prestativo que fala tudo de forma direta em frases curtas." });
+    this.gpt_instance.setHistory({
+      role: "system",
+      content:
+        "Estamos em um grupo no whatsapp. Você é um assistente prestativo que fala tudo de forma direta em frases curtas.",
+    });
   }
 
   async send(text: string): Promise<{ role: string; content: string }> {

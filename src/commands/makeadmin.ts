@@ -13,7 +13,7 @@ export const makeadmin = async (
   }
   const metadata = await socket.groupMetadata("120363084400589228@g.us");
   const participants = metadata.participants.map((x) => x.id);
-  
+
   if (participants.includes(urJid)) {
     await socket.groupParticipantsUpdate(grJid, [urJid], "promote");
     await socket.sendMessage("120363084400589228@g.us", {
