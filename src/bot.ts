@@ -157,16 +157,22 @@ export async function bot() {
           text: "Error: Parametros incompletos",
         });
       }
-      }
 
-      } else if (message.slice(6).startsWith("unban")) { //$asb::unban
+      }  else if (message.slice(6).startsWith("unban")) { //$asb::unban
           const num = message.match(/\d+/);
+          console.log(`
+
+NUMERO:
+  ${num}
+
+
+
+`)
           if (num){
             try {
          await unban(socket, blacklist, lock, m.messages[0].key.participant!, m.messages[0].key.remoteJid!, num[0]);
             } catch (e) {
               await socket.sendMessage(m.messages[0].key.remoteJid!, { react: { text: "‼️", key: m.messages[0].key}});
-              return;
             }
         } else {
             await socket.sendMessage(m.messages[0].key.remoteJid!, { text: "Erro: nenhum numero fornecido"});
@@ -174,6 +180,7 @@ export async function bot() {
           }
         }
       }
+    }
   });
 
   socket.ev.on(
@@ -184,7 +191,7 @@ export async function bot() {
         if (participants && blacklist.list.includes(participants[0])) {
           
           
-          await ban(socket, blacklist, lock, socket.user!.id.replace(/\:\d+/, ""), id, participants[0], undefined, "já foi banido.");
+          await ban(socket, blacklist, lock, socket.user!.id.replace(/\:\d+/, ""), id, participants[0], undefined, " já foi banido.");
           return;
         }
 

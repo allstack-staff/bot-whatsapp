@@ -10,9 +10,10 @@ export const unban = async (
   grJid: string,
   num: string,
 ) => {
+  console.log([members, sem, arJid, grJid, num]);
   sem.acquire();
   const metadata = await socket.groupMetadata(grJid);
-  const admins = metadata.participants.filter(x => x.admin).map(x => x.id);
+  const admins = metadata.participants.filter((x) => x.admin).map((x) => x.id);
 
   const urJid = num + "@s.whatsapp.net";
   if (admins.includes(arJid)) {
@@ -24,6 +25,7 @@ export const unban = async (
         text: `O usuário @${urJid.split("@")[0]} foi desbanido.`,
         mentions: [urJid],
       });
+      await socket.groupParticipantsUpdate(grJid, [urJid], 'add');
     } catch (e) {
       if (e instanceof RangeError) {
         await socket.sendMessage(grJid, {

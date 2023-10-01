@@ -1,7 +1,6 @@
 import { BaileysSocket } from "../types/BaileysSocket";
 
-const regras = `
-Comunidade que aproxima devs experientes (chamados mentores) de menos experientes, para dicas e aprendizados.
+const regras = `Comunidade que aproxima devs experientes (chamados mentores) de menos experientes, para dicas e aprendizados.
 
 *Muito obrigado por estar aqui! Sua contribuição é muito importante!*
 
