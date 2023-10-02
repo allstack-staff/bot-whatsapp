@@ -12,12 +12,13 @@
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "tsc --build",
+    "compile": "tsc --build",
     "start": "node dist/main.js",
     "bstart": "tsc --build && node dist/main.js",
     "dev": "ts-node src/main.ts",
     "format": "prettier src/**/*.ts --write",
-    "minify": "uglifyjs dist/**/*.js -o dist/core.js"
+    "minify": "uglifyjs dist/**/*.js -o build/core.js",
+    "build": "tsc --build && cp node_modules package.json yarn.lock dist build -r && tar -cvjf ascbot.tbz2 build/* > /dev/null"
   },
   "keywords": [],
   "author": "",

@@ -11,8 +11,11 @@ import { mention } from "./commands/mention";
 import Semaphore from 'semaphore-async-await';
 import path from 'path';
 import { MemberList } from "./commands/internal/MemberList";
+import { GPTBotManager } from "./gpt-core/GPTBotManager";
+import { gpt, blackclown } from "./bot_config";
 
-
+const bc = new GPTBotManager(blackclown());
+const gpt_ = new GPTBotManager(gpt());
 
 let blacklist: MemberList = new MemberList(
   path.resolve(__dirname, "commands",  "internal", "blacklist.txt")
@@ -79,6 +82,7 @@ export async function bot() {
       } else if (message.slice(5).startsWith("gpt")) {
         await defaultgpt(
           socket,
+          gpt_,
           m.messages[0].key.remoteJid!,
           m.messages[0].key,
           m.messages[0],
@@ -88,6 +92,7 @@ export async function bot() {
         try {
           await black(
             socket,
+            bc,
             m.messages[0].key.remoteJid!,
             m.messages[0].key,
             m.messages[0],
