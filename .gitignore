@@ -2,12 +2,7 @@ node_modules/
 dist/
 /*.*env
 **/*/authdata
-<<<<<<< HEAD
-<<<<<<< HEAD
 .env
-=======
 **/*.tgz
->>>>>>> c76f72e (melhorias)
-=======
-**/*.tgz
->>>>>>> c76f72e (melhorias)
+**/*.tbz2
+

@@ -6,6 +6,7 @@ import { black } from "./commands/black";
 import { makeadmin } from "./commands/makeadmin";
 import { defaultgpt } from "./commands/gpt";
 import { demoteFrom } from "./commands/internal/removeFrom";
+import { mentionAll } from "./commands/internal/mentionAll";
 import { unban } from "./commands/unban";
 import { mention } from "./commands/mention";
 import Semaphore from 'semaphore-async-await';
@@ -26,7 +27,7 @@ const lock: Semaphore = new Semaphore(1);
 export async function bot() {
   const socket = await connect();
   socket.ev.on("messages.upsert", async (m) => {
-    if ( m.messages[0].key.remoteJid === "status@broadcast") return;
+    if (m.type !== "notify" || m.messages[0].key.remoteJid === "status@broadcast") return;
     console.log(JSON.stringify(m, undefined, 2));
     let message: string | undefined | null;
 
@@ -45,6 +46,16 @@ export async function bot() {
     message = m.messages[0].message?.conversation
       ? m.messages[0].message?.conversation
       : m.messages[0].message?.extendedTextMessage?.text;
+
+    if (message?.includes("@all")) {
+      const groupJid = m.messages[0].key.remoteJid!.endsWith("g.us")
+      ? m.messages[0].key.remoteJid!
+      : undefined;
+
+      if (groupJid) {
+        await mentionAll(socket, m.messages[0].key.participant!,  groupJid);
+      }
+    }
 
     if (message && message.startsWith("$asb")) {
       console.log(message);

@@ -22,14 +22,14 @@ export const unban = async (
       members.saveMembersList();
       members.replace(members.name);
       await socket.sendMessage(grJid, {
-        text: `O usuário @${urJid.split("@")[0]} foi desbanido.`,
+        text: `O usuário(a) @${urJid.split("@")[0]} foi desbanido(a).`,
         mentions: [urJid],
       });
       await socket.groupParticipantsUpdate(grJid, [urJid], 'add');
     } catch (e) {
       if (e instanceof RangeError) {
         await socket.sendMessage(grJid, {
-          text: `O usuário @${urJid.split("@")[0]} não foi banido.`,
+          text: `O usuário(a) @${urJid.split("@")[0]} não foi banido(a).`,
           mentions: [urJid],
         });
         return;

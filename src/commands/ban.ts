@@ -20,7 +20,7 @@ export const ban = async (
     try {
       if (arJid === rJid) {
         await socket.sendMessage(grJid, {
-          text: "Você não pode banir a si mesmo!",
+          text: "Você não pode banir a si mesm(a)!",
         });
         return;
       }
@@ -29,7 +29,7 @@ export const ban = async (
       await socket.groupParticipantsUpdate(grJid, [rJid], "remove");
       await socket.sendMessage(grJid, {
         text: `
-O usuário @${rJid?.split("@")[0]} foi banido.
+O usuário(a) @${rJid?.split("@")[0]} foi banido(a).
 Motivo:${motivo}
 `,
         mentions: [rJid],
