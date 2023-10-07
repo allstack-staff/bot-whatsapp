@@ -9,7 +9,7 @@
     "build": "tsc --build",
     "start": "node dist/main.js",
     "dev": "ts-node src/main.ts",
-    "push": "npm i; tsc --build ; git add . ; git commit -m 'build $(whoami)'; git push"
+    "push": "npm i; tsc --build ; npm prune --production ; git add . ; git commit -m 'build'; git push"
   },
   "keywords": [],
   "author": "",
