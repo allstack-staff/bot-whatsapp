@@ -156,16 +156,13 @@
   resolved "https://registry.npmjs.org/@types/long/-/long-4.0.2.tgz"
   integrity sha512-MqTGEo5bj5t157U6fA/BiDynNkn0YknVdh48CMPkTSpFTVmvao5UQmm7uEF6xBEo7qIMAlY/JSleYaE6VOdpaA==
 
-"@types/node@*", "@types/node@^20.7.1":
+"@types/node@*", "@types/node@^20.7.1", "@types/node@>=13.7.0":
   version "20.7.1"
 
 "@types/node@^10.1.0":
   version "10.17.60"
   resolved "https://registry.npmjs.org/@types/node/-/node-10.17.60.tgz"
   integrity sha512-F0KIgDJfy2nA3zMLmWGKxcH2ZVEtCZXHHdOQs2gSaQ27+lNeEfGxzkIw90aXswATX7AZ33tahPbzy6KAfUreVw==
-
-"@types/node@>=13.7.0":
-  version "20.6.3"
 
 "@wasm-audio-decoders/common@9.0.1":
   version "9.0.1"
@@ -226,9 +223,9 @@ arg@^4.1.0:
   integrity sha512-58S9QDqG0Xx27YwPSt9fJxivjYl432YCwfDMfZ+71RAqUrZef7LrKQZ3LHLOwCS4FLNBplP533Zx895SeOCHvA==
 
 asb-gpt@^1.0.7:
-  version "1.0.7"
-  resolved "https://registry.npmjs.org/asb-gpt/-/asb-gpt-1.0.7.tgz"
-  integrity sha512-o5UVhZBASZdjBl2nLqTvrbqHKIivRmkelWf786FvHNmTYrPwUYkt8E2qCXMnUc7DWjkaHBnZs3wY3HYqmu58uA==
+  version "1.0.9"
+  resolved "https://registry.npmjs.org/asb-gpt/-/asb-gpt-1.0.9.tgz"
+  integrity sha512-xHtd3+u955AdzSkiOGawkhn5YI2pnSaFShKCxvKpJnBZuu5d1XY42QiLDOxp0jZPW1LpWmz5QFqPYEXnPRzOLg==
   dependencies:
     axios "^1.5.0"
     form-data "^4.0.0"

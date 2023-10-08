@@ -12,8 +12,8 @@ dependencies:
     specifier: ^6.4.1
     version: 6.5.0(qrcode-terminal@0.12.0)
   asb-gpt:
-    specifier: ^1.0.7
-    version: 1.0.7
+    specifier: ^1.0.9
+    version: 1.0.9
   dotenv:
     specifier: ^16.3.1
     version: 16.3.1
@@ -37,6 +37,9 @@ devDependencies:
   typescript:
     specifier: ^5.2.2
     version: 5.2.2
+  uglify-js:
+    specifier: ^3.17.4
+    version: 3.17.4
 
 packages:
 
@@ -251,8 +254,8 @@ packages:
     resolution: {integrity: sha512-58S9QDqG0Xx27YwPSt9fJxivjYl432YCwfDMfZ+71RAqUrZef7LrKQZ3LHLOwCS4FLNBplP533Zx895SeOCHvA==}
     dev: true
 
-  /asb-gpt@1.0.7:
-    resolution: {integrity: sha512-o5UVhZBASZdjBl2nLqTvrbqHKIivRmkelWf786FvHNmTYrPwUYkt8E2qCXMnUc7DWjkaHBnZs3wY3HYqmu58uA==}
+  /asb-gpt@1.0.9:
+    resolution: {integrity: sha512-xHtd3+u955AdzSkiOGawkhn5YI2pnSaFShKCxvKpJnBZuu5d1XY42QiLDOxp0jZPW1LpWmz5QFqPYEXnPRzOLg==}
     dependencies:
       axios: 1.5.1
       form-data: 4.0.0
@@ -738,6 +741,12 @@ packages:
   /typescript@5.2.2:
     resolution: {integrity: sha512-mI4WrpHsbCIcwT9cF4FZvr80QUeKvsUsUvKDoR+X/7XHQH98xYD8YHZg7ANtz2GtZt/CBq2QJ0thkGJMHfqc1w==}
     engines: {node: '>=14.17'}
+    hasBin: true
+    dev: true
+
+  /uglify-js@3.17.4:
+    resolution: {integrity: sha512-T9q82TJI9e/C1TAxYvfb16xO120tMVFZrGA3f9/P4424DNu6ypK103y0GPFVa17yotwSyZW5iYXgjYHkGrJW/g==}
+    engines: {node: '>=0.8.0'}
     hasBin: true
     dev: true
 
