@@ -1,4 +1,4 @@
-import { DisconnectReason, useMultiFileAuthState } from "@whiskeysockets/baileys"; 
+import { ConnectionState, DisconnectReason, useMultiFileAuthState } from "@whiskeysockets/baileys"; 
  import makeWASocket from "@whiskeysockets/baileys/lib/Socket"; 
  import { Boom } from "@hapi/boom"; 
  //import pino from "pino"; 
@@ -15,7 +15,7 @@ import { DisconnectReason, useMultiFileAuthState } from "@whiskeysockets/baileys
      auth: state,  
    }); 
   
-   socket.ev.on("connection.update", async (update) => { 
+   socket.ev.on("connection.update", async (update: Partial<ConnectionState>) => { 
      const { connection, lastDisconnect } = update; 
 
   
