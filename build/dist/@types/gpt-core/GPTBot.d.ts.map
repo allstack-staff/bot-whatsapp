@@ -1,0 +1,1 @@
+{"version":3,"file":"GPTBot.d.ts","sourceRoot":"","sources":["../../../src/gpt-core/GPTBot.ts"],"names":[],"mappings":"AAAA,MAAM,WAAW,MAAM;IACrB,IAAI,CAAC,IAAI,EAAE,MAAM,GAAG,OAAO,CAAC;QAAE,IAAI,EAAE,MAAM,CAAC;QAAC,OAAO,EAAE,MAAM,CAAA;KAAE,CAAC,CAAC;IAC/D,MAAM,IAAI,IAAI,CAAC;CAChB"}

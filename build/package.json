@@ -1,0 +1,35 @@
+{
+  "name": "ascbot",
+  "version": "1.1.0",
+  "description": "",
+  "main": "dist/main.js",
+  "devDependencies": {
+    "@types/node": "^20.7.1",
+    "prettier": "^3.0.3",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.2.2",
+    "uglify-js": "^3.17.4"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "compile": "tsc --build",
+    "start": "node dist/main.js",
+    "bstart": "tsc --build && node dist/main.js",
+    "dev": "ts-node src/main.ts --watch",
+    "rdev": "tsnd --respawn --transpile-only src/main.ts",
+    "format": "prettier src/**/*.ts --write",
+    "minify": "uglifyjs dist/**/*.js -o build/core.js",
+    "build": "rm build/* -rf && tsc --build && cp node_modules package.json yarn.lock dist build -r && tar -cvjf ascbot.tbz2 build/* > /dev/null"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@hapi/boom": "^10.0.1",
+    "@whiskeysockets/baileys": "^6.4.1",
+    "asb-gpt": "^1.0.9",
+    "dotenv": "^16.3.1",
+    "qrcode-terminal": "^0.12.0",
+    "semaphore-async-await": "^1.5.1"
+  }
+}
