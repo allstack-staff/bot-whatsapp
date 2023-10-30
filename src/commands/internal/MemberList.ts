@@ -1,5 +1,5 @@
 import fs from "fs";
-
+import path from "path";
 /*
  *ATENÇÃO:
  * essa funcionalidade está em testes.
@@ -20,6 +20,11 @@ export class MemberList {
   }
 
   #mount(file: string): void {
+    const filePath = path.join(__dirname, 'blacklist.txt');
+
+    if (!fs.existsSync(filePath)) {
+      fs.writeFileSync(filePath, '');
+    }
     this.#list = fs.readFileSync(file, 'utf8').split("\n").filter(x => /\d+\@s\.whatsapp\.net/.test(x));
     this.#list = this.#list.filter((x, idx) => this.#list.indexOf(x) === idx)
   }
@@ -46,13 +51,13 @@ export class MemberList {
 
   rm(rJid: string): void {
     if (/\d+\@s\.whatsapp\.net/.test(rJid)) {
-        const index = this.#list.indexOf(rJid);
-        if (index === -1) {
-          throw new RangeError("indice invalido!");
-        }
+      const index = this.#list.indexOf(rJid);
+      if (index === -1) {
+        throw new RangeError("indice invalido!");
+      }
 
-        this.#list.splice(index);
-    } 
+      this.#list.splice(index);
+    }
   }
 
   saveMembersList(): void {

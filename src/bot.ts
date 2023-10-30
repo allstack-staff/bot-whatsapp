@@ -24,9 +24,15 @@ let blacklist: MemberList = new MemberList(
 );
 const lock: Semaphore = new Semaphore(1);
 
-
 export async function bot() {
   const socket = await connect();
+
+  const admin = async (userID: any, groupID: string) => {
+    const metadata = await socket.groupMetadata(groupID)
+    const user = metadata.participants.find((user) => user.id === userID)
+    return user && user.admin == 'admin'
+  }
+
   socket.ev.on("messages.upsert", async (m) => {
     if (m.type !== "notify" || m.messages[0].key.remoteJid === "status@broadcast") return;
 
@@ -49,12 +55,14 @@ export async function bot() {
       ? m.messages[0].message?.conversation
       : m.messages[0].message?.extendedTextMessage?.text;
 
-    if (message?.includes("@all")) {
+    if (message?.includes("@all")) {   
       const groupJid = m.messages[0].key.remoteJid!.endsWith("g.us")
         ? m.messages[0].key.remoteJid!
         : undefined;
+        
+        const isAdmin = await admin(m.messages[0].key.participant!, groupJid!.toString())
 
-      if (groupJid) {
+      if (groupJid && isAdmin) {
         await mentionAll(socket, m.messages[0].key.participant!, groupJid);
       }
     }
@@ -200,22 +208,23 @@ NUMERO:
       }
     }
 
+    // Dando muito problema, desativado.
     // Se a mensagem não possui link...
-    if (message && ! /^(https?|ftp?|http):\/\/[^\s/$.?#].[^\s]*$/i.test(message) && !m.messages[0].key.fromMe) {
-      const jid = m.messages[0].key.remoteJid as unknown as string
-      const userID = m.messages[0].key.participant!
-      const metadata = await socket.groupMetadata(jid)
+    // if (message && ! /^(https?|ftp?|http):\/\/[^\s/$.?#].[^\s]*$/i.test(message) && !m.messages[0].key.fromMe) {
+    //   const jid = m.messages[0].key.remoteJid as unknown as string
+    //   const userID = m.messages[0].key.participant!
+    //   const metadata = await socket.groupMetadata(jid)
 
-      const admin = (userID: any) => {
-        const user = metadata.participants.find((user) => user.id === userID)
-        return user && user.admin == 'admin'
-      }
-      console.log(admin(userID))
-      if (admin(userID)) return
+    //   const admin = (userID: any) => {
+    //     const user = metadata.participants.find((user) => user.id === userID)
+    //     return user && user.admin == 'admin'
+    //   }
+    //   console.log(admin(userID))
+    //   if (admin(userID)) return
 
-      const gLink = await socket.groupInviteCode(jid)
-      await link(socket, jid, m, message, `https://chat.whatsapp.com/${gLink}`)
-    }
+    //   const gLink = await socket.groupInviteCode(jid)
+    //   await link(socket, jid, m, message, `https://chat.whatsapp.com/${gLink}`)
+    // }
   });
 
   socket.ev.on(
