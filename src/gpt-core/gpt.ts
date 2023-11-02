@@ -1,33 +1,85 @@
-import { GPT } from "asb-gpt";
-import { GPTBot } from "./GPTBot";
+import { GPT, LOG } from "asb-gpt";
 import { AlreadyConfiguredError } from "../exceptions/AlreadyConfiguredError";
+import path from "path";
+import { existsSync, mkdirSync, writeFileSync } from "fs";
+import { ChatGptRequestError } from "../exceptions/ChatGptRequestError";
+import 'dotenv/config'
 
-export class Gpt implements GPTBot {
-  gpt_instance: GPT;
-  #hasConfigured: boolean = false;
-
-  constructor(gpt: GPT) {
-    this.gpt_instance = gpt;
+class Gpt extends GPT {
+  private configuration: boolean = false
+  private log = new LOG()
+  constructor() {
+    super({ apikey: process.env.API_KEY, history: true, max_tokens: 700 })
   }
 
-  config(): void {
-    if (!this.#hasConfigured) {
-    this.gpt_instance.setHistory({
+  public resetConfiguration() {
+    this.configuration = false
+  }
+
+  public config(): void {
+    if (this.configuration) throw new AlreadyConfiguredError('Bot ja configurado, resete as configuracoes e tente novamente');
+    this.setHistory({
       role: "system",
       content:
-        "Você é um assistente prestativo que fala tudo de forma didatica e um pouco verbosa.",
+        "Você é um assistente prestativo que fala tudo de forma didática e um pouco verbosa.",
     });
-      this.#hasConfigured = true;
-    } else {
-      throw new AlreadyConfiguredError("As configurações já foram definidas!");
+    this.setHistory({
+      role: "system",
+      content:
+        "Seja direto ao ponto e nunca fale que é um assistente virtual.",
+    });
+    this.setHistory({
+      role: "system",
+      content:
+        "Você está no WhatsApp, use os recursos disponíveis para se comunicar.",
+    });
+    this.setHistory({
+      role: "system",
+      content:
+        "Use mensagens curtas sempre que possível.",
+    });
+    this.configuration = true
+  }
+
+  private async request(message: string, id: string, name: string): Promise<{ role: string; content: string }> {
+    try {
+      const filePath = path.resolve(__dirname, '..', 'logs');
+      if (!existsSync(filePath)) {
+        mkdirSync(filePath);
+      }
+      const request = await this.defaultRequestChat(message);
+      const jsonPath = path.resolve(__dirname, `${filePath}`, `${`${name}.json`}`)
+      this.log.SaveMessageToJSON(id, message, request, `${jsonPath}`)
+      return request
+    } catch (e) {
+      if (e instanceof ChatGptRequestError) {
+        throw new ChatGptRequestError(`Erro ao Fazer Requisicao: ${e.code} \n\n${e}`)
+      }
+      else {
+        throw new Error(`Erro desconhecido em:\n ${__dirname} : ${__filename} \n\n ${e}`)
+      }
     }
   }
 
-  async send(text: string): Promise<{ role: string; content: string }> {
-    return await this.gpt_instance.defaultRequestChat(text);
-  }
+  public async send(message: string, id: string): Promise<{ role: string; content: string }> {
+    try {
+      if (!this.configuration) {
+        this.config()
+      }
+      const userID = `${id}-${this.log.getTimeStamp()}`
+      const text = await this.request(message, id, userID)
+      return text
+    } catch (error) {
+      if (error instanceof ChatGptRequestError) {
+        return { role: "Admin", content: "Erro ao fazer request pra openai, contate o suporte All Stack" }
+      } else {
+        console.error(error)
+        return { role: "Admin", content: "Erro desconhecido, contate o suporte All Stack" }
 
-  resetconfig() {
-    this.#hasConfigured = false;
+      }
+    }
+
   }
 }
+
+export default new Gpt()

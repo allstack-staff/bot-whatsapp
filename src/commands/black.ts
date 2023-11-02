@@ -1,21 +1,18 @@
-import { blackclown } from "../bot_config";
+import blackclown from "../gpt-core/blackclown";
 import { BaileysSocket } from "../types/BaileysSocket";
-import { GPTBotManager } from "../gpt-core/GPTBotManager";
 
-type BlackClown = ReturnType<typeof blackclown>;
-
-export async function black(
+export const black = async (
   socket: BaileysSocket,
-  sender: GPTBotManager<BlackClown>,
   rJid: string,
   key: any,
   m: any,
-  text: string,
-) {
+  message: string,
+) => {
+  const id: string = key.participant.split('@')[0]
   await socket.sendMessage(rJid, { react: { text: "✅", key: key } });
   await socket.sendMessage(
     rJid,
-    { text: (await sender.bot?.send(text))?.content! },
+    { text: (await blackclown.send(message, id))?.content! },
     { quoted: m },
   );
-}
+};

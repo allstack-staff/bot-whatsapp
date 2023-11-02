@@ -12,12 +12,6 @@ import { mention } from "./commands/mention";
 import Semaphore from 'semaphore-async-await';
 import path from 'path';
 import { MemberList } from "./commands/internal/MemberList";
-import { GPTBotManager } from "./gpt-core/GPTBotManager";
-import { gpt, blackclown } from "./bot_config";
-import { link } from "./commands/link";
-
-const bc = new GPTBotManager(blackclown());
-const gpt_ = new GPTBotManager(gpt());
 
 let blacklist: MemberList = new MemberList(
   path.resolve(__dirname, "commands", "internal", "blacklist.txt")
@@ -55,12 +49,12 @@ export async function bot() {
       ? m.messages[0].message?.conversation
       : m.messages[0].message?.extendedTextMessage?.text;
 
-    if (message?.includes("@all")) {   
+    if (message?.includes("@all")) {
       const groupJid = m.messages[0].key.remoteJid!.endsWith("g.us")
         ? m.messages[0].key.remoteJid!
         : undefined;
-        
-        const isAdmin = await admin(m.messages[0].key.participant!, groupJid!.toString())
+
+      const isAdmin = await admin(m.messages[0].key.participant!, groupJid!.toString())
 
       if (groupJid && isAdmin) {
         await mentionAll(socket, m.messages[0].key.participant!, groupJid);
@@ -68,7 +62,6 @@ export async function bot() {
     }
 
     if (message && message.startsWith("$asb")) {
-      console.log(message);
       if (/^(\$asb)\s*$/.test(message)) {
         await hello(
           socket,
@@ -77,136 +70,126 @@ export async function bot() {
           "Olá! este é o bot utilitário da All Stack Community."
         );
         return;
-      } else if (/^(\$asb)\:(?!\:)/.test(message)) {
-        if (message.slice(5).startsWith("makeadmin")) {
-          const groupJid = m.messages[0].key.remoteJid!.endsWith("@g.us")
-            ? m.messages[0].key.remoteJid
-            : undefined;
-
-          if (groupJid) {
-            await makeadmin(socket, groupJid, m.messages[0].key.participant!);
-          } else {
-            await socket.sendMessage(m.messages[0].key.remoteJid!, {
-              text: "Estamos em uma conversa pessoal.",
-            });
+      }
+      if (message.split(' ')[1].startsWith("makeadmin") || message.split(' ')[1].startsWith("-ma")) {
+        const groupJid = m.messages[0].key.remoteJid!.endsWith("@g.us")
+          ? m.messages[0].key.remoteJid
+          : undefined;
+        if (groupJid) {
+          await makeadmin(socket, groupJid, m.messages[0].key.participant!);
+        } else {
+          await socket.sendMessage(m.messages[0].key.remoteJid!, {
+            text: "Estamos em uma conversa pessoal.",
+          });
+        }
+      } // MakeAdmin
+      else if (message.split(' ')[1].startsWith("mention") || message.split(' ')[1].startsWith("-me")) {
+        const num = (message.match(/\d+/));
+        if (num) {
+          try {
+            await mention(socket, m.messages[0].key.remoteJid!, num[0]);
+          } catch (e) {
+            await socket.sendMessage(m.messages[0].key.remoteJid!, { react: { text: "‼️", key: m.messages[0].key } });
+            console.error(e);
           }
-        } else if (message.slice(5).startsWith("mention")) {
-          const num = (message.match(/\d+/));
-          if (num) {
-            try {
-              await mention(socket, m.messages[0].key.remoteJid!, num[0]);
-            } catch (e) {
-              await socket.sendMessage(m.messages[0].key.remoteJid!, { react: { text: "‼️", key: m.messages[0].key } });
-              console.error(e);
-            }
-          }
-        } else if (message.slice(5).startsWith("gpt")) {
-          await defaultgpt(
+        }
+      } else if (message.split(' ')[1].startsWith("gpt")) {
+        await defaultgpt(
+          socket,
+          m.messages[0].key.remoteJid!,
+          m.messages[0].key,
+          m.messages[0],
+          message.slice(8),
+        );
+      } else if (message.split(' ')[1].startsWith("bc")) {
+        try {
+          await black(
             socket,
-            gpt_,
             m.messages[0].key.remoteJid!,
             m.messages[0].key,
             m.messages[0],
-            message.slice(9),
+            message.slice(7)
           );
-        } else if (message.slice(5).startsWith("bc")) {
-          try {
-            await black(
-              socket,
-              bc,
-              m.messages[0].key.remoteJid!,
-              m.messages[0].key,
-              m.messages[0],
-              message.slice(9)
-            );
-          } catch (e) {
-            await socket.sendMessage(m.messages[0].key.remoteJid!, {
-              react: {
-                text: "‼️",
-                key: m.messages[0]
-              }
-            });
-          }
+        } catch (e) {
+          await socket.sendMessage(m.messages[0].key.remoteJid!, {
+            react: {
+              text: "‼️",
+              key: m.messages[0]
+            }
+          });
         }
-      } else if (/^(\$asb)\:\:/.test(message)) {
-
-        if (message.slice(6).startsWith("regras")) {
-          await rules(socket, m.messages[0].key.remoteJid!);
-        } else if (message.slice(6).startsWith("ban")) { //$asb::ban
-          if (
-            !m.messages[0].message?.extendedTextMessage?.contextInfo?.mentionedJid
-          ) {
-            await socket.sendMessage(m.messages[0].key.remoteJid!, {
-              react: {
-                text: "‼️",
-                key: m.messages[0]
-              }
-            })
-            await socket.sendMessage(m.messages[0].key.remoteJid!, {
-              text: "precisa-se de ter alguem pra banir!",
-            });
-            return;
-          }
-
-          const jids =
-            m.messages[0].message.extendedTextMessage.contextInfo.mentionedJid;
-
-          const [usuario, motivo] = [
-            jids[0],
-            message.split(jids[0].split("@")[0])[1],
-          ];
-
-          const grouprJid = m.messages[0].key.remoteJid!.endsWith("@g.us")
-            ? m.messages[0].key.remoteJid
-            : undefined;
-
-          try {
-            if (grouprJid) {
-              await ban(
-                socket,
-                blacklist,
-                lock,
-                m.messages[0].key.participant!.trim(),
-                grouprJid,
-                usuario,
-                m.messages[0],
-                motivo,
-              );
-            } else {
-              (await socket.sendMessage(m.messages[0].key.remoteJid!, {
-                text: "estamos numa conversa pessoal.",
-              }));
+      }
+      if (message.split(' ')[1].startsWith("regras")) {
+        await rules(socket, m.messages[0].key.remoteJid!);
+      }
+      else if (message.split(' ')[1].startsWith("ban")) { //$asb::ban
+        if (
+          !m.messages[0].message?.extendedTextMessage?.contextInfo?.mentionedJid
+        ) {
+          await socket.sendMessage(m.messages[0].key.remoteJid!, {
+            react: {
+              text: "‼️",
+              key: m.messages[0]
             }
+          })
+          await socket.sendMessage(m.messages[0].key.remoteJid!, {
+            text: "precisa-se de ter alguem pra banir!",
+          });
+          return;
+        }
 
-          } catch (_) {
-            await socket.sendMessage(m.messages[0].key.remoteJid!, {
-              text: "Error: Parametros incompletos",
-            });
-          }
+        const jids =
+          m.messages[0].message.extendedTextMessage.contextInfo.mentionedJid;
 
-        } else if (message.slice(6).startsWith("unban")) { //$asb::unban
-          const num = message.match(/\d+/);
-          console.log(`
+        const [usuario, motivo] = [
+          jids[0],
+          message.split(jids[0].split("@")[0])[1],
+        ];
 
-NUMERO:
-  ${num}
+        const grouprJid = m.messages[0].key.remoteJid!.endsWith("@g.us")
+          ? m.messages[0].key.remoteJid
+          : undefined;
 
-
-
-`)
-          if (num) {
-            try {
-              await unban(socket, blacklist, lock, m.messages[0].key.participant!, m.messages[0].key.remoteJid!, num[0]);
-            } catch (e) {
-              await socket.sendMessage(m.messages[0].key.remoteJid!, { react: { text: "‼️", key: m.messages[0].key } });
-            }
+        try {
+          if (grouprJid) {
+            await ban(
+              socket,
+              blacklist,
+              lock,
+              m.messages[0].key.participant!.trim(),
+              grouprJid,
+              usuario,
+              m.messages[0],
+              motivo,
+            );
           } else {
-            await socket.sendMessage(m.messages[0].key.remoteJid!, { text: "Erro: nenhum numero fornecido" });
-            return;
+            (await socket.sendMessage(m.messages[0].key.remoteJid!, {
+              text: "estamos numa conversa pessoal.",
+            }));
           }
+
+        } catch (_) {
+          await socket.sendMessage(m.messages[0].key.remoteJid!, {
+            text: "Error: Parametros incompletos",
+          });
+        }
+
+      } else if (message.split(' ')[1].startsWith("unban")) { //$asb::unban
+        const num = message.match(/\d+/);
+        // console.log(`NUMERO:${num}`)
+        if (num) {
+          try {
+            await unban(socket, blacklist, lock, m.messages[0].key.participant!, m.messages[0].key.remoteJid!, num[0]);
+          } catch (e) {
+            await socket.sendMessage(m.messages[0].key.remoteJid!, { react: { text: "‼️", key: m.messages[0].key } });
+          }
+        } else {
+          await socket.sendMessage(m.messages[0].key.remoteJid!, { text: "Erro: nenhum numero fornecido" });
+          return;
         }
       }
     }
+  
 
     // Dando muito problema, desativado.
     // Se a mensagem não possui link...
@@ -227,36 +210,36 @@ NUMERO:
     // }
   });
 
-  socket.ev.on(
-    "group-participants.update",
-    async ({ id, participants, action }) => {
-      if (id === "120363138200204540@g.us") return;
-      if (action === "add") {
-        if (participants && blacklist.list.includes(participants[0])) {
+socket.ev.on(
+  "group-participants.update",
+  async ({ id, participants, action }) => {
+    if (id === "120363138200204540@g.us") return;
+    if (action === "add") {
+      if (participants && blacklist.list.includes(participants[0])) {
 
 
-          await ban(socket, blacklist, lock, socket.user!.id.replace(/\:\d+/, ""), id, participants[0], undefined, " já foi banido.");
-          return;
-        }
-
-        await rules(socket, id);
+        await ban(socket, blacklist, lock, socket.user!.id.replace(/\:\d+/, ""), id, participants[0], undefined, " já foi banido.");
         return;
       }
-      if (id === "120363084400589228@g.us") {
-        if (action === "remove") {
-          await demoteFrom(
-            socket,
-            [
-              "120363029900825529@g.us",
-              "120363042733129991@g.us",
-              "120363100560580311@g.us",
-            ],
-            participants[0]
-          );
-          return;
-        }
-        return;
-      }
+
+      await rules(socket, id);
+      return;
     }
-  );
+    if (id === "120363084400589228@g.us") {
+      if (action === "remove") {
+        await demoteFrom(
+          socket,
+          [
+            "120363029900825529@g.us",
+            "120363042733129991@g.us",
+            "120363100560580311@g.us",
+          ],
+          participants[0]
+        );
+        return;
+      }
+      return;
+    }
+  }
+);
 }

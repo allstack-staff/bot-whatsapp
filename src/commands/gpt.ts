@@ -1,21 +1,17 @@
 import { BaileysSocket } from "../types/BaileysSocket";
-import { gpt } from "../bot_config";
-import { GPTBotManager } from "../gpt-core/GPTBotManager";
-
-type Gpt = ReturnType<typeof gpt>;
-
+import gpt from '../gpt-core/gpt'
 export const defaultgpt = async (
   socket: BaileysSocket,
-  sender: GPTBotManager<Gpt>,
   rJid: string,
   key: any,
   m: any,
   message: string,
 ) => {
+  const id: string = key.participant.split('@')[0]
   await socket.sendMessage(rJid, { react: { text: "✅", key: key } });
   await socket.sendMessage(
     rJid,
-    { text: (await sender.bot?.send(message))?.content! },
+    { text: (await gpt.send(message, id))?.content! },
     { quoted: m },
   );
 };
