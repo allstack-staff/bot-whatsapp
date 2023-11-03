@@ -7,7 +7,7 @@ export const defaultgpt = async (
   m: any,
   message: string,
 ) => {
-  const id: string = key.participant.split('@')[0]
+  const id: string = key.participant.split('@')[0] || key.remoteJid.split('@')[0]
   await socket.sendMessage(rJid, { react: { text: "✅", key: key } });
   await socket.sendMessage(
     rJid,

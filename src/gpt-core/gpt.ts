@@ -9,7 +9,7 @@ class Gpt extends GPT {
   private configuration: boolean = false
   private log = new LOG()
   constructor() {
-    super({ apikey: process.env.API_KEY, history: true, max_tokens: 700 })
+    super({ apikey: process.env.API_KEY, history: true, max_tokens: 700, model: "gpt-4"})
   }
 
   public resetConfiguration() {
@@ -48,8 +48,8 @@ class Gpt extends GPT {
         mkdirSync(filePath);
       }
       const request = await this.defaultRequestChat(message);
-      const jsonPath = path.resolve(__dirname, `${filePath}`, `${`${name}.json`}`)
-      this.log.SaveMessageToJSON(id, message, request, `${jsonPath}`)
+      const jsonPath = path.resolve(__dirname, filePath, `${name}.json`)
+      this.log.saveMessageToJSON(jsonPath, id, message, request.content)
       return request
     } catch (e) {
       if (e instanceof ChatGptRequestError) {
