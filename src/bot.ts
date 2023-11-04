@@ -30,7 +30,7 @@ export async function bot() {
   socket.ev.on("messages.upsert", async (m) => {
     if (m.type !== "notify" || m.messages[0].key.remoteJid === "status@broadcast") return;
 
-    console.log(JSON.stringify(m, undefined, 2));
+    // console.log(JSON.stringify(m, undefined, 2));
     let message: string | undefined | null;
 
     if (

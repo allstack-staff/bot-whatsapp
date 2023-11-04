@@ -52,23 +52,19 @@ class Gpt extends GPT {
 
       const logCache = [{ role: "user", content: message }]
       this.log.saveMessagesToJSON(jsonPath, logCache)
-
       const history = JSON.parse(await readFile(jsonPath, "utf-8"));
-
-      const count = history.length >= 20 ? 10 : 0 
+      const count = history.length >= 20 ? 10 : 0
 
       const config: ChatConfig = {
-        model: 'gpt-4',
-        messages: [...this.config(), ...history.slice(count, history.length) ],
-        temperature: 0.6,
+        model: 'gpt-3.5-turbo',
+        messages: [...this.config(), ...history.slice(count, history.length)],
+        temperature: 0.9,
         max_tokens: 500,
       }
-
       const request = await this.requestChat(config);
-
-
       this.log.saveMessagesToJSON(jsonPath, [request.data.choices[0].message])
       return request.data.choices[0].message
+
     } catch (e) {
       if (e instanceof ChatGptRequestError) {
         throw new ChatGptRequestError(`Erro ao Fazer Requisicao: ${e.code} \n\n${e}`)
@@ -92,10 +88,8 @@ class Gpt extends GPT {
       } else {
         console.error(error)
         return { role: "Admin", content: "Erro desconhecido, contate o suporte All Stack" }
-
       }
     }
-
   }
 }
 
