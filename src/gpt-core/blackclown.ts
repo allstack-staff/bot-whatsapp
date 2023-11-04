@@ -2,6 +2,7 @@ import { GPT, LOG } from "asb-gpt";
 import { AlreadyConfiguredError } from "../exceptions/AlreadyConfiguredError";
 import path from "path";
 import { existsSync, mkdirSync, writeFileSync } from "fs";
+import { ChatGptRequestError } from "../exceptions/ChatGptRequestError";
 
 class Blackclown extends GPT {
   private indice: number = 0
@@ -34,15 +35,13 @@ class Blackclown extends GPT {
     this.configuration = true
   }
 
-  private async request(message: string, id: string, name: string): Promise<{ role: string; content: string }> {
+  private async request(message: string): Promise<{ role: string; content: string }> {
     try {
       const filePath = path.resolve(__dirname, '..', 'logs');
       if (!existsSync(filePath)) {
         mkdirSync(filePath);
       }
       const request = await this.defaultRequestChat(message);
-      const jsonPath = path.resolve(__dirname, `${filePath}`, `${`${name}.json`}`)
-      this.log.SaveMessageToJSON(id, message, request, `${jsonPath}`)
       return request
     } catch (e) {
       if (e instanceof ChatGptRequestError) {
@@ -63,7 +62,7 @@ class Blackclown extends GPT {
         this.config()
       }
       const userID = `${id}-${this.log.getTimeStamp()}`
-      const text = this.request(message, id, userID)
+      const text = this.request(message)
       return text
     } catch (error) {
       if (error instanceof ChatGptRequestError) {

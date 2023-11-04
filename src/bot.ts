@@ -49,6 +49,19 @@ export async function bot() {
       ? m.messages[0].message?.conversation
       : m.messages[0].message?.extendedTextMessage?.text;
 
+    if (message && m.messages[0].key.remoteJid && !m.messages[0].key.participant) {
+      await defaultgpt(
+        socket,
+        m.messages[0].key.remoteJid!,
+        m.messages[0].key,
+        m.messages[0],
+        message,
+      ).catch(error =>
+        console.error(error)
+      );
+      return;
+    }
+
     if (message?.includes("@all")) {
       const groupJid = m.messages[0].key.remoteJid!.endsWith("g.us")
         ? m.messages[0].key.remoteJid!
@@ -100,7 +113,10 @@ export async function bot() {
           m.messages[0].key,
           m.messages[0],
           message.slice(8),
+        ).catch(error =>
+          console.error(error)
         );
+        return;
       } else if (message.split(' ')[1].startsWith("bc")) {
         try {
           await black(
@@ -189,7 +205,7 @@ export async function bot() {
         }
       }
     }
-  
+
 
     // Dando muito problema, desativado.
     // Se a mensagem não possui link...
@@ -210,36 +226,36 @@ export async function bot() {
     // }
   });
 
-socket.ev.on(
-  "group-participants.update",
-  async ({ id, participants, action }) => {
-    if (id === "120363138200204540@g.us") return;
-    if (action === "add") {
-      if (participants && blacklist.list.includes(participants[0])) {
+  socket.ev.on(
+    "group-participants.update",
+    async ({ id, participants, action }) => {
+      if (id === "120363138200204540@g.us") return;
+      if (action === "add") {
+        if (participants && blacklist.list.includes(participants[0])) {
 
 
-        await ban(socket, blacklist, lock, socket.user!.id.replace(/\:\d+/, ""), id, participants[0], undefined, " já foi banido.");
+          await ban(socket, blacklist, lock, socket.user!.id.replace(/\:\d+/, ""), id, participants[0], undefined, " já foi banido.");
+          return;
+        }
+
+        await rules(socket, id);
         return;
       }
-
-      await rules(socket, id);
-      return;
-    }
-    if (id === "120363084400589228@g.us") {
-      if (action === "remove") {
-        await demoteFrom(
-          socket,
-          [
-            "120363029900825529@g.us",
-            "120363042733129991@g.us",
-            "120363100560580311@g.us",
-          ],
-          participants[0]
-        );
+      if (id === "120363084400589228@g.us") {
+        if (action === "remove") {
+          await demoteFrom(
+            socket,
+            [
+              "120363029900825529@g.us",
+              "120363042733129991@g.us",
+              "120363100560580311@g.us",
+            ],
+            participants[0]
+          );
+          return;
+        }
         return;
       }
-      return;
     }
-  }
-);
+  );
 }

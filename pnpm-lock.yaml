@@ -12,8 +12,8 @@ dependencies:
     specifier: ^6.4.1
     version: 6.5.0(qrcode-terminal@0.12.0)
   asb-gpt:
-    specifier: ^1.1.0
-    version: 1.1.0
+    specifier: ^1.1.1
+    version: 1.1.1
   dotenv:
     specifier: ^16.3.1
     version: 16.3.1
@@ -254,8 +254,8 @@ packages:
     resolution: {integrity: sha512-58S9QDqG0Xx27YwPSt9fJxivjYl432YCwfDMfZ+71RAqUrZef7LrKQZ3LHLOwCS4FLNBplP533Zx895SeOCHvA==}
     dev: true
 
-  /asb-gpt@1.1.0:
-    resolution: {integrity: sha512-KdK9W69B90sJfFOSiYxSTHNOKxyEpI26kxH3mQM6egnqsQYSNWa8uDnizFVvQ/A67YZBDaggYUdefLHOKzJjJA==}
+  /asb-gpt@1.1.1:
+    resolution: {integrity: sha512-Em/pkdxW4VBYheejUkg0iCyr5OfRZQ8goTC5IZhYtg1LDSlCTt8cACfunkhef5IPFrzzivrPz/o5Nm3MW3hYsQ==}
     dependencies:
       axios: 1.5.1
       form-data: 4.0.0
