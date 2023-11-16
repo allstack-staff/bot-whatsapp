@@ -1,5 +1,5 @@
 import { BaileysSocket } from "../types/BaileysSocket";
-import gpt from '../gpt-core/gpt'
+import gpt from '../ia-core/gpt'
 import { SendMessageError } from "../exceptions/SendMessageError";
 export const defaultgpt = async (
   socket: BaileysSocket,

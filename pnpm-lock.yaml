@@ -11,9 +11,9 @@ dependencies:
   '@whiskeysockets/baileys':
     specifier: ^6.4.1
     version: 6.5.0(qrcode-terminal@0.12.0)
-  asb-gpt:
-    specifier: ^1.1.1
-    version: 1.1.1
+  asb-openai:
+    specifier: ^1.0.1
+    version: 1.0.1
   dotenv:
     specifier: ^16.3.1
     version: 16.3.1
@@ -23,11 +23,17 @@ dependencies:
   semaphore-async-await:
     specifier: ^1.5.1
     version: 1.5.1
+  uuid:
+    specifier: ^9.0.1
+    version: 9.0.1
 
 devDependencies:
   '@types/node':
     specifier: ^20.7.1
     version: 20.7.1
+  '@types/uuid':
+    specifier: ^9.0.7
+    version: 9.0.7
   prettier:
     specifier: ^3.0.3
     version: 3.0.3
@@ -180,6 +186,10 @@ packages:
   /@types/node@20.7.1:
     resolution: {integrity: sha512-LT+OIXpp2kj4E2S/p91BMe+VgGX2+lfO+XTpfXhh+bCk2LkQtHZSub8ewFBMGP5ClysPjTDFa4sMI8Q3n4T0wg==}
 
+  /@types/uuid@9.0.7:
+    resolution: {integrity: sha512-WUtIVRUZ9i5dYXefDEAI7sh9/O7jGvHg7Df/5O/gtH3Yabe5odI3UWopVR1qbPXQtvOxWu3mM4XxlYeZtMWF4g==}
+    dev: true
+
   /@wasm-audio-decoders/common@9.0.1:
     resolution: {integrity: sha512-s4KxPsxhD6e+EtjmHPzTmKJSJTEXHGYlBzUGGLN/plV01x3RecybW73nIMtdLLXL8k/zQ8HYFcA6d9lqCJcDjQ==}
     dependencies:
@@ -254,11 +264,12 @@ packages:
     resolution: {integrity: sha512-58S9QDqG0Xx27YwPSt9fJxivjYl432YCwfDMfZ+71RAqUrZef7LrKQZ3LHLOwCS4FLNBplP533Zx895SeOCHvA==}
     dev: true
 
-  /asb-gpt@1.1.1:
-    resolution: {integrity: sha512-Em/pkdxW4VBYheejUkg0iCyr5OfRZQ8goTC5IZhYtg1LDSlCTt8cACfunkhef5IPFrzzivrPz/o5Nm3MW3hYsQ==}
+  /asb-openai@1.0.1:
+    resolution: {integrity: sha512-zuuEQ/ewdMHRrTv+09HFl9DRNJZX6xGgDF9Xyafh7jhaEXg8Z4/XDCDcfOucNUU9ZEc/PaLQUZTM6bCbQtl+DA==}
     dependencies:
       axios: 1.5.1
       form-data: 4.0.0
+      uuid: 9.0.1
     transitivePeerDependencies:
       - debug
     dev: false

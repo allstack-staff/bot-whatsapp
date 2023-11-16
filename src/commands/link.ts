@@ -1,6 +1,6 @@
 
 import { writeFile, existsSync, mkdirSync } from "fs";
-import Link from "../gpt-core/link";
+import Link from "../ia-core/link";
 import { BaileysSocket } from "../types/BaileysSocket";
 
 export const link = async (

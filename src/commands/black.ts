@@ -1,4 +1,4 @@
-import blackclown from "../gpt-core/blackclown";
+import blackclown from "../ia-core/blackclown";
 import { BaileysSocket } from "../types/BaileysSocket";
 
 export const black = async (

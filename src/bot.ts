@@ -4,6 +4,7 @@ import { rules } from "./commands/regras";
 import { ban } from "./commands/ban";
 import { black } from "./commands/black";
 import { makeadmin } from "./commands/makeadmin";
+import { generateImage } from "./commands/dalle";
 import { defaultgpt } from "./commands/gpt";
 import { demoteFrom } from "./commands/internal/removeFrom";
 import { mentionAll } from "./commands/internal/mentionAll";
@@ -12,6 +13,8 @@ import { mention } from "./commands/mention";
 import Semaphore from 'semaphore-async-await';
 import path from 'path';
 import { MemberList } from "./commands/internal/MemberList";
+import { doc } from "./commands/doc";
+import { getImageById } from "./commands/get";
 
 let blacklist: MemberList = new MemberList(
   path.resolve(__dirname, "commands", "internal", "blacklist.txt")
@@ -106,7 +109,8 @@ export async function bot() {
             console.error(e);
           }
         }
-      } else if (message.split(' ')[1].startsWith("gpt")) {
+      }
+      else if (message.split(' ')[1].startsWith("gpt")) {
         await defaultgpt(
           socket,
           m.messages[0].key.remoteJid!,
@@ -117,7 +121,8 @@ export async function bot() {
           console.error(error)
         );
         return;
-      } else if (message.split(' ')[1].startsWith("bc")) {
+      }
+      else if (message.split(' ')[1].startsWith("bc")) {
         try {
           await black(
             socket,
@@ -135,8 +140,39 @@ export async function bot() {
           });
         }
       }
+      else if (message.split(' ')[1].startsWith("img")) {
+        try {
+          await generateImage(
+            socket,
+            m.messages[0].key.remoteJid!,
+            m.messages[0].key,
+            m.messages[0],
+            message.slice(8)
+          )
+          return
+        } catch (error) {
+          console.error(error)
+          return
+        }
+      }
+      else if (message.split(' ')[1].startsWith("img") && message.split(' ')[2].startsWith("--get")) {
+        await getImageById(
+          socket,
+          m.messages[0].key.remoteJid!,
+          m.messages[0].key,
+          m.messages[0],
+          message.split(' ')[4]
+        )
+      }
       if (message.split(' ')[1].startsWith("regras")) {
-        await rules(socket, m.messages[0].key.remoteJid!);
+        try {
+          const metadata = await socket.groupMetadata(m.messages[0].key.remoteJid!)
+          const description = metadata.desc
+          if (description) {
+            await rules(socket, m.messages[0].key.remoteJid!, description);
+
+          }
+        } catch { return }
       }
       else if (message.split(' ')[1].startsWith("ban")) { //$asb::ban
         if (
@@ -190,7 +226,8 @@ export async function bot() {
           });
         }
 
-      } else if (message.split(' ')[1].startsWith("unban")) { //$asb::unban
+      }
+      else if (message.split(' ')[1].startsWith("unban")) { //$asb::unban
         const num = message.match(/\d+/);
         // console.log(`NUMERO:${num}`)
         if (num) {
@@ -203,6 +240,14 @@ export async function bot() {
           await socket.sendMessage(m.messages[0].key.remoteJid!, { text: "Erro: nenhum numero fornecido" });
           return;
         }
+      }
+      else if (message.split(' ')[1].startsWith("doc")) {
+        await doc(
+          socket,
+          m.messages[0].key.remoteJid!,
+          m.messages[0].key,
+          m.messages[0]
+        )
       }
     }
 
@@ -228,17 +273,22 @@ export async function bot() {
 
   socket.ev.on(
     "group-participants.update",
-    async ({ id, participants, action }) => {
+    async ({ id, participants, action, }) => {
       if (id === "120363138200204540@g.us") return;
       if (action === "add") {
         if (participants && blacklist.list.includes(participants[0])) {
-
-
           await ban(socket, blacklist, lock, socket.user!.id.replace(/\:\d+/, ""), id, participants[0], undefined, " já foi banido.");
           return;
         }
 
-        await rules(socket, id);
+        try {
+          const metadata = await socket.groupMetadata(id)
+          const description = metadata.desc
+          if (description) {
+            await rules(socket, participants[0], description);
+
+          }
+        } catch { return }
         return;
       }
       if (id === "120363084400589228@g.us") {
