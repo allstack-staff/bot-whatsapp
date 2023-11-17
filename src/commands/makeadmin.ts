@@ -7,7 +7,7 @@ export const makeadmin = async (
 ) => {
   if (grJid === "120363084400589228@g.us") {
     await socket.sendMessage(grJid, {
-      text: "O uso de $asb:makeadmin no grupo dos administradores não é permitido.",
+      text: "O uso de $asb makeadmin no grupo dos administradores não é permitido.",
     });
     return;
   }

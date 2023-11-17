@@ -32,6 +32,7 @@ export async function bot() {
 
   socket.ev.on("messages.upsert", async (m) => {
     if (m.type !== "notify" || m.messages[0].key.remoteJid === "status@broadcast") return;
+    if (m.messages[0].key.fromMe) return
 
     // console.log(JSON.stringify(m, undefined, 2));
     let message: string | undefined | null;
@@ -52,7 +53,31 @@ export async function bot() {
       ? m.messages[0].message?.conversation
       : m.messages[0].message?.extendedTextMessage?.text;
 
-    if (message && m.messages[0].key.remoteJid && !m.messages[0].key.participant) {
+    // console.log("Condições para generateImage:", message!, m.messages[0].key.remoteJid, !m.messages[0].key.participant, message!.startsWith('$img'), !message!.startsWith('$img --get'));
+
+    // console.log("Condições para getImageById:", message, m.messages[0].key.remoteJid, !m.messages[0].key.participant, message!.startsWith('$img --get'));
+
+    // Inicio do Privado
+    if (message && m.messages[0].key.remoteJid && !m.messages[0].key.participant && message.startsWith('$img') && !message.startsWith('$img --get')) {
+      await generateImage(
+        socket,
+        m.messages[0].key.remoteJid!,
+        m.messages[0].key,
+        m.messages[0],
+        message.slice(4)
+      ).catch(error => console.error(error))
+      return;
+    } else if (message && m.messages[0].key.remoteJid && !m.messages[0].key.participant && message.startsWith('$img --get')) {
+      await getImageById(
+        socket,
+        m.messages[0].key.remoteJid!,
+        m.messages[0].key,
+        m.messages[0],
+        message.split(' ')[2]
+      ).catch(error => console.error(error))
+      return;
+    }
+    else if (message && m.messages[0].key.remoteJid && !m.messages[0].key.participant) {
       await defaultgpt(
         socket,
         m.messages[0].key.remoteJid!,
@@ -64,6 +89,7 @@ export async function bot() {
       );
       return;
     }
+    // Fim do privado
 
     if (message?.includes("@all")) {
       const groupJid = m.messages[0].key.remoteJid!.endsWith("g.us")
@@ -88,15 +114,20 @@ export async function bot() {
         return;
       }
       if (message.split(' ')[1].startsWith("makeadmin") || message.split(' ')[1].startsWith("-ma")) {
-        const groupJid = m.messages[0].key.remoteJid!.endsWith("@g.us")
-          ? m.messages[0].key.remoteJid
-          : undefined;
-        if (groupJid) {
-          await makeadmin(socket, groupJid, m.messages[0].key.participant!);
-        } else {
-          await socket.sendMessage(m.messages[0].key.remoteJid!, {
-            text: "Estamos em uma conversa pessoal.",
-          });
+        try {
+          const groupJid = m.messages[0].key.remoteJid!.endsWith("@g.us")
+            ? m.messages[0].key.remoteJid
+            : undefined;
+          if (groupJid) {
+            await makeadmin(socket, groupJid, m.messages[0].key.participant!);
+          } else {
+            await socket.sendMessage(m.messages[0].key.remoteJid!, {
+              text: "Estamos em uma conversa pessoal.",
+            });
+          }
+        } catch (error) {
+          console.error(error)
+          return
         }
       } // MakeAdmin
       else if (message.split(' ')[1].startsWith("mention") || message.split(' ')[1].startsWith("-me")) {
@@ -140,7 +171,7 @@ export async function bot() {
           });
         }
       }
-      else if (message.split(' ')[1].startsWith("img")) {
+      else if (message.split(' ')[1].startsWith("img") && !message.split(' ')[2].startsWith("--get")) {
         try {
           await generateImage(
             socket,
@@ -161,8 +192,9 @@ export async function bot() {
           m.messages[0].key.remoteJid!,
           m.messages[0].key,
           m.messages[0],
-          message.split(' ')[4]
-        )
+          message.split(' ')[3]
+        ).catch(error => console.error(error))
+        return;
       }
       if (message.split(' ')[1].startsWith("regras")) {
         try {
@@ -247,11 +279,9 @@ export async function bot() {
           m.messages[0].key.remoteJid!,
           m.messages[0].key,
           m.messages[0]
-        )
+        ).catch(error => console.error(error))
       }
     }
-
-
     // Dando muito problema, desativado.
     // Se a mensagem não possui link...
     // if (message && ! /^(https?|ftp?|http):\/\/[^\s/$.?#].[^\s]*$/i.test(message) && !m.messages[0].key.fromMe) {
@@ -277,7 +307,7 @@ export async function bot() {
       if (id === "120363138200204540@g.us") return;
       if (action === "add") {
         if (participants && blacklist.list.includes(participants[0])) {
-          await ban(socket, blacklist, lock, socket.user!.id.replace(/\:\d+/, ""), id, participants[0], undefined, " já foi banido.");
+          await ban(socket, blacklist, lock, socket.user!.id.replace(/\:\d+/, ""), id, participants[0], undefined, " já foi banido.").catch(error => console.error(error))
           return;
         }
 
@@ -285,26 +315,29 @@ export async function bot() {
           const metadata = await socket.groupMetadata(id)
           const description = metadata.desc
           if (description) {
-            await rules(socket, participants[0], description);
-
+            await rules(socket, participants[0], description)
           }
         } catch { return }
         return;
       }
       if (id === "120363084400589228@g.us") {
-        if (action === "remove") {
-          await demoteFrom(
-            socket,
-            [
-              "120363029900825529@g.us",
-              "120363042733129991@g.us",
-              "120363100560580311@g.us",
-            ],
-            participants[0]
-          );
+        try {
+          if (action === "remove") {
+            await demoteFrom(
+              socket,
+              [
+                "120363029900825529@g.us",
+                "120363042733129991@g.us",
+                "120363100560580311@g.us",
+              ],
+              participants[0]
+            );
+            return;
+          }
           return;
+        } catch (error) {
+          console.error(error)
         }
-        return;
       }
     }
   );

@@ -17,6 +17,8 @@
 
  6. $asb makeadmin - lhe promove a administrador (se estiver no grupo de administração)
 
+ 7. No privaddo, use *$img* para gerar imagens
+
  ## OBS:
   1. O gpt tem grava todas as mensagens em um arquivo json. O motivo é gerar um historico para cada individuo, a fim de garantir uma melhor experiência. Nenhum dado pessoal é salvo e você pode solicitar o seu json para os administradores do bot.
 
