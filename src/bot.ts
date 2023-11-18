@@ -192,7 +192,7 @@ export async function bot() {
           m.messages[0].key.remoteJid!,
           m.messages[0].key,
           m.messages[0],
-          message.split(' ')[4]
+          message.split(' ')[3]
         ).catch(error => console.error(error))
         return;
       }
