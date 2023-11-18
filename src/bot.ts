@@ -21,6 +21,18 @@ let blacklist: MemberList = new MemberList(
 );
 const lock: Semaphore = new Semaphore(1);
 
+
+function coerce(str: string): string | number {
+  if (/\d+(\.\d+)?/.test(str)) {
+    return Number.parseFloat(str);
+  } else if (/\".*?\"|'.*?'/.test(str)) {
+    let r = /\".*?\"|'.*?'/.exec(str);
+    return " " + r![0].slice(1, r![0].length - 1);
+  } else {
+    return str;
+  }
+}
+
 export async function bot() {
   const socket = await connect();
 
@@ -32,7 +44,7 @@ export async function bot() {
 
   socket.ev.on("messages.upsert", async (m) => {
     if (m.type !== "notify" || m.messages[0].key.remoteJid === "status@broadcast") return;
-    if (m.messages[0].key.fromMe) return
+    
 
     // console.log(JSON.stringify(m, undefined, 2));
     let message: string | undefined | null;
@@ -225,10 +237,10 @@ export async function bot() {
         const jids =
           m.messages[0].message.extendedTextMessage.contextInfo.mentionedJid;
 
-        const [usuario, motivo] = [
-          jids[0],
-          message.split(jids[0].split("@")[0])[1],
-        ];
+        let usuario = jids[0];
+        let motivo: string | number = message.split(jids[0].split("@")[0])[1];
+
+        motivo = coerce(motivo);
 
         const grouprJid = m.messages[0].key.remoteJid!.endsWith("@g.us")
           ? m.messages[0].key.remoteJid
@@ -312,10 +324,11 @@ export async function bot() {
         }
 
         try {
-          const metadata = await socket.groupMetadata(id)
-          const description = metadata.desc
+          const metadata = await socket.groupMetadata(id);
+
+          const description = metadata.desc;
           if (description) {
-            await rules(socket, participants[0], description)
+            await rules(socket, id, `Olá! Seja bem vindo a All Stack! Leia as regras honrado cavalheiro/honrada dama.`);
           }
         } catch { return }
         return;

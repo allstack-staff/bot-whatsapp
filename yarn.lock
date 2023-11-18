@@ -164,6 +164,11 @@
   resolved "https://registry.npmjs.org/@types/node/-/node-10.17.60.tgz"
   integrity sha512-F0KIgDJfy2nA3zMLmWGKxcH2ZVEtCZXHHdOQs2gSaQ27+lNeEfGxzkIw90aXswATX7AZ33tahPbzy6KAfUreVw==
 
+"@types/uuid@^9.0.7":
+  version "9.0.7"
+  resolved "https://registry.npmjs.org/@types/uuid/-/uuid-9.0.7.tgz"
+  integrity sha512-WUtIVRUZ9i5dYXefDEAI7sh9/O7jGvHg7Df/5O/gtH3Yabe5odI3UWopVR1qbPXQtvOxWu3mM4XxlYeZtMWF4g==
+
 "@wasm-audio-decoders/common@9.0.1":
   version "9.0.1"
   resolved "https://registry.npmjs.org/@wasm-audio-decoders/common/-/common-9.0.1.tgz"
@@ -222,10 +227,10 @@ arg@^4.1.0:
   resolved "https://registry.npmjs.org/arg/-/arg-4.1.3.tgz"
   integrity sha512-58S9QDqG0Xx27YwPSt9fJxivjYl432YCwfDMfZ+71RAqUrZef7LrKQZ3LHLOwCS4FLNBplP533Zx895SeOCHvA==
 
-asb-gpt@^1.1.1:
-  version "1.2.0"
-  resolved "https://registry.npmjs.org/asb-gpt/-/asb-gpt-1.2.0.tgz"
-  integrity sha512-Hotjk6qOOcUjXO5HB0t63MdEZ2Td+pr99t+3FMTV2yrkkOhwUossa87LCjWsqT9CAUFnl8DlmDMj1O4QqlNjgw==
+asb-openai@^1.0.1:
+  version "1.0.1"
+  resolved "https://registry.npmjs.org/asb-openai/-/asb-openai-1.0.1.tgz"
+  integrity sha512-zuuEQ/ewdMHRrTv+09HFl9DRNJZX6xGgDF9Xyafh7jhaEXg8Z4/XDCDcfOucNUU9ZEc/PaLQUZTM6bCbQtl+DA==
   dependencies:
     axios "^1.5.0"
     form-data "^4.0.0"
@@ -265,17 +270,10 @@ audio-type@^2.2.0:
   resolved "https://registry.npmjs.org/audio-type/-/audio-type-2.2.1.tgz"
   integrity sha512-En9AY6EG1qYqEy5L/quryzbA4akBpJrnBZNxeKTqGHC2xT9Qc4aZ8b7CcbOMFTTc/MGdoNyp+SN4zInZNKxMYA==
 
-axios@^1.3.3:
+axios@^1.3.3, axios@^1.5.0:
   version "1.5.0"
   resolved "https://registry.npmjs.org/axios/-/axios-1.5.0.tgz"
   integrity sha512-D4DdjDo5CY50Qms0qGQTTw6Q44jl7zRwY7bthds06pUGfChBCTcQs+N743eFWGEd6pRTMd6A+I87aWyFV5wiZQ==
-  dependencies:
-    follow-redirects "^1.15.0"
-    form-data "^4.0.0"
-    proxy-from-env "^1.1.0"
-
-axios@^1.5.0:
-  version "1.5.1"
   dependencies:
     follow-redirects "^1.15.0"
     form-data "^4.0.0"
