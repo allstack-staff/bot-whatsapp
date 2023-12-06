@@ -1,10 +1,14 @@
 import { BaileysSocket } from "../types/BaileysSocket";
 import { MemberList } from "./internal/MemberList";
 import Semaphore from "semaphore-async-await";
-import {readFileSync } from 'fs'
-import { resolve } from 'path';
-const regras = JSON.parse(readFileSync(resolve(".", "dist", "commands", "internal", "regras.json"), 'utf-8'));
-
+import { readFileSync } from "fs";
+import { resolve } from "path";
+const regras = JSON.parse(
+  readFileSync(
+    resolve(".", "dist", "commands", "internal", "regras.json"),
+    "utf-8"
+  )
+);
 
 function getrule(key: number) {
   return regras[key];
@@ -17,14 +21,14 @@ export const ban = async (
   grJid: string,
   rJid: string,
   key: any,
-  motivo: string | number,
+  motivo: string | number
 ) => {
   await sem.acquire();
 
   if (typeof motivo == "number") {
     motivo = getrule(motivo) ?? " regra indefinida";
   }
-  
+
   const metadata = await socket.groupMetadata(grJid);
   const admins = metadata.participants.filter((x) => x.admin).map((x) => x.id);
   if (admins.includes(arJid)) {
@@ -39,10 +43,9 @@ export const ban = async (
         await socket.sendMessage(grJid, { react: { text: "✅", key: key } });
       await socket.groupParticipantsUpdate(grJid, [rJid], "remove");
       await socket.sendMessage(grJid, {
-        text: `
-O usuário(a) @${rJid?.split("@")[0]} foi banido(a).
-Motivo:${motivo}
-`,
+        text: `O usuário(a) @${rJid?.split(
+          "@"
+        )[0]} foi banido(a). Motivo:${motivo}`,
         mentions: [rJid],
       });
       members.add(rJid);
@@ -51,14 +54,17 @@ Motivo:${motivo}
     } catch (e) {
       await socket.sendMessage(grJid, {
         react: {
-          text: "‼️",
+          text: "❌",
           key: key,
         },
       });
     }
   } else {
     await socket.sendMessage(grJid, {
-      text: "É necessário ser uma pessoa autorizada para usar este comando.",
+      react: {
+        text: "❌",
+        key: key,
+      },
     });
   }
 
