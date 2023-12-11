@@ -348,6 +348,7 @@ export async function bot() {
               key: m.messages[0],
             },
           });
+          return;
         }
 
         if (message.split(" ")[2].startsWith("--all")) {
