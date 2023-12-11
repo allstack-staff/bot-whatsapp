@@ -331,28 +331,16 @@ export async function bot() {
 
         motivo = coerce(motivo);
 
-        // const userValid = Promise.all([
-        //   await admin(jids, "120363084400589228@g.us"),
-        //   (await admin(
-        //     m.messages[0].key.participant!,
-        //     "120363084400589228@g.us"
-        //   )),
-        // ]);
-
-        console.log(await socket.groupMetadata("120363084400589228@g.us"));
         const userIsAdmin = async () => {
           const data = await socket.groupMetadata("120363084400589228@g.us");
           return data.participants.map((user) => user.id);
         };
-        // admin(usuario, "120363084400589228@g.us");
-        console.log(await userIsAdmin());
 
         if (await userIsAdmin()) {
-          console.log("IF userIsAdmin");
           await socket.sendMessage(m.messages[0].key.remoteJid!, {
             react: {
               text: "❌",
-              key: m.messages[0],
+              key: m.messages[0].key,
             },
           });
           return;
@@ -402,7 +390,7 @@ export async function bot() {
           await socket.sendMessage(m.messages[0].key.remoteJid!, {
             react: {
               text: "❌",
-              key: m.messages[0],
+              key: m.messages[0].key,
             },
           });
           console.error(error);
@@ -462,7 +450,7 @@ export async function bot() {
   socket.ev.on(
     "group-participants.update",
     async ({ id, participants, action }) => {
-      console.log({ id, participants, action });
+      // console.log({ id, participants, action });
 
       if (id === "120363138200204540@g.us") return;
       if (action === "add") {
@@ -481,9 +469,7 @@ export async function bot() {
         }
 
         const metadata = await socket.groupMetadata(id);
-
         const description = metadata.desc;
-        console.log(description);
 
         await rules(
           socket,
