@@ -86,7 +86,15 @@ export async function bot() {
         m.messages[0].key,
         m.messages[0],
         message.slice(4)
-      ).catch((error) => console.error(error));
+      ).catch(async (error) => {
+        console.error(error);
+        await socket.sendMessage(m.messages[0].key.remoteJid!, {
+          react: {
+            text: "❌",
+            key: m.messages[0],
+          },
+        });
+      });
       return;
     } else if (
       message &&
@@ -100,7 +108,15 @@ export async function bot() {
         m.messages[0].key,
         m.messages[0],
         message.split(" ")[2]
-      ).catch((error) => console.error(error));
+      ).catch(async (error) => {
+        console.error(error);
+        await socket.sendMessage(m.messages[0].key.remoteJid!, {
+          react: {
+            text: "❌",
+            key: m.messages[0],
+          },
+        });
+      });
       return;
     } else if (
       message &&
@@ -113,7 +129,15 @@ export async function bot() {
         m.messages[0].key,
         m.messages[0],
         message
-      ).catch((error) => console.error(error));
+      ).catch(async (error) => {
+        console.error(error);
+        await socket.sendMessage(m.messages[0].key.remoteJid!, {
+          react: {
+            text: "❌",
+            key: m.messages[0],
+          },
+        });
+      });
       return;
     }
     // Fim do privado
@@ -222,19 +246,22 @@ export async function bot() {
         message.split(" ")[1].startsWith("img") &&
         !message.split(" ")[2].startsWith("--get")
       ) {
-        try {
-          await generateImage(
-            socket,
-            m.messages[0].key.remoteJid!,
-            m.messages[0].key,
-            m.messages[0],
-            message.slice(8)
-          );
-          return;
-        } catch (error) {
+        await generateImage(
+          socket,
+          m.messages[0].key.remoteJid!,
+          m.messages[0].key,
+          m.messages[0],
+          message.slice(8)
+        ).catch(async (error) => {
           console.error(error);
-          return;
-        }
+          await socket.sendMessage(m.messages[0].key.remoteJid!, {
+            react: {
+              text: "❌",
+              key: m.messages[0],
+            },
+          });
+        });
+        return;
       } else if (
         message.split(" ")[1].startsWith("img") &&
         message.split(" ")[2].startsWith("--get")
@@ -245,7 +272,15 @@ export async function bot() {
           m.messages[0].key,
           m.messages[0],
           message.split(" ")[3]
-        ).catch((error) => console.error(error));
+        ).catch(async (error) => {
+          console.error(error);
+          await socket.sendMessage(m.messages[0].key.remoteJid!, {
+            react: {
+              text: "❌",
+              key: m.messages[0],
+            },
+          });
+        });
         return;
       }
       if (message.split(" ")[1].startsWith("regras")) {
@@ -296,6 +331,23 @@ export async function bot() {
 
         motivo = coerce(motivo);
 
+        const userValid = Promise.all([
+          await admin(jids, "120363084400589228@g.us"),
+          !(await admin(
+            m.messages[0].key.participant!,
+            "120363084400589228@g.us"
+          )),
+        ]);
+
+        if (!(await userValid).every(Boolean)) {
+          await socket.sendMessage(m.messages[0].key.remoteJid!, {
+            react: {
+              text: "❌",
+              key: m.messages[0],
+            },
+          });
+        }
+
         if (message.split(" ")[2].startsWith("--all")) {
           const grupos: { [_: string]: GroupMetadata } =
             await socket.groupFetchAllParticipating();
@@ -324,7 +376,7 @@ export async function bot() {
                 5000 * (index + 1)
               );
             });
-          });
+          }).catch((error) => console.error(error));
         }
 
         await ban(
@@ -413,7 +465,7 @@ export async function bot() {
             id,
             participants[0],
             undefined,
-            " já foi banido."
+            "Black List."
           ).catch((error) => console.error(error));
           return;
         }
@@ -433,10 +485,7 @@ export async function bot() {
       if (id === "120363084400589228@g.us") {
         try {
           if (action === "remove") {
-            await demoteFrom(
-              socket,
-              participants[0]
-            );
+            await demoteFrom(socket, participants[0]);
             return;
           }
           return;

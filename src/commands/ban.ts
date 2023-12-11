@@ -17,50 +17,44 @@ export const ban = async (
   socket: BaileysSocket,
   members: MemberList,
   sem: Semaphore,
-  arJid: string,
-  grJid: string,
-  rJid: string,
+  participant: string,
+  groupJid: string,
+  userJid: string,
   key: any,
   motivo: string | number
 ) => {
   await sem.acquire();
 
   if (typeof motivo == "number") {
-    motivo = getrule(motivo) ?? " regra indefinida";
+    motivo = getrule(motivo) ?? "Regra de Exceção";
   }
 
-  const metadata = await socket.groupMetadata(grJid);
+  const metadata = await socket.groupMetadata(groupJid);
   const admins = metadata.participants.filter((x) => x.admin).map((x) => x.id);
-  if (admins.includes(arJid)) {
-    try {
-      if (arJid === rJid) {
-        await socket.sendMessage(grJid, {
-          text: "Você não pode banir a si mesmo(a)!",
-        });
-        return;
-      }
-      if (key)
-        await socket.sendMessage(grJid, { react: { text: "✅", key: key } });
-      await socket.groupParticipantsUpdate(grJid, [rJid], "remove");
-      await socket.sendMessage(grJid, {
-        text: `O usuário(a) @${rJid?.split(
-          "@"
-        )[0]} foi banido(a). Motivo:${motivo}`,
-        mentions: [rJid],
-      });
-      members.add(rJid);
-      members.saveMembersList();
-      members.replace(members.name);
-    } catch (e) {
-      await socket.sendMessage(grJid, {
+  if (admins.includes(participant)) {
+    if (participant === userJid) {
+      await socket.sendMessage(groupJid, {
         react: {
           text: "❌",
           key: key,
         },
       });
+      return;
     }
+    if (key)
+      await socket.sendMessage(groupJid, { react: { text: "✅", key: key } });
+    await socket.groupParticipantsUpdate(groupJid, [userJid], "remove");
+    await socket.sendMessage(groupJid, {
+      text: `O usuário(a) @${userJid?.split(
+        "@"
+      )[0]} foi banido(a). Motivo:${motivo}`,
+      mentions: [userJid],
+    });
+    members.add(userJid);
+    members.saveMembersList();
+    members.replace(members.name);
   } else {
-    await socket.sendMessage(grJid, {
+    await socket.sendMessage(groupJid, {
       react: {
         text: "❌",
         key: key,
