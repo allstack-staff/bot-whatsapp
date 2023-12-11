@@ -331,15 +331,17 @@ export async function bot() {
 
         motivo = coerce(motivo);
 
-        const userValid = Promise.all([
-          await admin(jids, "120363084400589228@g.us"),
-          !(await admin(
-            m.messages[0].key.participant!,
-            "120363084400589228@g.us"
-          )),
-        ]);
+        // const userValid = Promise.all([
+        //   await admin(jids, "120363084400589228@g.us"),
+        //   (await admin(
+        //     m.messages[0].key.participant!,
+        //     "120363084400589228@g.us"
+        //   )),
+        // ]);
 
-        if (!(await userValid).every(Boolean)) {
+        const userValid = await admin(usuario, "120363084400589228@g.us");
+
+        if (!userValid) {
           await socket.sendMessage(m.messages[0].key.remoteJid!, {
             react: {
               text: "❌",
