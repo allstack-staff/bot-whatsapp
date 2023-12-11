@@ -342,7 +342,7 @@ export async function bot() {
         console.log(await socket.groupMetadata('120363084400589228@g.us'))
         const userIsAdmin = async () => {
           const data = await socket.groupMetadata('120363084400589228@g.us')
-          console.log(Object.keys(data))
+          console.log(Object.keys(data.participants))
           return Object.keys(data).includes(usuario)
         }
         // admin(usuario, "120363084400589228@g.us");
