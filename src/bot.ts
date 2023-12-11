@@ -340,8 +340,10 @@ export async function bot() {
         // ]);
 
         const userIsAdmin = await admin(usuario, "120363084400589228@g.us");
+        console.log(userIsAdmin)
 
         if (userIsAdmin) {
+          console.log('IF userIsAdmin')
           await socket.sendMessage(m.messages[0].key.remoteJid!, {
             react: {
               text: "❌",
@@ -481,7 +483,7 @@ export async function bot() {
         await rules(
           socket,
           id,
-          `Olá ${participants[0]}! Seja bem vindo a All Stack!\n\n ${description}`
+          `Olá ${participants[0].split('@'[0])}! Seja bem vindo a All Stack!\n\n ${description}`
         ).catch((error) => console.error(error));
 
         return;

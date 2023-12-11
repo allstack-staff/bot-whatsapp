@@ -46,7 +46,7 @@ export const ban = async (
     await socket.sendMessage(groupJid, {
       text: `O usuário(a) @${userJid?.split(
         "@"
-      )[0]} foi banido(a). Motivo:${motivo}`,
+      )[0]} foi banido(a). Motivo: ${motivo}`,
       mentions: [userJid],
     });
     members.add(userJid);
