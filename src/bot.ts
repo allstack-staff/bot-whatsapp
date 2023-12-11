@@ -476,6 +476,7 @@ export async function bot() {
         const metadata = await socket.groupMetadata(id);
 
         const description = metadata.desc;
+        console.log(description)
 
         await rules(
           socket,
