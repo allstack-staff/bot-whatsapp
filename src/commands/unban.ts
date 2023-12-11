@@ -25,19 +25,15 @@ export const unban = async (
   if (!admins.includes(arJid))
     throw new NoUserAdminError("\n\nUsuario não é admnin\n\n");
   
-  try {
     members.rm(urJid);
     members.saveMembersList();
     members.replace(members.name);
     await socket.sendMessage(grJid, {
-      text: `O usuário(a) @${urJid.split("@")[0]} foi desbanido(a).`,
+      text: `Usuário(a) @${urJid.split("@")[0]} removido da black list.`,
       mentions: [urJid],
     });
     await socket.groupParticipantsUpdate(grJid, [urJid], "add");
-  } catch (e) {
-    console.error(e);
-    throw new Error();
-  }
+
 
   sem.release();
 };
