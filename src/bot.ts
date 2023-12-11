@@ -339,9 +339,9 @@ export async function bot() {
         //   )),
         // ]);
 
-        const userValid = await admin(usuario, "120363084400589228@g.us");
+        const userIsAdmin = await admin(usuario, "120363084400589228@g.us");
 
-        if (!userValid) {
+        if (userIsAdmin) {
           await socket.sendMessage(m.messages[0].key.remoteJid!, {
             react: {
               text: "❌",
