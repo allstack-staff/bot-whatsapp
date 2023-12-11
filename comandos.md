@@ -2,7 +2,9 @@
 
 ## Acessiveis somente a administração
  1. $asb ban @usuario motivo: bane um usuario do grupo, com um motivo.
- 2. $asb unban @usuario - desbane um usuario.
+ 2. $asb ban --all @usuario: 
+ 3. $asb unban @usuario - desbane um usuario.
+ 4. $asb makeadmin - lhe promove a administrador (se estiver no grupo de administração)
 
 ## Acessiveis aos usuarios e a administração
  1. $asb bc {pergunta} - o bot BlackClown (um piadista velho e sem graça)
@@ -15,14 +17,18 @@
 
  5. $asb regras - Mostra as regras que está definida na descrição do grupo.
 
- 6. $asb makeadmin - lhe promove a administrador (se estiver no grupo de administração)
-
- 7. No privaddo, use *$img* para gerar imagens
+ 6. No privado, use *$img* para gerar imagens
 
  ## OBS:
   1. O gpt tem grava todas as mensagens em um arquivo json. O motivo é gerar um historico para cada individuo, a fim de garantir uma melhor experiência. Nenhum dado pessoal é salvo e você pode solicitar o seu json para os administradores do bot.
 
   2. O dalle guarda as imagens geradas em uma pasta, e também gera um arquivo json com o local da imagem e um id unico. Você também pode recuperar a imagem a qualquer momento com o comando *img --get 55DDDxxxxxxxx_uuid* onde xxxxxxxx são os 8 numero do seu numero de celular + o id que veio junto com sua imagem gerada.
+
+  3. A cada atualização do bot, as imagens e os prompts do gpt são zipados dentro do servidor. Para recuperar, solicite ao administrador da VM.
+
+  4. É extritamente proibido adicionar o bot a outros grupos sem autorização dos administradores.
+
+  5. Os custos do bot são pagos pelo administrador da VM, não é arrecadado nenhuma ajuda de custo no seu uso, portanto, use com moderação. 
 
 ## Extras (features que não são comandos)
 
@@ -36,7 +42,7 @@
   *$asb gpt olá, pode me dizer o ano de nascimento do Leonardo da Vinci?*
   *$asb bc faz uma piada pra mim sobre coelhos no milharal*
   *$asb img uma planice nevada semelhante ao Alasca no por do sol*
-  *$asb img --get 55629...*
+  *$asb img --get 55628626...* (sem o 9)
 
 ## Github dos Desenvolvedores:
  ### NicollasPrudencio

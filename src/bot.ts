@@ -473,14 +473,14 @@ export async function bot() {
           return;
         }
 
-        // const metadata = await socket.groupMetadata(id);
+        const metadata = await socket.groupMetadata(id);
 
-        // const description = metadata.desc;
+        const description = metadata.desc;
 
         await rules(
           socket,
           id,
-          `Olá! Seja bem vindo a All Stack! Leia as regras honrado cavalheiro/honrada dama.`
+          `Olá ${participants[0]}! Seja bem vindo a All Stack!\n\n ${description}`
         ).catch((error) => console.error(error));
 
         return;
