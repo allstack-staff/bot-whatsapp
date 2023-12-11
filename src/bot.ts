@@ -339,10 +339,14 @@ export async function bot() {
         //   )),
         // ]);
 
-        const userIsAdmin = await admin(usuario, "120363084400589228@g.us");
+        const userIsAdmin = async () => {
+          const data = await socket.groupMetadata('120363084400589228@g.us')
+          return data.participants.includes({id: usuario, admin: 'admin'} || {id: usuario, admin: 'superadmin'})
+        }
+        // admin(usuario, "120363084400589228@g.us");
         console.log(userIsAdmin)
 
-        if (userIsAdmin) {
+        if (await userIsAdmin()) {
           console.log('IF userIsAdmin')
           await socket.sendMessage(m.messages[0].key.remoteJid!, {
             react: {
