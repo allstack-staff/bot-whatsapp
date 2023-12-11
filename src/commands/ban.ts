@@ -41,8 +41,7 @@ export const ban = async (
       });
       return;
     }
-    if (key)
-      await socket.sendMessage(groupJid, { react: { text: "✅", key: key } });
+    await socket.sendMessage(groupJid, { react: { text: "✅", key: key } });
     await socket.groupParticipantsUpdate(groupJid, [userJid], "remove");
     await socket.sendMessage(groupJid, {
       text: `O usuário(a) @${userJid?.split(
