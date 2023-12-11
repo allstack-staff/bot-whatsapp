@@ -339,17 +339,16 @@ export async function bot() {
         //   )),
         // ]);
 
-        console.log(await socket.groupMetadata('120363084400589228@g.us'))
+        console.log(await socket.groupMetadata("120363084400589228@g.us"));
         const userIsAdmin = async () => {
-          const data = await socket.groupMetadata('120363084400589228@g.us')
-          console.log(Object.keys(data.participants))
-          return Object.keys(data).includes(usuario)
-        }
+          const data = await socket.groupMetadata("120363084400589228@g.us");
+          return data.participants.map((user) => user.id);
+        };
         // admin(usuario, "120363084400589228@g.us");
-        console.log(await userIsAdmin())
+        console.log(await userIsAdmin());
 
         if (await userIsAdmin()) {
-          console.log('IF userIsAdmin')
+          console.log("IF userIsAdmin");
           await socket.sendMessage(m.messages[0].key.remoteJid!, {
             react: {
               text: "❌",
@@ -484,12 +483,14 @@ export async function bot() {
         const metadata = await socket.groupMetadata(id);
 
         const description = metadata.desc;
-        console.log(description)
+        console.log(description);
 
         await rules(
           socket,
           id,
-          `Olá ${participants[0].split('@')[0]}! Seja bem vindo a All Stack!\n\n ${description}`
+          `Olá ${
+            participants[0].split("@")[0]
+          }! Seja bem vindo a All Stack!\n\n ${description}`
         ).catch((error) => console.error(error));
 
         return;
