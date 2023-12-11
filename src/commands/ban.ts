@@ -5,7 +5,7 @@ import { readFileSync } from "fs";
 import { resolve } from "path";
 const regras = JSON.parse(
   readFileSync(
-    resolve(".", "dist", "commands", "internal", "regras.json"),
+    resolve(__dirname, "internal", "regras.json"),
     "utf-8"
   )
 );
