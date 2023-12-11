@@ -345,7 +345,7 @@ export async function bot() {
           return Object.keys(data).includes(usuario)
         }
         // admin(usuario, "120363084400589228@g.us");
-        console.log(userIsAdmin)
+        console.log(userIsAdmin())
 
         if (await userIsAdmin()) {
           console.log('IF userIsAdmin')
