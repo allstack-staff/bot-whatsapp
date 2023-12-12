@@ -30,11 +30,14 @@ export class Dalle extends DALLE {
       response_format: 'b64_json'
     }
     const request = await this.createImage(params)
-    if (request.data.error) return request.data.error.message!;
+
+    if (request.data.error) throw new SendDalleGenerateImage(request.data.error.message!);
+
     const logCache: Array<{
       role: string;
       content: string;
     }> = [{ role: message, content: imageName }]
+    
     await this.log.saveMessagesToJSON(`${path}/${id}.json`, logCache)
 
     writeFileSync(`${dirPath}/${imageName}`, request.data.data[0].b64_json, 'base64')

@@ -17,6 +17,7 @@ import { doc } from "./commands/doc";
 import { getImageById } from "./commands/get";
 import { GroupMetadata } from "@whiskeysockets/baileys";
 
+
 let blacklist: MemberList = new MemberList(
   path.resolve(__dirname, "commands", "internal", "blacklist.txt")
 );
