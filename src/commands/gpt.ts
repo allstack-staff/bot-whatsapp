@@ -10,10 +10,13 @@ export const defaultgpt = async (
 ) => {
   const id: string =
     key.participant?.split("@")[0] ?? key.remoteJid?.split("@")[0];
-  await socket.sendMessage(rJid, { react: { text: "✅", key: key } });
-  await socket.sendMessage(
+  const react = await socket.sendMessage(rJid, {
+    react: { text: "✅", key: key },
+  });
+  const msg = await socket.sendMessage(
     rJid,
     { text: (await gpt.send(message, id))?.content! },
     { quoted: m }
   );
+  Promise.all([react, msg]);
 };

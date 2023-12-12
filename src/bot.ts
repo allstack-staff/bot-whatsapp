@@ -91,7 +91,7 @@ export async function bot() {
         await socket.sendMessage(m.messages[0].key.remoteJid!, {
           react: {
             text: "❌",
-            key: m.messages[0],
+            key: m.messages[0].key,
           },
         });
       });
@@ -113,7 +113,7 @@ export async function bot() {
         await socket.sendMessage(m.messages[0].key.remoteJid!, {
           react: {
             text: "❌",
-            key: m.messages[0],
+            key: m.messages[0].key,
           },
         });
       });
@@ -134,7 +134,7 @@ export async function bot() {
         await socket.sendMessage(m.messages[0].key.remoteJid!, {
           react: {
             text: "❌",
-            key: m.messages[0],
+            key: m.messages[0].key,
           },
         });
       });
@@ -179,7 +179,7 @@ export async function bot() {
           await socket.sendMessage(m.messages[0].key.remoteJid!, {
             react: {
               text: "❌",
-              key: m.messages[0],
+              key: m.messages[0].key,
             },
           });
           return;
@@ -190,7 +190,7 @@ export async function bot() {
             await socket.sendMessage(m.messages[0].key.remoteJid!, {
               react: {
                 text: "❌",
-                key: m.messages[0],
+                key: m.messages[0].key,
               },
             });
             console.error(error);
@@ -210,7 +210,7 @@ export async function bot() {
             await socket.sendMessage(m.messages[0].key.remoteJid!, {
               react: {
                 text: "❌",
-                key: m.messages[0],
+                key: m.messages[0].key,
               },
             });
             console.error(e);
@@ -223,25 +223,33 @@ export async function bot() {
           m.messages[0].key,
           m.messages[0],
           message.slice(8)
-        ).catch((error) => console.error(error));
-        return;
-      } else if (message.split(" ")[1].startsWith("bc")) {
-        try {
-          await black(
-            socket,
-            m.messages[0].key.remoteJid!,
-            m.messages[0].key,
-            m.messages[0],
-            message.slice(7)
-          );
-        } catch (e) {
+        ).catch(async (error) => {
           await socket.sendMessage(m.messages[0].key.remoteJid!, {
             react: {
               text: "❌",
-              key: m.messages[0],
+              key: m.messages[0].key,
             },
           });
-        }
+          console.error(error);
+        });
+        return;
+      } else if (message.split(" ")[1].startsWith("bc")) {
+        await black(
+          socket,
+          m.messages[0].key.remoteJid!,
+          m.messages[0].key,
+          m.messages[0],
+          message.slice(7)
+        ).catch(async (error) => {
+          await socket.sendMessage(m.messages[0].key.remoteJid!, {
+            react: {
+              text: "❌",
+              key: m.messages[0].key,
+            },
+          });
+          console.error(error);
+        });
+        return;
       } else if (
         message.split(" ")[1].startsWith("img") &&
         !message.split(" ")[2].startsWith("--get")
@@ -257,7 +265,7 @@ export async function bot() {
           await socket.sendMessage(m.messages[0].key.remoteJid!, {
             react: {
               text: "❌",
-              key: m.messages[0],
+              key: m.messages[0].key,
             },
           });
         });
@@ -277,7 +285,7 @@ export async function bot() {
           await socket.sendMessage(m.messages[0].key.remoteJid!, {
             react: {
               text: "❌",
-              key: m.messages[0],
+              key: m.messages[0].key,
             },
           });
         });
@@ -292,7 +300,14 @@ export async function bot() {
           if (description) {
             await rules(socket, m.messages[0].key.remoteJid!, description);
           }
-        } catch {
+        } catch (e) {
+          await socket.sendMessage(m.messages[0].key.remoteJid!, {
+            react: {
+              text: "❌",
+              key: m.messages[0].key,
+            },
+          });
+          console.error(e);
           return;
         }
       } else if (message.split(" ")[1].startsWith("ban")) {
@@ -303,7 +318,7 @@ export async function bot() {
           await socket.sendMessage(m.messages[0].key.remoteJid!, {
             react: {
               text: "❌",
-              key: m.messages[0],
+              key: m.messages[0].key,
             },
           });
           return;
@@ -317,7 +332,7 @@ export async function bot() {
           await socket.sendMessage(m.messages[0].key.remoteJid!, {
             react: {
               text: "❌",
-              key: m.messages[0],
+              key: m.messages[0].key,
             },
           });
           return;
@@ -417,7 +432,10 @@ export async function bot() {
           await socket.sendMessage(m.messages[0].key.remoteJid!, {
             react: { text: "❌", key: m.messages[0].key },
           });
+          console.error(error);
+          return;
         });
+        return;
       } else if (message.split(" ")[1].startsWith("doc")) {
         await doc(
           socket,
@@ -490,6 +508,7 @@ export async function bot() {
           return;
         } catch (error) {
           console.error(error);
+          return;
         }
       }
     }
