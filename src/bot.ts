@@ -4,33 +4,53 @@ import { rules } from "./commands/regras";
 import { ban } from "./commands/ban";
 import { black } from "./commands/black";
 import { makeadmin } from "./commands/makeadmin";
+import { generateImage } from "./commands/dalle";
 import { defaultgpt } from "./commands/gpt";
 import { demoteFrom } from "./commands/internal/removeFrom";
-<<<<<<< HEAD
-=======
+import { mentionAll } from "./commands/internal/mentionAll";
 import { unban } from "./commands/unban";
-import { readFile } from "fs";
-import Semaphore from 'semaphore-async-await';
-import path from 'path';
+import { mention } from "./commands/mention";
+import Semaphore from "semaphore-async-await";
+import path from "path";
+import { MemberList } from "./commands/internal/MemberList";
+import { doc } from "./commands/doc";
+import { getImageById } from "./commands/get";
+import { GroupMetadata } from "@whiskeysockets/baileys";
 
 
-let blacklist: string[] = [];
+let blacklist: MemberList = new MemberList(
+  path.resolve(__dirname, "commands", "internal", "blacklist.txt")
+);
+const lock: Semaphore = new Semaphore(1);
 
-readFile(path.resolve(__dirname, "commands", "internal", "blacklist.txt"), "utf8", (err, data) => {
-  if (err) throw err;
-
-  blacklist = data.split("\n");
-})
-
-const lock = new Semaphore(1);
->>>>>>> mudancas
+function coerce(str: string): string | number {
+  if (/\d+(\.\d+)?/.test(str)) {
+    return Number.parseFloat(str);
+  } else if (/\".*?\"|'.*?'/.test(str)) {
+    let r = /\".*?\"|'.*?'/.exec(str);
+    return " " + r![0].slice(1, r![0].length - 1);
+  } else {
+    return str;
+  }
+}
 
 export async function bot() {
   const socket = await connect();
 
+  const admin = async (userID: any, groupID: string) => {
+    const metadata = await socket.groupMetadata(groupID);
+    const user = metadata.participants.find((user) => user.id === userID);
+    return user && user.admin == "admin";
+  };
+
   socket.ev.on("messages.upsert", async (m) => {
-    if (m.type === "notify" || m.messages[0].key.remoteJid === "status@broadcast") return;
-    console.log(JSON.stringify(m, undefined, 2));
+    if (
+      m.type !== "notify" ||
+      m.messages[0].key.remoteJid === "status@broadcast"
+    )
+      return;
+
+    // console.log(JSON.stringify(m, undefined, 2));
     let message: string | undefined | null;
 
     if (
@@ -48,6 +68,95 @@ export async function bot() {
     message = m.messages[0].message?.conversation
       ? m.messages[0].message?.conversation
       : m.messages[0].message?.extendedTextMessage?.text;
+
+    // console.log("Condições para generateImage:", message!, m.messages[0].key.remoteJid, !m.messages[0].key.participant, message!.startsWith('$img'), !message!.startsWith('$img --get'));
+
+    // console.log("Condições para getImageById:", message, m.messages[0].key.remoteJid, !m.messages[0].key.participant, message!.startsWith('$img --get'));
+
+    // Inicio do Privado
+    if (
+      message &&
+      m.messages[0].key.remoteJid &&
+      !m.messages[0].key.participant &&
+      message.startsWith("$img") &&
+      !message.startsWith("$img --get")
+    ) {
+      await generateImage(
+        socket,
+        m.messages[0].key.remoteJid!,
+        m.messages[0].key,
+        m.messages[0],
+        message.slice(4)
+      ).catch(async (error) => {
+        console.error(error);
+        await socket.sendMessage(m.messages[0].key.remoteJid!, {
+          react: {
+            text: "❌",
+            key: m.messages[0].key,
+          },
+        });
+      });
+      return;
+    } else if (
+      message &&
+      m.messages[0].key.remoteJid &&
+      !m.messages[0].key.participant &&
+      message.startsWith("$img --get")
+    ) {
+      await getImageById(
+        socket,
+        m.messages[0].key.remoteJid!,
+        m.messages[0].key,
+        m.messages[0],
+        message.split(" ")[2]
+      ).catch(async (error) => {
+        console.error(error);
+        await socket.sendMessage(m.messages[0].key.remoteJid!, {
+          react: {
+            text: "❌",
+            key: m.messages[0].key,
+          },
+        });
+      });
+      return;
+    } else if (
+      message &&
+      m.messages[0].key.remoteJid &&
+      !m.messages[0].key.participant
+    ) {
+      await defaultgpt(
+        socket,
+        m.messages[0].key.remoteJid!,
+        m.messages[0].key,
+        m.messages[0],
+        message
+      ).catch(async (error) => {
+        console.error(error);
+        await socket.sendMessage(m.messages[0].key.remoteJid!, {
+          react: {
+            text: "❌",
+            key: m.messages[0].key,
+          },
+        });
+      });
+      return;
+    }
+    // Fim do privado
+
+    if (message?.includes("@all")) {
+      const groupJid = m.messages[0].key.remoteJid!.endsWith("g.us")
+        ? m.messages[0].key.remoteJid!
+        : undefined;
+
+      const isAdmin = await admin(
+        m.messages[0].key.participant!,
+        groupJid!.toString()
+      );
+
+      if (groupJid && isAdmin) {
+        await mentionAll(socket, m.messages[0].key.participant!, groupJid);
+      }
+    }
 
     if (message && message.startsWith("$asb")) {
       if (/^(\$asb)\s*$/.test(message)) {
@@ -67,25 +176,60 @@ export async function bot() {
 
 =======
           m.messages[0].key,
-          "Olá! este é o bot utilitário da All Stack Community.",
+          "Olá! este é o bot utilitário da All Stack Community."
         );
         return;
-      } else if (/^(\$asb)\:(?!\:)/.test(message))  {
-
-       if (message.slice(5).startsWith("makeadmin")) {
+      }
+      if (
+        message.split(" ")[1].startsWith("makeadmin") ||
+        message.split(" ")[1].startsWith("-ma")
+      ) {
         const groupJid = m.messages[0].key.remoteJid!.endsWith("@g.us")
           ? m.messages[0].key.remoteJid
           : undefined;
 
->>>>>>> mudancas
-        if (groupJid) {
-          await makeadmin(socket, groupJid, m.messages[0].key.participant!);
-        } else {
+        if (!groupJid) {
           await socket.sendMessage(m.messages[0].key.remoteJid!, {
-            text: "Estamos em uma conversa pessoal.",
+            react: {
+              text: "❌",
+              key: m.messages[0].key,
+            },
           });
+          return;
         }
-      } else if (message.slice(5).startsWith("gpt")) {
+
+        await makeadmin(socket, groupJid, m.messages[0].key.participant!).catch(
+          async (error) => {
+            await socket.sendMessage(m.messages[0].key.remoteJid!, {
+              react: {
+                text: "❌",
+                key: m.messages[0].key,
+              },
+            });
+            console.error(error);
+          }
+        );
+        return;
+      } // MakeAdmin
+      else if (
+        message.split(" ")[1].startsWith("mention") ||
+        message.split(" ")[1].startsWith("-me")
+      ) {
+        const num = message.match(/\d+/);
+        if (num) {
+          try {
+            await mention(socket, m.messages[0].key.remoteJid!, num[0]);
+          } catch (e) {
+            await socket.sendMessage(m.messages[0].key.remoteJid!, {
+              react: {
+                text: "❌",
+                key: m.messages[0].key,
+              },
+            });
+            console.error(e);
+          }
+        }
+      } else if (message.split(" ")[1].startsWith("gpt")) {
         await defaultgpt(
           socket,
           m.messages[0].key.remoteJid!,
@@ -96,77 +240,118 @@ export async function bot() {
 =======
           m.messages[0].key,
           m.messages[0],
-          message.slice(9),
->>>>>>> mudancas
-        );
-      } else if (message.slice(5).startsWith("bc")) {
-        try {
-          await black(
-<<<<<<< HEAD
-            socket,
-            m.messages[0].key.remoteJid!,
-            m.messages[0].key,
-            m.messages[0],
-            message.slice(15)
-          );
-        } catch (e) {
+          message.slice(8)
+        ).catch(async (error) => {
           await socket.sendMessage(m.messages[0].key.remoteJid!, {
-            text: `Erro interno: ${e}`,
+            react: {
+              text: "❌",
+              key: m.messages[0].key,
+            },
           });
-        }
-      } else if (message.slice(5).startsWith("regras")) {
-        await rules(socket, m.messages[0].key.remoteJid!);
+          console.error(error);
+        });
+        return;
+      } else if (message.split(" ")[1].startsWith("bc")) {
+        await black(
+          socket,
+          m.messages[0].key.remoteJid!,
+          m.messages[0].key,
+          m.messages[0],
+          message.slice(7)
+        ).catch(async (error) => {
+          await socket.sendMessage(m.messages[0].key.remoteJid!, {
+            react: {
+              text: "❌",
+              key: m.messages[0].key,
+            },
+          });
+          console.error(error);
+        });
+        return;
       } else if (
-        message.slice(5).startsWith("ban") &&
-        m.messages[0].message?.extendedTextMessage?.contextInfo?.mentionedJid
+        message.split(" ")[1].startsWith("img") &&
+        !message.split(" ")[2].startsWith("--get")
       ) {
+        await generateImage(
+          socket,
+          m.messages[0].key.remoteJid!,
+          m.messages[0].key,
+          m.messages[0],
+          message.slice(8)
+        ).catch(async (error) => {
+          console.error(error);
+          await socket.sendMessage(m.messages[0].key.remoteJid!, {
+            react: {
+              text: "❌",
+              key: m.messages[0].key,
+            },
+          });
+        });
+        return;
+      } else if (
+        message.split(" ")[1].startsWith("img") &&
+        message.split(" ")[2].startsWith("--get")
+      ) {
+        await getImageById(
+          socket,
+          m.messages[0].key.remoteJid!,
+          m.messages[0].key,
+          m.messages[0],
+          message.split(" ")[3]
+        ).catch(async (error) => {
+          console.error(error);
+          await socket.sendMessage(m.messages[0].key.remoteJid!, {
+            react: {
+              text: "❌",
+              key: m.messages[0].key,
+            },
+          });
+        });
+        return;
+      }
+      if (message.split(" ")[1].startsWith("regras")) {
         try {
-          const jids =
-            m.messages[0].message.extendedTextMessage.contextInfo.mentionedJid;
-=======
-            socket,
-            m.messages[0].key.remoteJid!,
-            m.messages[0].key,
-            m.messages[0],
-            message.slice(15),
+          const metadata = await socket.groupMetadata(
+            m.messages[0].key.remoteJid!
           );
+          const description = metadata.desc;
+          if (description) {
+            await rules(socket, m.messages[0].key.remoteJid!, description);
+          }
         } catch (e) {
           await socket.sendMessage(m.messages[0].key.remoteJid!, {
             react: {
-              text: "‼️",
-              key: m.messages[0]
-            }
+              text: "❌",
+              key: m.messages[0].key,
+            },
           });
+          console.error(e);
+          return;
         }
-      }
-      } else if (/^(\$asb)\:\:/.test(message)) {
-
-      if (message.slice(6).startsWith("regras")) {
-        await rules(socket, m.messages[0].key.remoteJid!);
-<<<<<<< HEAD
-<<<<<<< HEAD
-      }
-      else if (message.slice(5).startsWith("ban")) {
-
-
-       try {
-          if (
-=======
-=======
->>>>>>> c76f72e (melhorias)
-      } else if (message.slice(6).startsWith("ban")) {
+      } else if (message.split(" ")[1].startsWith("ban")) {
+        //$asb ban
         if (
->>>>>>> c76f72e (melhorias)
           !m.messages[0].message?.extendedTextMessage?.contextInfo?.mentionedJid
         ) {
           await socket.sendMessage(m.messages[0].key.remoteJid!, {
             react: {
-              text: "‼️",
-              key: m.messages[0]
-            }
-          })
+              text: "❌",
+              key: m.messages[0].key,
+            },
+          });
+          return;
+        }
+
+        const grouprJid = m.messages[0].key.remoteJid!.endsWith("@g.us")
+          ? m.messages[0].key.remoteJid
+          : undefined;
+
+        if (!grouprJid) {
           await socket.sendMessage(m.messages[0].key.remoteJid!, {
-            text: "precisa-se de ter alguem pra banir!",
+            react: {
+              text: "❌",
+              key: m.messages[0].key,
+            },
           });
           return;
         }
@@ -174,126 +359,176 @@ export async function bot() {
         const jids =
           m.messages[0].message.extendedTextMessage.contextInfo.mentionedJid;
 
-        const [usuario, motivo] = [
-          jids[0],
-          message.split(jids[0].split("@")[0])[1],
-        ];
+        let usuario = jids[0];
+        let motivo: string | number = message.split(jids[0].split("@")[0])[1];
 
-        const grouprJid = m.messages[0].key.remoteJid!.endsWith("@g.us")
-          ? m.messages[0].key.remoteJid
-          : undefined;
+        motivo = coerce(motivo);
 
-        if (grouprJid) {
-          await ban(
-            socket,
-            lock,
-            m.messages[0].key.participant!.trim(),
-            grouprJid,
-            usuario,
-            m.messages[0],
-            motivo,
-          );
-        } else {
-          !(await socket.sendMessage(m.messages[0].key.remoteJid!, {
-            text: "estamos numa conversa pessoal.",
-          }));
-        }
-<<<<<<< HEAD
-<<<<<<< HEAD
-      
-      } catch {
-        await socket.sendMessage(m.messages[0].key.remoteJid!, {
-          text: "Error: Parametros incompletos",
-        });
-      }
->>>>>>> mudancas
+        const userIsAdmin = async () => {
+          const data = await socket.groupMetadata("120363084400589228@g.us");
+          return data.participants.map((user) => user.id);
+        };
 
-          const [usuario, motivo] = [
-            jids[0],
-            message.split(jids[0].split("@")[0])[1],
-          ];
-
-<<<<<<< HEAD
-          const grouprJid = m.messages[0].key.remoteJid!.endsWith("@g.us")
-            ? m.messages[0].key.remoteJid
-            : undefined;
-
-          if (grouprJid) {
-            await ban(
-              socket,
-              m.messages[0].key.participant!.trim(),
-              grouprJid,
-              usuario,
-              motivo
-            );
-          } else {
-            !(await socket.sendMessage(m.messages[0].key.remoteJid!, {
-              text: "estamos numa conversa pessoal.",
-            }));
-          }
-        } catch (e) {
+        if (await userIsAdmin()) {
           await socket.sendMessage(m.messages[0].key.remoteJid!, {
-            text: `Erro, argumentos incompletos`,
+            react: {
+              text: "❌",
+              key: m.messages[0].key,
+            },
           });
+          return;
         }
-=======
-=======
-=======
->>>>>>> c76f72e (melhorias)
-      } else if (message.slice(6).startsWith("unban")) {
 
-         if (m.messages[0].message?.extendedTextMessage?.contextInfo?.mentionedJid) {
-         await unban(socket, lock, m.messages[0].key.participant!, m.messages[0].key.remoteJid!, m.messages[0].message.extendedTextMessage.contextInfo.mentionedJid[0]);
-          }
-<<<<<<< HEAD
->>>>>>> c76f72e (melhorias)
-=======
->>>>>>> c76f72e (melhorias)
->>>>>>> mudancas
+        if (message.split(" ")[2].startsWith("--all")) {
+          const grupos: { [_: string]: GroupMetadata } =
+            await socket.groupFetchAllParticipating();
+
+          await new Promise((res) => {
+            const idsArray: string[] = Object.keys(grupos);
+
+            idsArray.forEach((id, index) => {
+              setTimeout(
+                async () => {
+                  await ban(
+                    socket,
+                    blacklist,
+                    lock,
+                    m.messages[0].key.participant!.trim(),
+                    id,
+                    usuario,
+                    m.messages[0],
+                    motivo
+                  ).catch((error) => {
+                    console.error(error);
+                  });
+
+                  if (index === idsArray.length - 1) res("true");
+                },
+                5000 * (index + 1)
+              );
+            });
+          }).catch((error) => console.error(error));
+        }
+
+        await ban(
+          socket,
+          blacklist,
+          lock,
+          m.messages[0].key.participant!.trim(),
+          grouprJid,
+          usuario,
+          m.messages[0],
+          motivo
+        ).catch(async (error) => {
+          await socket.sendMessage(m.messages[0].key.remoteJid!, {
+            react: {
+              text: "❌",
+              key: m.messages[0].key,
+            },
+          });
+          console.error(error);
+        });
+      } else if (message.split(" ")[1].startsWith("unban")) {
+        //$asb::unban
+        const num = message.match(/\d+/);
+        // console.log(`NUMERO:${num}`)
+        if (!num) {
+          await socket.sendMessage(m.messages[0].key.remoteJid!, {
+            react: { text: "❌", key: m.messages[0].key },
+          });
+          return;
+        }
+
+        await unban(
+          socket,
+          blacklist,
+          lock,
+          m.messages[0].key.participant!,
+          m.messages[0].key.remoteJid!,
+          num[0]
+        ).catch(async (error) => {
+          await socket.sendMessage(m.messages[0].key.remoteJid!, {
+            react: { text: "❌", key: m.messages[0].key },
+          });
+          console.error(error);
+          return;
+        });
+        return;
+      } else if (message.split(" ")[1].startsWith("doc")) {
+        await doc(
+          socket,
+          m.messages[0].key.remoteJid!,
+          m.messages[0].key,
+          m.messages[0]
+        ).catch((error) => console.error(error));
+        return;
       }
     }
+    // Dando muito problema, desativado.
+    // Se a mensagem não possui link...
+    // if (message && ! /^(https?|ftp?|http):\/\/[^\s/$.?#].[^\s]*$/i.test(message) && !m.messages[0].key.fromMe) {
+    //   const jid = m.messages[0].key.remoteJid as unknown as string
+    //   const userID = m.messages[0].key.participant!
+    //   const metadata = await socket.groupMetadata(jid)
+
+    //   const admin = (userID: any) => {
+    //     const user = metadata.participants.find((user) => user.id === userID)
+    //     return user && user.admin == 'admin'
+    //   }
+    //   console.log(admin(userID))
+    //   if (admin(userID)) return
+
+    //   const gLink = await socket.groupInviteCode(jid)
+    //   await link(socket, jid, m, message, `https://chat.whatsapp.com/${gLink}`)
+    // }
   });
 
   socket.ev.on(
     "group-participants.update",
     async ({ id, participants, action }) => {
+      // console.log({ id, participants, action });
+
       if (id === "120363138200204540@g.us") return;
       if (action === "add") {
-<<<<<<< HEAD
-=======
-        
-        if (participants && blacklist.includes(participants[0])) {
-          await ban(socket, lock, socket.user!.id, id, participants[0], undefined, "já foi banido.");
+        if (participants && blacklist.list.includes(participants[0])) {
+          await ban(
+            socket,
+            blacklist,
+            lock,
+            socket.user!.id.replace(/\:\d+/, ""),
+            id,
+            participants[0],
+            undefined,
+            "Black List."
+          ).catch((error) => console.error(error));
           return;
         }
-        
->>>>>>> mudancas
-        await rules(socket, id);
+
+        const metadata = await socket.groupMetadata(id);
+        const description = metadata.desc;
+
+        await rules(
+          socket,
+          id,
+          `Olá ${
+            participants[0].split("@")[0]
+          }! Seja bem vindo a All Stack!\n\n ${description}`
+        ).catch((error) => console.error(error));
+
         return;
       }
       if (id === "120363084400589228@g.us") {
-        if (action === "remove") {
-          await demoteFrom(
-            socket,
-            [
-              "120363029900825529@g.us",
-              "120363042733129991@g.us",
-              "120363100560580311@g.us",
-            ],
-<<<<<<< HEAD
-            participants[0]
-=======
-            participants[0],
->>>>>>> mudancas
-          );
+        try {
+          if (action === "remove") {
+            await demoteFrom(socket, participants[0]);
+            return;
+          }
+          return;
+        } catch (error) {
+          console.error(error);
           return;
         }
-        return;
       }
-<<<<<<< HEAD
     }
-=======
-    },
->>>>>>> mudancas
   );
 }

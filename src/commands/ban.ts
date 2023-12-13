@@ -1,86 +1,64 @@
-<<<<<<< HEAD
-import { BaileysSocket } from "../types/BaileysSocket";
-
-export const ban = async (
-  socket: BaileysSocket,
-  arJid: string,
-  grJid: string,
-  rJid: string,
-  motivo: string
-) => {
-=======
-import path from "path";
 import { BaileysSocket } from "../types/BaileysSocket";
 import { MemberList } from "./internal/MemberList";
-import Semaphore from 'semaphore-async-await';
+import Semaphore from "semaphore-async-await";
+import { readFileSync } from "fs";
+import { resolve } from "path";
+const regras = JSON.parse(
+  readFileSync(
+    resolve(__dirname, "internal", "regras.json"),
+    "utf-8"
+  )
+);
 
-let instance: MemberList;
-
+function getrule(key: number) {
+  return regras[key];
+}
 export const ban = async (
   socket: BaileysSocket,
+  members: MemberList,
   sem: Semaphore,
-  arJid: string,
-  grJid: string,
-  rJid: string,
+  participant: string,
+  groupJid: string,
+  userJid: string,
   key: any,
-  motivo: string,
+  motivo: string | number
 ) => {
   await sem.acquire();
 
-  if (!instance) {
-    instance = new MemberList(
-      path.resolve(__dirname, "internal", "blacklist.txt"),
-    );
+  if (typeof motivo == "number") {
+    motivo = getrule(motivo) ?? "Regra de Exceção";
   }
 
->>>>>>> mudancas
-  const metadata = await socket.groupMetadata(grJid);
+  const metadata = await socket.groupMetadata(groupJid);
   const admins = metadata.participants.filter((x) => x.admin).map((x) => x.id);
-  if (admins.includes(arJid)) {
-    try {
-      if (arJid === rJid) {
-        await socket.sendMessage(grJid, {
-          text: "Você não pode banir a si mesmo!",
-        });
-        return;
-      }
-<<<<<<< HEAD
-      await socket.groupParticipantsUpdate(grJid, [rJid], "remove");
-      await socket.sendMessage(grJid, {
-        text: `O usuário @${
-          rJid.split("@")[0]
-        } foi banido. \n Motivo:${motivo}`,
-        mentions: [rJid],
-      });
-    } catch (e) {
-      await socket.sendMessage(grJid, {
-        text: `Erro interno do servidor: ${e}.`,
-=======
-      if (key)
-        await socket.sendMessage(grJid, { react: { text: "✅", key: key } });
-      await socket.groupParticipantsUpdate(grJid, [rJid], "remove");
-      await socket.sendMessage(grJid, {
-        text: `
-O usuário @${rJid?.split("@")[0]} foi banido.
-Motivo:${motivo}
-`,
-        mentions: [rJid],
-      });
-      instance.add(rJid);
-      instance.saveMembersList();
-      instance.replace(instance.name);
-    } catch (e) {
-      await socket.sendMessage(grJid, {
+  if (admins.includes(participant)) {
+    if (participant === userJid) {
+      await socket.sendMessage(groupJid, {
         react: {
-          text: "‼️",
+          text: "❌",
           key: key,
         },
 >>>>>>> mudancas
       });
+      return;
     }
+    await socket.sendMessage(groupJid, { react: { text: "✅", key: key } });
+    await socket.groupParticipantsUpdate(groupJid, [userJid], "remove");
+    await socket.sendMessage(groupJid, {
+      text: `O usuário(a) @${userJid?.split(
+        "@"
+      )[0]} foi banido(a). Motivo: ${motivo}`,
+      mentions: [userJid],
+    });
+    members.add(userJid);
+    members.saveMembersList();
+    members.replace(members.name);
   } else {
-    await socket.sendMessage(grJid, {
-      text: "É necessário ser uma pessoa autorizada para usar este comando.",
+    await socket.sendMessage(groupJid, {
+      react: {
+        text: "❌",
+        key: key,
+      },
     });
   }
 <<<<<<< HEAD

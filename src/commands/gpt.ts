@@ -1,17 +1,22 @@
 import { BaileysSocket } from "../types/BaileysSocket";
-import { gpt, send } from "../bot_config";
+import gpt from "../ia-core/gpt";
 
 export const defaultgpt = async (
   socket: BaileysSocket,
   rJid: string,
   key: any,
   m: any,
-  message: string,
+  message: string
 ) => {
-  await socket.sendMessage(rJid, { react: { text: "✅", key: key } });
-  await socket.sendMessage(
+  const id: string =
+    key.participant?.split("@")[0] ?? key.remoteJid?.split("@")[0];
+  const react = await socket.sendMessage(rJid, {
+    react: { text: "✅", key: key },
+  });
+  const msg = await socket.sendMessage(
     rJid,
-    { text: await send(gpt(), message) },
-    { quoted: m },
+    { text: (await gpt.send(message, id))?.content! },
+    { quoted: m }
   );
+  Promise.all([react, msg]);
 };

@@ -1,10 +1,10 @@
 import { DisconnectReason, useMultiFileAuthState } from "@whiskeysockets/baileys"; 
  import makeWASocket from "@whiskeysockets/baileys/lib/Socket"; 
  import { Boom } from "@hapi/boom"; 
- import pino from "pino"; 
+ //import pino from "pino"; 
  import path from 'path'; 
-  
- export const connect = async () => { 
+ import { BaileysSocket } from "./types/BaileysSocket";
+ export const connect: () => Promise<BaileysSocket> = async () => { 
   
    const { state, saveCreds } = await useMultiFileAuthState( 
      path.resolve(__dirname, "authdata") 

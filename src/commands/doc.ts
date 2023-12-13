@@ -1,18 +1,18 @@
-import blackclown from "../ia-core/blackclown";
+import { readFile } from "fs/promises";
+import { resolve } from "path";
 import { BaileysSocket } from "../types/BaileysSocket";
 
-export const black = async (
+export const doc = async (
   socket: BaileysSocket,
   rJid: string,
   key: any,
-  m: any,
-  message: string,
+  m: any
 ) => {
-  const id: string = key.participant.split('@')[0]
+  const rules = await readFile(resolve(__dirname, '..', '..', 'comandos.md'), 'utf-8')
   await socket.sendMessage(rJid, { react: { text: "✅", key: key } });
   await socket.sendMessage(
     rJid,
-    { text: (await blackclown.send(message, id))?.content! },
+    { text: rules },
     { quoted: m },
   );
-};
+}
