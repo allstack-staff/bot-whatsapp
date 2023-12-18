@@ -488,14 +488,14 @@ export async function bot() {
         }
 
         const metadata = await socket.groupMetadata(id);
-        const description = metadata.desc;
+        const description = metadata.desc ? "\n\n" + metadata.desc : "";
 
         await rules(
           socket,
           id,
           `Olá ${
             participants[0].split("@")[0]
-          }! Seja bem vindo a All Stack!\n\n ${description}`
+          }! Seja bem vindo a All Stack!${description}`
         ).catch((error) => console.error(error));
 
         return;
