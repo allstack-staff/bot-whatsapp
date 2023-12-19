@@ -10,7 +10,7 @@ class Gpt extends GPT {
   private log = new LOG();
   constructor() {
     super({
-      apikey: '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',
+      apikey: 'add key aqui',
     });
   }
 
