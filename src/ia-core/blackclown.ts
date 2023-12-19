@@ -8,7 +8,7 @@ class Blackclown extends GPT {
   private indice: number = 0;
   private configuration: boolean = false;
   constructor() {
-    super({ apikey: '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', history: true, max_tokens: 300 });
+    super({ apikey: 'add key aqui', history: true, max_tokens: 300 });
   }
 
   public resetConfiguration() {
