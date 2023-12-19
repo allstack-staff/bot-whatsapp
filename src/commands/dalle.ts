@@ -10,7 +10,7 @@ export const generateImage = async (
   m: any,
   message: string
 ) => {
-  const dalle = new Dalle('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');
+  const dalle = new Dalle('add key aqui');
   const ID: string =
     key.participant?.split("@")[0] ?? key.remoteJid?.split("@")[0];
   await socket.sendMessage(rJid, { react: { text: "✅", key: key } });
