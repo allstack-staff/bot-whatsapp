@@ -347,20 +347,20 @@ export async function bot() {
 
         motivo = coerce(motivo);
 
-        const userIsAdmin = async () => {
-          const data = await socket.groupMetadata("120363084400589228@g.us");
-          return data.participants.map((user) => user.id);
-        };
+        // const userIsAdmin = async () => {
+        //   const data = await socket.groupMetadata("120363084400589228@g.us");
+        //   return data.participants.map((user) => user.id);
+        // };
 
-        if (await userIsAdmin()) {
-          await socket.sendMessage(m.messages[0].key.remoteJid!, {
-            react: {
-              text: "❌",
-              key: m.messages[0].key,
-            },
-          });
-          return;
-        }
+        // if (await userIsAdmin()) {
+        //   await socket.sendMessage(m.messages[0].key.remoteJid!, {
+        //     react: {
+        //       text: "❌",
+        //       key: m.messages[0].key,
+        //     },
+        //   });
+        //   return;
+        // }
 
         if (message.split(" ")[2].startsWith("--all")) {
           const grupos: { [_: string]: GroupMetadata } =

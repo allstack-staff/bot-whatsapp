@@ -6,3 +6,8 @@ dist/
 **/*.tgz
 **/*.tbz2
 logs/
+
+.env*
+.flaskenv*
+!.env.project
+!.env.vault
