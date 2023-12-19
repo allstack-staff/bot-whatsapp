@@ -10,7 +10,7 @@ class Gpt extends GPT {
   private log = new LOG();
   constructor() {
     super({
-      apikey: process.env.API_KEY,
+      apikey: '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',
     });
   }
 
@@ -43,7 +43,7 @@ class Gpt extends GPT {
       model: "gpt-4",
       messages: [...this.config(), ...history.slice(count, history.length)],
       temperature: 0.9,
-      max_tokens: 500,
+      max_tokens: 600,
     };
     const request = await this.requestChat(config);
     if (!request.data.choices) throw new ChatGptRequestError(request.toString());
