@@ -10,7 +10,7 @@ class Gpt extends GPT {
   private log = new LOG();
   constructor() {
     super({
-      apikey: 'add key aqui',
+      apikey: process.env.OPENAI_API_KEY,
     });
   }
 
