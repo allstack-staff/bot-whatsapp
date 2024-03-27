@@ -4,33 +4,37 @@ FROM node:lts-alpine3.19 as builder
 
 WORKDIR /app
 
-COPY package*.json .
+COPY . .
 
 RUN npm install -g pnpm
 
-RUN pnpm install
+RUN apk add --no-cache git
 
-RUN pnpm prod
+COPY system.config.js /production
 
-COPY ./dist .
+RUN pnpm install \
+    && pnpm add typescript @types/node\
+    && npx tsc --build
 
 FROM node:lts-alpine3.19
 
 # Multistage build
 
-WORKDIR /app
+WORKDIR /production
 
 ENV NODE_ENV=production
 
 COPY --from=builder /app/dist .
 
-COPY --from=builder /app/package*.json .
+COPY --from=builder /app/*.json .
 
-COPY --from=builder /app/ecosystem.config.js .
+COPY --from=builder /app/system.config.js .
+
+RUN npm install -g pnpm
+
+RUN apk add --no-cache git
 
 RUN pnpm install
 
-RUN pnpm list
-
-ENTRYPOINT ["pm2-runtime", "start", "ecosystem.config.js"]
+ENTRYPOINT ["pm2-runtime", "start", "system.config.js"]
 
