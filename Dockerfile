@@ -36,5 +36,7 @@ RUN apk add --no-cache git
 
 RUN pnpm install
 
+RUN pnpm add pm2 -g
+
 ENTRYPOINT ["pm2-runtime", "start", "system.config.js"]
 
