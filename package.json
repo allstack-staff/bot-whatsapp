@@ -22,7 +22,7 @@
     "format": "prettier src/**/*.ts --write",
     "minify": "uglifyjs dist/**/*.js -o build/core.js",
     "build": "rm build/* -rf && tsc --build && cp node_modules package.json yarn.lock dist build -r && tar -cvjf ascbot.tbz2 build/* > /dev/null",
-    "prod": "tsc --build && uglifyjs dist/**/*.js",
+    "prod": "tsc --build",
     "rmauth": "rm -rf ./src/authdata"
   },
   "keywords": [],
