@@ -28,9 +28,9 @@ COPY --from=builder /app/package*.json .
 
 COPY --from=builder /app/ecosystem.config.js .
 
-RUN pnpm add -g pm2
-
 RUN pnpm install
+
+RUN pnpm list
 
 ENTRYPOINT ["pm2-runtime", "start", "ecosystem.config.js"]
 
