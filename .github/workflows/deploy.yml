@@ -12,6 +12,7 @@ jobs:
 
     env:
       TF_VAR_project_id: ${{ secrets.GCP_PROJECT_ID }}
+      TF_VAR_gh_token: ${{ secrets.GH_PAT_TOKEN }}
 
     steps:
       - name: Checkout do Repositório
