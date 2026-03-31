@@ -5,6 +5,12 @@ terraform {
       version = "~> 5.0"
     }
   }
+
+  # Configuração do State Remoto no Bucket criado
+  backend "gcs" {
+    bucket  = "all-stack-bot-tfstate"
+    prefix  = "terraform/state"
+  }
 }
 
 provider "google" {
@@ -14,11 +20,11 @@ provider "google" {
 }
 
 variable "project_id" {
-  description = "ID do projeto no GCP (injetado pelo GitHub Actions)"
+  description = "ID do projeto no GCP"
   type        = string
 }
 
-# Cria a Máquina Virtual (Sempre Gratuita)
+# VM e2-micro (Sempre Gratuita)
 resource "google_compute_instance" "baileys_bot_vm" {
   name         = "baileys-bot-server"
   machine_type = "e2-micro"
@@ -36,28 +42,23 @@ resource "google_compute_instance" "baileys_bot_vm" {
 
   network_interface {
     network = "default"
-    access_config {} # Garante um IP público
+    access_config {} # IP Público Efêmero
   }
 
-  # Script de inicialização: Prepara o ambiente automaticamente
   metadata_startup_script = <<-EOT
     #!/bin/bash
     apt-get update
     apt-get upgrade -y
-    
-    # Instala Git e Curl
     apt-get install -y git curl
     
-    # Instala Node.js (Versão 20 LTS)
+    # Node.js 20 LTS e PM2
     curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
     apt-get install -y nodejs
-    
-    # Instala PM2 globalmente
     npm install -y -g pm2
   EOT
 }
 
-# Regra de Firewall para permitir acesso SSH
+# Firewall para SSH
 resource "google_compute_firewall" "allow_ssh" {
   name    = "allow-ssh-bot"
   network = "default"
