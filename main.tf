@@ -26,65 +26,79 @@ variable "gh_token" {
 # --- INFRA DA VM (O BOT) ---
 resource "google_compute_instance" "baileys_bot_vm" {
   name         = "baileys-bot-server"
-  machine_type = "e2-micro"
+  machine_type = "e2-micro" # Nível gratuito do GCP
   zone         = "us-central1-a"
-  tags         = ["bot-whatsapp"]
 
   boot_disk {
     initialize_params {
       image = "ubuntu-os-cloud/ubuntu-2204-lts"
-      size  = 30
+      size  = 10
     }
   }
 
   network_interface {
     network = "default"
-    access_config {}
+    access_config {
+      # Deixar vazio para atribuir um IP Externo Efêmero
+    }
   }
 
-metadata_startup_script = <<-EOT
+  # Script de Inicialização (O Cérebro da Automação)
+  metadata_startup_script = <<-EOT
     #!/bin/bash
-    # 1. Cria um log detalhado de tudo que acontece no boot
+    # Redireciona toda a saída para um log para debug futuro
     exec > /var/log/bot-startup.log 2>&1
-    echo "Iniciando provisionamento automatizado..."
+    echo "--- INICIANDO PROVISIONAMENTO AUTOMATIZADO ---"
 
-    # 2. Atualiza e instala pacotes base
-    apt-get update
+    # 1. Atualização do Sistema e Dependências Base
+    apt-get update -y
     apt-get install -y git curl
 
-    # 3. Instala Node.js 20 e PM2
-    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-    apt-get install -y nodejs
-    npm install -y -g pm2
+    # 2. Instalação do Node.js 20 e PM2 (Global)
+    if ! command -v node &> /dev/null; then
+        curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+        apt-get install -y nodejs
+        npm install -y -g pm2
+    fi
 
-    # 4. Prepara o diretório da aplicação
+    # 3. Preparação do Diretório e Código
     mkdir -p /opt/bot-whatsapp
     cd /opt/bot-whatsapp
 
-    # 5. Clona o repositório (ou atualiza se a VM for reiniciada)
     if [ ! -d ".git" ]; then
-      echo "Clonando o repositório..."
+      echo "Clonando repositório..."
       git clone https://github.com/allstack-staff/bot-whatsapp.git .
     else
-      echo "Repositório já existe, atualizando..."
+      echo "Atualizando repositório..."
       git pull origin main
     fi
 
-    # 6. Instala dependências
+    # 4. Instalação de Dependências e Build do Projeto
     echo "Instalando pacotes npm..."
     npm install
 
-    # 7. Limpa processos antigos e inicia o novo
-    pm2 delete bot-whatsapp || true
-    echo "Iniciando o PM2..."
-    pm2 start npm --name "bot-whatsapp" -- run start
+    echo "Limpando pasta dist e compilando TypeScript..."
+    rm -rf dist
+    # Compilação segura focada na pasta src
+    ./node_modules/.bin/tsc --rootDir src --outDir dist
 
-    # 8. Salva o estado para inicialização com o sistema
+    echo "Copiando arquivos estáticos (JSON)..."
+    # Procura todos os JSONs na src e replica na dist com as pastas corretas
+    cd src && find . -name "*.json" -exec cp --parents {} ../dist/ \; && cd ..
+
+    # 5. Configuração e Inicialização com PM2
+    echo "Configurando processo no PM2..."
+    pm2 delete bot-whatsapp || true
+    pm2 start npm --name "bot-whatsapp" -- run start
+    
+    # Salva para persistir após reboots da VM
     pm2 save
     env PATH=$PATH:/usr/bin pm2 startup systemd -u root --hp /root
 
-    echo "Provisionamento concluído com sucesso!"
+    echo "--- PROVISIONAMENTO CONCLUÍDO COM SUCESSO ---"
   EOT
+
+  tags = ["bot-whatsapp"]
 }
 
 resource "google_compute_firewall" "allow_ssh" {
