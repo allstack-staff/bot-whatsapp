@@ -46,22 +46,19 @@ resource "google_compute_instance" "baileys_bot_vm" {
   # Script de Inicialização (O Cérebro da Automação)
 metadata_startup_script = <<-EOT
     #!/bin/bash
-    # 1. Setup de Ambiente e Logs
     exec > /var/log/bot-startup.log 2>&1
     export HOME=/root
     export PATH=$PATH:/usr/bin:/usr/local/bin
-    echo "--- INICIANDO PROVISIONAMENTO AUTOMATIZADO ---"
+    echo "--- INICIANDO PROVISIONAMENTO ---"
 
-    # 2. Instalação de Dependências
+    # 1. Instalação básica
     apt-get update -y
     apt-get install -y git curl
-    if ! command -v node &> /dev/null; then
-        curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-        apt-get install -y nodejs
-        npm install -y -g pm2
-    fi
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+    apt-get install -y nodejs
+    npm install -y -g pm2
 
-    # 3. Preparação do Código
+    # 2. Setup do diretório
     mkdir -p /opt/bot-whatsapp
     cd /opt/bot-whatsapp
     if [ ! -d ".git" ]; then
@@ -71,22 +68,26 @@ metadata_startup_script = <<-EOT
       git reset --hard origin/main
     fi
 
-    # 4. Build e Gestão de Assets (A correção mestre)
-    /usr/bin/npm install
+    # 3. Build e Assets (Agora com .txt também!)
+    npm install
     rm -rf dist
     ./node_modules/.bin/tsc --rootDir src --outDir dist
 
-    echo "Sincronizando arquivos JSON..."
-    cd src && find . -name "*.json" -exec cp --parents {} ../dist/ \; && cd ..
-
-    # 5. Inicialização com PM2 e Persistência
-    /usr/local/bin/pm2 delete bot-whatsapp || true
-    /usr/local/bin/pm2 start /usr/bin/npm --name "bot-whatsapp" -- run start
+    echo "Sincronizando JSONs e TXTs..."
+    # Esse comando agora pega .json e .txt
+    cd src && find . \( -name "*.json" -o -name "*.txt" \) -exec cp --parents {} ../dist/ \; && cd ..
     
-    /usr/local/bin/pm2 save
-    /usr/local/bin/pm2 startup systemd -u root --hp /root --force
+    # Ajuste de permissão para o bot conseguir escrever nos arquivos
+    chmod -R 777 /opt/bot-whatsapp/dist
 
-    echo "--- PROVISIONAMENTO CONCLUÍDO COM SUCESSO ---"
+    # 4. Inicialização (Usando o caminho dinâmico do PM2)
+    PM2_PATH=$(command -v pm2)
+    $PM2_PATH delete bot-whatsapp || true
+    $PM2_PATH start npm --name "bot-whatsapp" -- run start
+    $PM2_PATH save
+    $PM2_PATH startup systemd -u root --hp /root --force
+
+    echo "--- PROVISIONAMENTO CONCLUÍDO ---"
   EOT
 }
 
