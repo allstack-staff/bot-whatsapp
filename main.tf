@@ -44,61 +44,50 @@ resource "google_compute_instance" "baileys_bot_vm" {
   }
 
   # Script de Inicialização (O Cérebro da Automação)
-  metadata_startup_script = <<-EOT
+metadata_startup_script = <<-EOT
     #!/bin/bash
-    # Redireciona toda a saída para um log para debug futuro
+    # 1. Setup de Ambiente e Logs
     exec > /var/log/bot-startup.log 2>&1
+    export HOME=/root
+    export PATH=$PATH:/usr/bin:/usr/local/bin
     echo "--- INICIANDO PROVISIONAMENTO AUTOMATIZADO ---"
 
-    # 1. Atualização do Sistema e Dependências Base
+    # 2. Instalação de Dependências
     apt-get update -y
     apt-get install -y git curl
-
-    # 2. Instalação do Node.js 20 e PM2 (Global)
     if ! command -v node &> /dev/null; then
         curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
         apt-get install -y nodejs
         npm install -y -g pm2
     fi
 
-    # 3. Preparação do Diretório e Código
+    # 3. Preparação do Código
     mkdir -p /opt/bot-whatsapp
     cd /opt/bot-whatsapp
-
     if [ ! -d ".git" ]; then
-      echo "Clonando repositório..."
       git clone https://github.com/allstack-staff/bot-whatsapp.git .
     else
-      echo "Atualizando repositório..."
-      git pull origin main
+      git fetch --all
+      git reset --hard origin/main
     fi
 
-    # 4. Instalação de Dependências e Build do Projeto
-    echo "Instalando pacotes npm..."
-    npm install
-
-    echo "Limpando pasta dist e compilando TypeScript..."
+    # 4. Build e Gestão de Assets (A correção mestre)
+    /usr/bin/npm install
     rm -rf dist
-    # Compilação segura focada na pasta src
     ./node_modules/.bin/tsc --rootDir src --outDir dist
 
-    echo "Copiando arquivos estáticos (JSON)..."
-    # Procura todos os JSONs na src e replica na dist com as pastas corretas
+    echo "Sincronizando arquivos JSON..."
     cd src && find . -name "*.json" -exec cp --parents {} ../dist/ \; && cd ..
 
-    # 5. Configuração e Inicialização com PM2
-    echo "Configurando processo no PM2..."
-    pm2 delete bot-whatsapp || true
-    pm2 start npm --name "bot-whatsapp" -- run start
+    # 5. Inicialização com PM2 e Persistência
+    /usr/local/bin/pm2 delete bot-whatsapp || true
+    /usr/local/bin/pm2 start /usr/bin/npm --name "bot-whatsapp" -- run start
     
-    # Salva para persistir após reboots da VM
-    pm2 save
-    env PATH=$PATH:/usr/bin pm2 startup systemd -u root --hp /root
+    /usr/local/bin/pm2 save
+    /usr/local/bin/pm2 startup systemd -u root --hp /root --force
 
     echo "--- PROVISIONAMENTO CONCLUÍDO COM SUCESSO ---"
   EOT
-
-  tags = ["bot-whatsapp"]
 }
 
 resource "google_compute_firewall" "allow_ssh" {
