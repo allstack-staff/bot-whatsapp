@@ -42,32 +42,48 @@ resource "google_compute_instance" "baileys_bot_vm" {
     access_config {}
   }
 
-  metadata_startup_script = <<-EOT
+metadata_startup_script = <<-EOT
     #!/bin/bash
-    # 1. Atualiza e instala dependências do SO
+    # 1. Cria um log detalhado de tudo que acontece no boot
+    exec > /var/log/bot-startup.log 2>&1
+    echo "Iniciando provisionamento automatizado..."
+
+    # 2. Atualiza e instala pacotes base
     apt-get update
     apt-get install -y git curl
-    
-    # 2. Instala Node.js 20 LTS e gerenciadores de pacote
+
+    # 3. Instala Node.js 20 e PM2
     curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
     apt-get install -y nodejs
-    npm install -y -g pm2 pnpm yarn
+    npm install -y -g pm2
 
-    # 3. Baixa a Aplicação (Como o repo é público, o clone direto funciona)
-    cd /opt
-    git clone https://github.com/allstack-staff/bot-whatsapp.git
-    cd bot-whatsapp
+    # 4. Prepara o diretório da aplicação
+    mkdir -p /opt/bot-whatsapp
+    cd /opt/bot-whatsapp
 
-    # 4. Instala as dependências do projeto
-    # (Vi na sua imagem que tem lockfiles do npm, pnpm e yarn. Vou usar npm como padrão)
+    # 5. Clona o repositório (ou atualiza se a VM for reiniciada)
+    if [ ! -d ".git" ]; then
+      echo "Clonando o repositório..."
+      git clone https://github.com/allstack-staff/bot-whatsapp.git .
+    else
+      echo "Repositório já existe, atualizando..."
+      git pull origin main
+    fi
+
+    # 6. Instala dependências
+    echo "Instalando pacotes npm..."
     npm install
 
-    # 5. Inicia o Bot com PM2 (Assumindo que você tem um script "start" no package.json)
+    # 7. Limpa processos antigos e inicia o novo
+    pm2 delete bot-whatsapp || true
+    echo "Iniciando o PM2..."
     pm2 start npm --name "bot-whatsapp" -- run start
-    
-    # 6. Salva o PM2 para voltar se a máquina reiniciar
+
+    # 8. Salva o estado para inicialização com o sistema
     pm2 save
     env PATH=$PATH:/usr/bin pm2 startup systemd -u root --hp /root
+
+    echo "Provisionamento concluído com sucesso!"
   EOT
 }
 
