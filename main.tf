@@ -30,6 +30,7 @@ data "google_service_account" "gh_actions" {
   account_id = "github-actions" 
 }
 
+
 # --- INFRA DA VM (O BOT) ---
 resource "google_compute_instance" "baileys_bot_vm" {
   name         = "baileys-bot-server"
