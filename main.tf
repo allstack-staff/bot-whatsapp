@@ -89,6 +89,12 @@ resource "google_compute_instance" "baileys_bot_vm" {
   EOT
 }
 
+resource "google_project_iam_member" "sa_token_creator" {
+  project = var.project_id
+  role    = "roles/iam.serviceAccountTokenCreator"
+  member  = "serviceAccount:${data.google_service_account.gh_actions.email}"
+}
+
 resource "google_compute_firewall" "allow_ssh" {
   name    = "allow-ssh-bot"
   network = "default"

@@ -39,7 +39,14 @@ jobs:
       - name: Trigger VM Update
         if: github.ref == 'refs/heads/main'
         run: |
-          # Captura a URL que o seu Terraform gera no output
-          TRIGGER_URL=$(terraform output -raw trigger_url)
-          curl -X POST $TRIGGER_URL \
-            -H "Authorization: Bearer $(gcloud auth print-identity-token --audiences=$TRIGGER_URL)"
+          # 1. Captura a URL limpa
+          TRIGGER_URL=$(terraform output -raw trigger_url | tr -d '\r\n')
+          echo "Chamando gatilho de deploy: $TRIGGER_URL"
+          
+          # 2. Gera o token (com audiences no plural)
+          ID_TOKEN=$(gcloud auth print-identity-token --audiences="$TRIGGER_URL")
+          
+          # 3. Faz o POST com o Token
+          curl -X POST "$TRIGGER_URL" \
+            -H "Authorization: Bearer $ID_TOKEN" \
+            -H "Content-Type: application/json"
