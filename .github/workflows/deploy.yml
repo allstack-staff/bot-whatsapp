@@ -42,4 +42,4 @@ jobs:
           # Captura a URL que o seu Terraform gera no output
           TRIGGER_URL=$(terraform output -raw trigger_url)
           curl -X POST $TRIGGER_URL \
-            -H "Authorization: Bearer $(gcloud auth print-identity-token --audience=$TRIGGER_URL)"
+            -H "Authorization: Bearer $(gcloud auth print-identity-token --audiences=$TRIGGER_URL)"
