@@ -16,6 +16,7 @@ provider "google" {
   region  = "us-central1"
 }
 
+# --- VARIÁVEIS ---
 variable "project_id" { type = string }
 variable "gh_token" { 
   description = "GitHub PAT Token"
@@ -23,11 +24,18 @@ variable "gh_token" {
   sensitive   = true
 }
 
+# Coleta os dados da Service Account que você já criou para o GitHub
+# SUBSTITUA 'github-actions-sa' pelo ID da sua conta (o que vem antes do @)
+data "google_service_account" "gh_actions" {
+  account_id = "github-actions-sa" 
+}
+
 # --- INFRA DA VM (O BOT) ---
 resource "google_compute_instance" "baileys_bot_vm" {
   name         = "baileys-bot-server"
-  machine_type = "e2-micro" # Nível gratuito do GCP
+  machine_type = "e2-micro"
   zone         = "us-central1-a"
+  tags         = ["bot-whatsapp"]
 
   boot_disk {
     initialize_params {
@@ -38,27 +46,22 @@ resource "google_compute_instance" "baileys_bot_vm" {
 
   network_interface {
     network = "default"
-    access_config {
-      # Deixar vazio para atribuir um IP Externo Efêmero
-    }
+    access_config {}
   }
 
-  # Script de Inicialização (O Cérebro da Automação)
-metadata_startup_script = <<-EOT
+  metadata_startup_script = <<-EOT
     #!/bin/bash
     exec > /var/log/bot-startup.log 2>&1
     export HOME=/root
     export PATH=$PATH:/usr/bin:/usr/local/bin
     echo "--- INICIANDO PROVISIONAMENTO ---"
 
-    # 1. Instalação básica
     apt-get update -y
     apt-get install -y git curl
     curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
     apt-get install -y nodejs
     npm install -y -g pm2
 
-    # 2. Setup do diretório
     mkdir -p /opt/bot-whatsapp
     cd /opt/bot-whatsapp
     if [ ! -d ".git" ]; then
@@ -68,19 +71,14 @@ metadata_startup_script = <<-EOT
       git reset --hard origin/main
     fi
 
-    # 3. Build e Assets (Agora com .txt também!)
     npm install
     rm -rf dist
     ./node_modules/.bin/tsc --rootDir src --outDir dist
 
     echo "Sincronizando JSONs e TXTs..."
-    # Esse comando agora pega .json e .txt
     cd src && find . \( -name "*.json" -o -name "*.txt" \) -exec cp --parents {} ../dist/ \; && cd ..
-    
-    # Ajuste de permissão para o bot conseguir escrever nos arquivos
     chmod -R 777 /opt/bot-whatsapp/dist
 
-    # 4. Inicialização (Usando o caminho dinâmico do PM2)
     PM2_PATH=$(command -v pm2)
     $PM2_PATH delete bot-whatsapp || true
     $PM2_PATH start npm --name "bot-whatsapp" -- run start
@@ -104,16 +102,15 @@ resource "google_compute_firewall" "allow_ssh" {
   target_tags   = ["bot-whatsapp"]
 }
 
-# --- INFRA DA CLOUD FUNCTION (O GATILHO) ---
+# --- INFRA DA CLOUD FUNCTION ---
 
-# Bucket para o código da função
 resource "google_storage_bucket" "function_bucket" {
-  name     = "${var.project_id}-function-source"
-  location = "US"
+  name          = "${var.project_id}-function-source"
+  location      = "US"
   storage_class = "STANDARD"
+  force_destroy = true # Facilita a limpeza em testes
 }
 
-# Zip do código (O terraform vai zipar a pasta trigger-function pra você)
 data "archive_file" "function_zip" {
   type        = "zip"
   source_dir  = "${path.module}/trigger-function"
@@ -128,8 +125,9 @@ resource "google_storage_bucket_object" "function_code" {
 
 resource "google_cloudfunctions_function" "deploy_trigger" {
   name        = "trigger-deploy-bot"
-  description = "Dispara o GitHub Actions"
+  description = "Dispara o deploy via GitHub Actions"
   runtime     = "nodejs20"
+  region      = "us-central1"
 
   available_memory_mb   = 128
   source_archive_bucket = google_storage_bucket.function_bucket.name
@@ -142,13 +140,15 @@ resource "google_cloudfunctions_function" "deploy_trigger" {
   }
 }
 
-# Permite que a função seja chamada via HTTP publicamente
+# --- SEGURANÇA (IAM) ---
+
+# REMOVEMOS 'allUsers' e permitimos apenas a SA do GitHub Actions
 resource "google_cloudfunctions_function_iam_member" "invoker" {
   project        = google_cloudfunctions_function.deploy_trigger.project
   region         = google_cloudfunctions_function.deploy_trigger.region
   cloud_function = google_cloudfunctions_function.deploy_trigger.name
   role           = "roles/cloudfunctions.invoker"
-  member         = "allUsers"
+  member         = "serviceAccount:${data.google_service_account.gh_actions.email}"
 }
 
 output "trigger_url" {

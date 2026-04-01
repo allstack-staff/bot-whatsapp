@@ -41,5 +41,5 @@ jobs:
         run: |
           # Captura a URL que o seu Terraform gera no output
           TRIGGER_URL=$(terraform output -raw trigger_url)
-          echo "Chamando gatilho de deploy: $TRIGGER_URL"
-          curl -X POST $TRIGGER_URL
+          curl -X POST $TRIGGER_URL \
+            -H "Authorization: Bearer $(gcloud auth print-identity-token --audience=$TRIGGER_URL)"
