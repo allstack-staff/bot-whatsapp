@@ -35,3 +35,11 @@ jobs:
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main'
         run: terraform apply -auto-approve tfplan
+        
+      - name: Trigger VM Update
+        if: github.ref == 'refs/heads/main'
+        run: |
+          # Captura a URL que o seu Terraform gera no output
+          TRIGGER_URL=$(terraform output -raw trigger_url)
+          echo "Chamando gatilho de deploy: $TRIGGER_URL"
+          curl -X POST $TRIGGER_URL
