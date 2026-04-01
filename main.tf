@@ -27,7 +27,7 @@ variable "gh_token" {
 # Coleta os dados da Service Account que você já criou para o GitHub
 # SUBSTITUA 'github-actions-sa' pelo ID da sua conta (o que vem antes do @)
 data "google_service_account" "gh_actions" {
-  account_id = "github-actions-sa" 
+  account_id = "github-actions" 
 }
 
 # --- INFRA DA VM (O BOT) ---
