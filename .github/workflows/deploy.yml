@@ -43,34 +43,21 @@ jobs:
             const zone = 'us-central1-a';
             const instance = 'baileys-bot-server';
 
-            const script = `
-              cd /opt/bot-whatsapp && \
-              sudo git fetch --all && \
-              sudo git reset --hard origin/main && \
-              sudo npm install && \
-              sudo rm -rf dist && \
-              sudo ./node_modules/.bin/tsc --rootDir src --outDir dist && \
-              cd src && sudo find . \\( -name "*.json" -o -name "*.txt" \\) -exec cp --parents {} ../dist/ \\; && cd .. && \
-              sudo chmod -R 777 /opt/bot-whatsapp/dist && \
-              sudo pm2 restart bot-whatsapp
-            `;
-
             try {
-              console.log(`Enviando comando de deploy para ${instance}...`);
+              console.log(`Reiniciando a VM ${instance} para aplicar o novo deploy...`);
               
-              await instancesClient.insertCmd({
+              // O comando reset reinicia a máquina.
+              // Ao ligar, o GCP executa o seu metadata_startup_script automaticamente,
+              // fazendo o git pull e subindo o PM2 com o código novo!
+              await instancesClient.reset({
                 project,
                 zone,
-                instance,
-                runCommandRequestResource: {
-                  command: 'sh',
-                  args: ['-c', script]
-                }
+                instance
               });
 
-              res.status(200).send({ status: "Comando enviado com sucesso!" });
+              res.status(200).send({ status: "VM reiniciada! O script de inicializacao fara o deploy." });
             } catch (err) {
-              console.error("Erro ao disparar comando:", err);
+              console.error("Erro ao reiniciar VM:", err);
               res.status(500).send({ error: err.message });
             }
           };
