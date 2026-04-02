@@ -131,7 +131,7 @@ resource "google_storage_bucket_object" "function_code" {
 }
 
 resource "google_cloudfunctions_function" "deploy_trigger" {
-  name        = "trigger-deploy-bot-v2"
+  name        = "function-v3-${data.archive_file.function_zip.output_md5}.zip"
   description = "Dispara o deploy via GitHub Actions"
   runtime     = "nodejs20"
   region      = "us-central1"
