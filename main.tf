@@ -132,7 +132,7 @@ resource "google_storage_bucket_object" "function_code" {
 
 resource "google_cloudfunctions_function" "deploy_trigger" {
   name        = "trigger-deploy-bot"
-  description = "Dispara o deploy via GitHub Actions"
+  description = "Dispara o deploy via GitHub Actions v2"
   runtime     = "nodejs20"
   region      = "us-central1"
 
