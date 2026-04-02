@@ -43,10 +43,14 @@ jobs:
           TRIGGER_URL=$(terraform output -raw trigger_url | tr -d '\r\n')
           echo "Chamando gatilho de deploy: $TRIGGER_URL"
           
-          # 2. Gera o token (com audiences no plural)
+          # 2. A Pausa Tática do SRE: Espera a permissão do Google propagar
+          echo "Aguardando 45 segundos para propagação do IAM no GCP..."
+          sleep 45
+          
+          # 3. Gera o token
           ID_TOKEN=$(gcloud auth print-identity-token --audiences="$TRIGGER_URL")
           
-          # 3. Faz o POST com o Token
-          curl -X POST "$TRIGGER_URL" \
+          # 4. Faz a requisição com o modo verbose (-v) ativado
+          curl -v -X POST "$TRIGGER_URL" \
             -H "Authorization: Bearer $ID_TOKEN" \
             -H "Content-Type: application/json"
