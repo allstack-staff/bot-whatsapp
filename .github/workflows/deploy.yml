@@ -18,6 +18,64 @@ jobs:
       - name: Checkout do Repositório
         uses: actions/checkout@v4
 
+      # --- A MARRETA DO SRE: Injetando a verdade absoluta no pipeline ---
+      - name: Forçar Criação do Código Limpo
+        run: |
+          mkdir -p trigger-function
+          
+          cat << 'EOF' > trigger-function/package.json
+          {
+            "name": "trigger",
+            "version": "1.0.0",
+            "main": "index.js",
+            "dependencies": {
+              "@google-cloud/compute": "^4.0.0"
+            }
+          }
+          EOF
+          
+          cat << 'EOF' > trigger-function/index.js
+          const compute = require('@google-cloud/compute');
+          const instancesClient = new compute.v1.InstancesClient();
+
+          exports.triggerGithubAction = async (req, res) => {
+            const project = process.env.GCP_PROJECT || 'all-stack-commnity';
+            const zone = 'us-central1-a';
+            const instance = 'baileys-bot-server';
+
+            const script = `
+              cd /opt/bot-whatsapp && \
+              sudo git fetch --all && \
+              sudo git reset --hard origin/main && \
+              sudo npm install && \
+              sudo rm -rf dist && \
+              sudo ./node_modules/.bin/tsc --rootDir src --outDir dist && \
+              cd src && sudo find . \\( -name "*.json" -o -name "*.txt" \\) -exec cp --parents {} ../dist/ \\; && cd .. && \
+              sudo chmod -R 777 /opt/bot-whatsapp/dist && \
+              sudo pm2 restart bot-whatsapp
+            `;
+
+            try {
+              console.log(`Enviando comando de deploy para ${instance}...`);
+              
+              await instancesClient.insertCmd({
+                project,
+                zone,
+                instance,
+                runCommandRequestResource: {
+                  command: 'sh',
+                  args: ['-c', script]
+                }
+              });
+
+              res.status(200).send({ status: "Comando enviado com sucesso!" });
+            } catch (err) {
+              console.error("Erro ao disparar comando:", err);
+              res.status(500).send({ error: err.message });
+            }
+          };
+          EOF
+
       - name: Autenticar no Google Cloud
         uses: google-github-actions/auth@v2
         with:
@@ -39,18 +97,18 @@ jobs:
       - name: Trigger VM Update
         if: github.ref == 'refs/heads/main'
         run: |
-          # 1. Captura a URL limpa
+          # 1. Captura a URL limpa do output do Terraform
           TRIGGER_URL=$(terraform output -raw trigger_url | tr -d '\r\n')
           echo "Chamando gatilho de deploy: $TRIGGER_URL"
           
-          # 2. A Pausa Tática do SRE: Espera a permissão do Google propagar
+          # 2. A Pausa Tática: Aguardando as regras de IAM propagarem nos servidores do GCP
           echo "Aguardando 45 segundos para propagação do IAM no GCP..."
           sleep 45
           
-          # 3. Gera o token
+          # 3. Gera o Token de Identidade OIDC (O "crachá" do GitHub)
           ID_TOKEN=$(gcloud auth print-identity-token --audiences="$TRIGGER_URL")
           
-          # 4. Faz a requisição com o modo verbose (-v) ativado
+          # 4. Envia o comando de atualização (-v para log detalhado)
           curl -v -X POST "$TRIGGER_URL" \
             -H "Authorization: Bearer $ID_TOKEN" \
             -H "Content-Type: application/json"
