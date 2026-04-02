@@ -1,44 +1,41 @@
-const { InstancesClient } = require('@google-cloud/compute').v1;
-const computeClient = new InstancesClient();
+const compute = require('@google-cloud/compute');
+const instancesClient = new compute.v1.InstancesClient();
 
-/**
- * Entry point: triggerGithubAction (conforme definido no seu main.tf)
- */
 exports.triggerGithubAction = async (req, res) => {
-  const project = process.env.GCP_PROJECT || 'seu-projeto-id'; // O GCP preenche isso automaticamente
+  const project = process.env.GCP_PROJECT || 'all-stack-commnity';
   const zone = 'us-central1-a';
   const instance = 'baileys-bot-server';
 
-  console.log(`Iniciando comando de atualização na instância: ${instance}`);
-
-  // O nosso "Combo de Update" validado na simulação
-  const updateCommand = `
+  const script = `
     cd /opt/bot-whatsapp && \
     sudo git fetch --all && \
     sudo git reset --hard origin/main && \
     sudo npm install && \
     sudo rm -rf dist && \
     sudo ./node_modules/.bin/tsc --rootDir src --outDir dist && \
-    cd src && sudo find . \( -name "*.json" -o -name "*.txt" \) -exec cp --parents {} ../dist/ \; && cd .. && \
+    cd src && sudo find . \\( -name "*.json" -o -name "*.txt" \\) -exec cp --parents {} ../dist/ \\; && cd .. && \
     sudo chmod -R 777 /opt/bot-whatsapp/dist && \
     sudo pm2 restart bot-whatsapp
   `;
 
   try {
-    // Chamada para executar o comando via OS Config Agent (padrão nas VMs Ubuntu do GCP)
-    // Isso evita que precisemos gerenciar chaves SSH no código
-    console.log("Comando enviado. Aguardando processamento da VM...");
+    console.log(`Enviando comando de deploy para ${instance}...`);
     
-    // NOTA: Em instâncias pequenas, o comando 'runCommand' pode variar conforme a SDK.
-    // Como alternativa robusta, a função retorna 200 para o GitHub
-    // e você pode monitorar o log da VM.
-    
-    res.status(200).send({
-      status: "Sucesso",
-      message: "Comando de deploy disparado para a VM."
+    await instancesClient.insertCmd({
+      project,
+      zone,
+      instance,
+      runCommandRequestResource: {
+        command: 'sh',
+        args: ['-c', script]
+      }
     });
-  } catch (error) {
-    console.error("Erro ao disparar comando:", error);
-    res.status(500).send({ error: error.message });
+
+    // Se chegar aqui, retornamos sucesso!
+    res.status(200).send({ status: "Comando enviado com sucesso!" });
+  } catch (err) {
+    console.error("Erro ao disparar comando na VM:", err);
+    res.status(500).send({ error: err.message });
   }
 };
+
