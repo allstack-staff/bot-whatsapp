@@ -31,11 +31,9 @@ exports.triggerGithubAction = async (req, res) => {
       }
     });
 
-    // Se chegar aqui, retornamos sucesso!
     res.status(200).send({ status: "Comando enviado com sucesso!" });
   } catch (err) {
-    console.error("Erro ao disparar comando na VM:", err);
+    console.error("Erro ao disparar comando:", err);
     res.status(500).send({ error: err.message });
   }
 };
-
