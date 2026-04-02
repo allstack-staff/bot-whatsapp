@@ -125,14 +125,14 @@ data "archive_file" "function_zip" {
 }
 
 resource "google_storage_bucket_object" "function_code" {
-  name   = "function-${data.archive_file.function_zip.output_md5}.zip"
+  name   = "function-v3-${data.archive_file.function_zip.output_md5}.zip"
   bucket = google_storage_bucket.function_bucket.name
   source = data.archive_file.function_zip.output_path
 }
 
 resource "google_cloudfunctions_function" "deploy_trigger" {
-  name        = "function-v3-${data.archive_file.function_zip.output_md5}.zip"
-  description = "Dispara o deploy via GitHub Actions"
+  name        = "trigger-deploy-bot"
+  description = "Dispara o deploy via GitHub Actions v3"
   runtime     = "nodejs20"
   region      = "us-central1"
 
