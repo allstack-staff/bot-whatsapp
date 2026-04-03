@@ -85,7 +85,7 @@ resource "google_compute_instance" "baileys_bot_vm" {
     $PM2_PATH start npm --name "bot-whatsapp" -- run start
     
     # 2. Conecta a VM ao painel na nuvem do PM2.io (Chaves da Imagem)
-    $PM2_PATH link 4plk48ypl2w27tt lez5w319nxogm92
+    $PM2_PATH link n8wbaca4chrbcft 3lix5wnw2is3w2o
     
     # 3. Salva os processos para iniciarem junto com a máquina
     $PM2_PATH save
