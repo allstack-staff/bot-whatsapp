@@ -40,7 +40,7 @@ jobs:
 
           exports.triggerGithubAction = async (req, res) => {
             const project = process.env.GCP_PROJECT || 'all-stack-commnity';
-            const zone = 'us-central1-a';
+            const zone = 'us-central1-c';
             const instance = 'baileys-bot-server';
 
             try {
@@ -99,3 +99,4 @@ jobs:
           curl -v -X POST "$TRIGGER_URL" \
             -H "Authorization: Bearer $ID_TOKEN" \
             -H "Content-Type: application/json"
+            
