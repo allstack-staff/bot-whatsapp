@@ -33,7 +33,7 @@ data "google_service_account" "gh_actions" {
 resource "google_compute_instance" "baileys_bot_vm" {
   name         = "baileys-bot-server"
   machine_type = "e2-micro"
-  zone         = "us-central1-a"
+  zone         = "us-central1-c"
   tags         = ["bot-whatsapp"]
 
   boot_disk {
