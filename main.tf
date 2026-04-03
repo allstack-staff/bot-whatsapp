@@ -24,14 +24,12 @@ variable "gh_token" {
   sensitive   = true
 }
 
-# Coleta os dados da Service Account que você já criou para o GitHub
-# SUBSTITUA 'github-actions-sa' pelo ID da sua conta (o que vem antes do @)
+# Coleta os dados da Service Account do GitHub
 data "google_service_account" "gh_actions" {
   account_id = "github-actions" 
 }
 
-
-# --- INFRA DA VM (O BOT) ---
+# --- INFRA DA VM (O BOT E OBSERVABILIDADE PM2.IO) ---
 resource "google_compute_instance" "baileys_bot_vm" {
   name         = "baileys-bot-server"
   machine_type = "e2-micro"
@@ -81,8 +79,15 @@ resource "google_compute_instance" "baileys_bot_vm" {
     chmod -R 777 /opt/bot-whatsapp/dist
 
     PM2_PATH=$(command -v pm2)
+    
+    # 1. Limpa e Inicia o Bot do WhatsApp
     $PM2_PATH delete bot-whatsapp || true
     $PM2_PATH start npm --name "bot-whatsapp" -- run start
+    
+    # 2. Conecta a VM ao painel na nuvem do PM2.io (Chaves da Imagem)
+    $PM2_PATH link 4plk48ypl2w27tt lez5w319nxogm92
+    
+    # 3. Salva os processos para iniciarem junto com a máquina
     $PM2_PATH save
     $PM2_PATH startup systemd -u root --hp /root --force
 
@@ -96,6 +101,7 @@ resource "google_project_iam_member" "sa_token_creator" {
   member  = "serviceAccount:${data.google_service_account.gh_actions.email}"
 }
 
+# --- FIREWALL (Voltamos apenas para o SSH seguro) ---
 resource "google_compute_firewall" "allow_ssh" {
   name    = "allow-ssh-bot"
   network = "default"
@@ -115,7 +121,7 @@ resource "google_storage_bucket" "function_bucket" {
   name          = "${var.project_id}-function-source"
   location      = "US"
   storage_class = "STANDARD"
-  force_destroy = true # Facilita a limpeza em testes
+  force_destroy = true 
 }
 
 data "archive_file" "function_zip" {
@@ -149,7 +155,6 @@ resource "google_cloudfunctions_function" "deploy_trigger" {
 
 # --- SEGURANÇA (IAM) ---
 
-# REMOVEMOS 'allUsers' e permitimos apenas a SA do GitHub Actions
 resource "google_cloudfunctions_function_iam_member" "invoker" {
   project        = google_cloudfunctions_function.deploy_trigger.project
   region         = google_cloudfunctions_function.deploy_trigger.region
