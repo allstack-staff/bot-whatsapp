@@ -2,12 +2,13 @@ node_modules/
 dist/
 /*.*env
 **/*/authdata
-.env
+error.txt
 **/*.tgz
 **/*.tbz2
 logs/
 
-.env*
+.env
 .flaskenv*
 !.env.project
 !.env.vault
+authdata
