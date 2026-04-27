@@ -1,63 +1,69 @@
-import { GPT, LOG, type ChatConfig, ChatMessage } from "asb-openai";
-import { AlreadyConfiguredError } from "../exceptions/AlreadyConfiguredError";
-import path from "path";
-import { existsSync, mkdirSync, writeFileSync } from "fs";
+import OpenAI from 'openai';
+import path from 'path';
+import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
+import 'dotenv/config';
 import { ChatGptRequestError } from '../exceptions/ChatGptRequestError';
-import "dotenv/config";
-import { readFile } from "fs/promises";
 
-class Gpt extends GPT {
-  private log = new LOG();
-  constructor() {
-    super({
-      apikey: 'add key aqui',
-    });
-  }
+type Message = { role: 'system' | 'user' | 'assistant'; content: string };
 
-  private config() {
-    return [
-      {
-        role: "system",
-        content:
-          "Você é um assistente prestativo. Fale sempre com linguagem simples. \n\n Nunca fale que é um assistente virtual. \n\n Você está no WhatsApp, use os recursos disponíveis para se comunicar. \n\n sempre use mensagens curtas.",
-      },
-    ];
-  }
+function appendToLog(filePath: string, messages: Message[]): void {
+    const existing: Message[] = existsSync(filePath)
+        ? JSON.parse(readFileSync(filePath, 'utf-8'))
+        : [];
+    writeFileSync(filePath, JSON.stringify([...existing, ...messages], null, 2));
+}
 
-  private async request(
-    message: string,
-    id: string
-  ): Promise<{ role: string; content: string }> {
-    const filePath = path.resolve(__dirname, "..", "logs");
-    const jsonPath = path.resolve(__dirname, filePath, `${id}.json`);
-    if (!existsSync(filePath)) {
-      mkdirSync(filePath);
+function readLog(filePath: string): Message[] {
+    if (!existsSync(filePath)) return [];
+    return JSON.parse(readFileSync(filePath, 'utf-8'));
+}
+
+class Gpt {
+    private client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+    private systemMessages(): Message[] {
+        return [
+            {
+                role: 'system',
+                content:
+                    'Você é um assistente prestativo. Fale sempre com linguagem simples.\n\n' +
+                    'Nunca fale que é um assistente virtual.\n\n' +
+                    'Você está no WhatsApp, use os recursos disponíveis para se comunicar.\n\n' +
+                    'Sempre use mensagens curtas.',
+            },
+        ];
     }
 
-    const logCache = [{ role: "user", content: message }];
-    this.log.saveMessagesToJSON(jsonPath, logCache);
-    const history = JSON.parse(await readFile(jsonPath, "utf-8"));
-    const count = history.length >= 20 ? 10 : 0;
+    private async request(message: string, id: string): Promise<Message> {
+        const logsDir = path.resolve(__dirname, '..', 'logs');
+        const jsonPath = path.resolve(logsDir, `${id}.json`);
 
-    const config: ChatConfig = {
-      model: "gpt-4",
-      messages: [...this.config(), ...history.slice(count, history.length)],
-      temperature: 0.9,
-      max_tokens: 600,
-    };
-    const request = await this.requestChat(config);
-    if (!request.data.choices) throw new ChatGptRequestError(request.toString());
+        if (!existsSync(logsDir)) mkdirSync(logsDir, { recursive: true });
 
-    this.log.saveMessagesToJSON(jsonPath, [request.data.choices[0].message]);
-    return request.data.choices[0].message;
-  }
+        appendToLog(jsonPath, [{ role: 'user', content: message }]);
+        const history = readLog(jsonPath);
+        const offset = history.length >= 20 ? 10 : 0;
 
-  public async send(
-    message: string,
-    id: string
-  ): Promise<{ role: string; content: string }> {
-    return await this.request(message, id);
-  }
+        const response = await this.client.chat.completions.create({
+            model: 'gpt-4',
+            messages: [...this.systemMessages(), ...history.slice(offset)],
+            temperature: 0.9,
+            max_tokens: 600,
+        });
+
+        if (!response.choices?.length) throw new ChatGptRequestError('No choices returned');
+
+        const reply: Message = {
+            role: 'assistant',
+            content: response.choices[0].message.content ?? '',
+        };
+        appendToLog(jsonPath, [reply]);
+        return reply;
+    }
+
+    public async send(message: string, id: string): Promise<Message> {
+        return this.request(message, id);
+    }
 }
 
 export default new Gpt();
