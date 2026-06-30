@@ -11,4 +11,5 @@ logs/
 .flaskenv*
 !.env.project
 !.env.vault
-authdata
+auth
+*.db
