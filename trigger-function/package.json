@@ -1,8 +1,0 @@
-{
-  "name": "trigger-function",
-  "version": "1.0.0",
-  "main": "index.js",
-  "dependencies": {
-    "@google-cloud/compute": "^4.9.0"
-  }
-}
