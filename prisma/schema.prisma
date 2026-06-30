@@ -1,0 +1,27 @@
+datasource db {
+    provider = "sqlite"
+}
+
+generator client {
+    provider = "prisma-client-js"
+}
+
+model AdminGroup {
+    id        String   @id // group JID
+    createdAt DateTime @default(now())
+}
+
+model BannedUser {
+    userJid   String   // user JID
+    groupJid  String   // group where ban was issued (or "comunidade")
+    banType   String   // PERMANENTE | TEMPORARIO | COMUNIDADE | GRUPO
+    reason    String
+    expiresAt DateTime? // for TEMPORARIO — null = never expires
+    bannedBy  String   // admin JID who issued the ban
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@id([userJid, groupJid])
+    @@index([userJid])
+    @@index([groupJid])
+}
