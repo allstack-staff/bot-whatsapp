@@ -1,0 +1,1 @@
+{"root":["./src/index.ts","./src/infra/bot/config/index.ts","./src/infra/bot/handlers/messagehandler.ts","./src/infra/bot/services/adminservice.ts","./src/infra/bot/services/banservice.ts","./src/infra/bot/types/index.ts","./src/infra/bot/utils/logger.ts"],"version":"5.9.3"}

@@ -1,4 +1,1 @@
-onlyBuiltDependencies:
-  - '@whiskeysockets/baileys'
-  - protobufjs
-  - sharp
+onlyBuiltDependencies: '[@prisma/client,@prisma/engines,prisma]'
