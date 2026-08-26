@@ -5,6 +5,13 @@ on:
     branches: [ "main" ]
   workflow_dispatch:
 
+# Duas execuções concorrentes aplicando Terraform sobre o mesmo state é a
+# receita pra corromper infra ou disputar lock. Enfileira em vez de rodar em paralelo,
+# e nunca cancela um apply/deploy já em andamento (deixaria a VM/infra pela metade).
+concurrency:
+  group: terraform-deploy
+  cancel-in-progress: false
+
 jobs:
   terraform:
     name: Terraform Apply
@@ -84,19 +91,30 @@ jobs:
       - name: Trigger VM Update
         if: github.ref == 'refs/heads/main'
         run: |
+          set -euo pipefail
+
           # 1. Captura a URL limpa do output do Terraform
           TRIGGER_URL=$(terraform output -raw trigger_url | tr -d '\r\n')
+          if [ -z "$TRIGGER_URL" ]; then
+            echo "::error::terraform output 'trigger_url' veio vazio — sem URL não há como acionar o redeploy da VM."
+            exit 1
+          fi
           echo "Chamando gatilho de deploy: $TRIGGER_URL"
-          
+
           # 2. A Pausa Tática: Aguardando as regras de IAM propagarem nos servidores do GCP
           echo "Aguardando 45 segundos para propagação do IAM no GCP..."
           sleep 45
-          
+
           # 3. Gera o Token de Identidade OIDC (O "crachá" do GitHub)
           ID_TOKEN=$(gcloud auth print-identity-token --audiences="$TRIGGER_URL")
-          
-          # 4. Envia o comando de atualização (-v para log detalhado)
-          curl -v -X POST "$TRIGGER_URL" \
+          if [ -z "$ID_TOKEN" ]; then
+            echo "::error::Não foi possível gerar o identity token do GCP."
+            exit 1
+          fi
+
+          # 4. Envia o comando de atualização.
+          # --fail-with-body: um 4xx/5xx da função (ela retorna 500 em erro) deve
+          # derrubar o pipeline, não só falhas de rede/DNS.
+          curl -v --fail-with-body -X POST "$TRIGGER_URL" \
             -H "Authorization: Bearer $ID_TOKEN" \
             -H "Content-Type: application/json"
-            

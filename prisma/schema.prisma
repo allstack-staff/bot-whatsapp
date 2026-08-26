@@ -12,14 +12,15 @@ model AdminGroup {
 }
 
 model BannedUser {
-    userJid   String   // user JID
-    groupJid  String   // group where ban was issued (or "comunidade")
-    banType   String   // PERMANENTE | TEMPORARIO | COMUNIDADE | GRUPO
-    reason    String
-    expiresAt DateTime? // for TEMPORARIO — null = never expires
-    bannedBy  String   // admin JID who issued the ban
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+    userJid     String   // user JID
+    displayName String?  // nome público (notify) da pessoa no momento do ban, se disponível
+    groupJid    String   // group where ban was issued (or "comunidade")
+    banType     String   // PERMANENTE | TEMPORARIO | COMUNIDADE
+    reason      String
+    expiresAt   DateTime? // for TEMPORARIO — null = never expires
+    bannedBy    String   // admin JID who issued the ban
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
 
     @@id([userJid, groupJid])
     @@index([userJid])

@@ -1,13 +1,20 @@
-import { WASocket } from '@whiskeysockets/baileys';
+import { GroupMetadata, WAMessageKey, WASocket } from '@whiskeysockets/baileys';
 import { MessageUpsert } from '../types';
 import { botConfig } from '../config';
 import { BanService } from '../services/banService';
 import { AdminService } from '../services/adminService';
 import { logger } from '../utils/logger';
+import { findParticipant, isGroupAdmin, resolvePnJid } from '../utils/jid';
+import { humanBulkActionDelay, humanReplyDelay } from '../utils/delay';
 
 export class MessageHandler {
     private banService: BanService;
     private adminService: AdminService;
+
+    // Rastro (em memória) dos comandos digitados pro bot e das respostas dele em
+    // cada grupo, só pra viabilizar o $clear. Não precisa sobreviver a um restart.
+    private groupMessageLog: Map<string, WAMessageKey[]> = new Map();
+    private static readonly MAX_TRACKED_PER_GROUP = 300;
 
     constructor(private sock: WASocket) {
         this.banService = new BanService();
@@ -20,7 +27,21 @@ export class MessageHandler {
         unban: (msg: any, args: string[]) => this.unbanCommand(msg, args),
         bans: (msg: any) => this.bansCommand(msg),
         banedit: (msg: any, args: string[]) => this.baneditCommand(msg, args),
+        clear: (msg: any) => this.clearCommand(msg),
+        status: (msg: any) => this.statusCommand(msg),
+        ajuda: (msg: any) => this.helpCommand(msg),
+        help: (msg: any) => this.helpCommand(msg),
     };
+
+    private trackGroupMessage(jid: string | undefined, key: WAMessageKey | undefined): void {
+        if (!jid?.endsWith('@g.us') || !key?.id) return;
+        const keys = this.groupMessageLog.get(jid) ?? [];
+        keys.push(key);
+        if (keys.length > MessageHandler.MAX_TRACKED_PER_GROUP) {
+            keys.splice(0, keys.length - MessageHandler.MAX_TRACKED_PER_GROUP);
+        }
+        this.groupMessageLog.set(jid, keys);
+    }
 
     async handleMessage({ messages, type }: MessageUpsert): Promise<void> {
         if (type !== 'notify') return;
@@ -45,6 +66,7 @@ export class MessageHandler {
 
                 if (text.startsWith(botConfig.commands.prefix)) {
                     logger.debug({ text, jid: msg.key.remoteJid }, '[handleMessage] command detected');
+                    this.trackGroupMessage(msg.key.remoteJid, msg.key);
                     await this.handleCommand(msg, text.split(' '));
                 }
             } catch (err) {
@@ -60,27 +82,27 @@ export class MessageHandler {
 
         for (const participant of participants) {
             try {
-                let participantJid: string;
-                if (typeof participant === 'string') {
-                    participantJid = participant;
-                } else {
-                    participantJid = participant.phoneNumber || participant.id;
-                }
+                const participantId: string = participant.id;
+                const resolvedJid = participant.phoneNumber
+                    ? participant.phoneNumber
+                    : await resolvePnJid(this.sock, participantId);
 
-                logger.debug({ participantJid, groupId: id }, '[handleGroupParticipantsUpdate] checking ban for participant');
+                logger.debug({ participantId, resolvedJid, groupId: id }, '[handleGroupParticipantsUpdate] checking ban for participant');
 
-                const ban = await this.banService.getActiveBan(participantJid, id);
-                logger.debug({ participantJid, found: !!ban }, '[handleGroupParticipantsUpdate] ban lookup result');
+                const ban = await this.banService.getActiveBan(resolvedJid, id);
+                logger.debug({ resolvedJid, found: !!ban }, '[handleGroupParticipantsUpdate] ban lookup result');
                 if (!ban) continue;
 
-                logger.info({ participantJid, groupId: id }, 'Removing banned user on re-entry');
+                logger.info({ resolvedJid, groupId: id }, 'Removing banned user on re-entry');
 
-                await this.sock.groupParticipantsUpdate(id, [participantJid], 'remove').catch((e: any) => {
+                // Se várias pessoas banidas entrarem juntas (add em lote), espaça as remoções.
+                await humanBulkActionDelay();
+                await this.sock.groupParticipantsUpdate(id, [participantId], 'remove').catch((e: any) => {
                     logger.error({ err: e }, 'Failed to remove banned user on re-entry');
                     return;
                 });
 
-                const number = participantJid.split('@')[0];
+                const number = resolvedJid.split('@')[0];
                 const banTypeLabel = this.resolveBanTypeLabel(ban.banType);
                 const expires = ban.expiresAt
                     ? ` (expira: ${new Date(ban.expiresAt).toLocaleString('pt-BR')})`
@@ -88,11 +110,11 @@ export class MessageHandler {
 
                 const msg = `🚫 @${number} removido — banimento ativo\nTipo: ${banTypeLabel}${expires}\nMotivo: ${ban.reason}`;
                 await this.replySafe(id, msg);
-                logger.info({ participantJid, groupId: id, reason: ban.reason }, 'Banned user removed on re-entry');
+                logger.info({ resolvedJid, groupId: id, reason: ban.reason }, 'Banned user removed on re-entry');
 
                 await this.sendLog(
                     `🚫 @${number} tentou re-entrar e foi removido — ${banTypeLabel}${expires} — Motivo: ${ban.reason}`,
-                    [participantJid],
+                    [resolvedJid],
                 );
             } catch (err) {
                 logger.warn({ err, participant }, '[handleGroupParticipantsUpdate] error checking participant');
@@ -110,6 +132,10 @@ export class MessageHandler {
         }
     }
 
+    /**
+     * Sender must be (a) admin of the group the command was typed in, and
+     * (b) a member of a registered admin group (see $home).
+     */
     private async isAuthorized(msg: any): Promise<boolean> {
         const jid = msg.key.remoteJid!;
 
@@ -118,7 +144,7 @@ export class MessageHandler {
             return false;
         }
 
-        let metadata: any;
+        let metadata: GroupMetadata;
         try {
             metadata = await this.sock.groupMetadata(jid);
         } catch {
@@ -126,18 +152,34 @@ export class MessageHandler {
             return false;
         }
 
-        const participantId = msg.key.participant! || msg.key.remoteJid;
-        const normalize = (id: string) => id.split('@')[0].split(':')[0];
-        const isGroupAdmin = metadata.participants.some(
-            (p: any) => normalize(p.id) === normalize(participantId) && (p.admin === 'admin' || p.admin === 'superadmin')
-        );
+        const senderRaw = msg.key.participant! || msg.key.remoteJid!;
+        const senderParticipant = findParticipant(metadata, senderRaw);
 
-        if (!isGroupAdmin) {
+        if (!isGroupAdmin(senderParticipant)) {
             await this.replySafe(jid, '❌ Você precisa ser admin do grupo para usar este comando.');
             return false;
         }
 
+        const senderJid = await resolvePnJid(this.sock, senderRaw, metadata);
+        if (!(await this.isMemberOfAdminGroup(senderRaw, senderJid))) {
+            await this.replySafe(jid, '❌ Você precisa estar no grupo de administração para usar este comando.');
+            return false;
+        }
+
         return true;
+    }
+
+    private async isMemberOfAdminGroup(rawJid: string, resolvedJid: string): Promise<boolean> {
+        const adminGroups = await this.adminService.getAdminGroups();
+        for (const groupJid of adminGroups) {
+            try {
+                const meta = await this.sock.groupMetadata(groupJid);
+                if (findParticipant(meta, rawJid) || findParticipant(meta, resolvedJid)) return true;
+            } catch (err) {
+                logger.warn({ err, groupJid }, '[isMemberOfAdminGroup] failed to fetch admin group metadata');
+            }
+        }
+        return false;
     }
 
     private async getLogJid(): Promise<string | null> {
@@ -150,9 +192,11 @@ export class MessageHandler {
         if (!logJid) return;
         const opts: any = { text };
         if (mentions?.length) opts.mentions = mentions;
-        await this.sock.sendMessage(logJid, opts).catch((e: any) => {
+        const sent = await this.sock.sendMessage(logJid, opts).catch((e: any) => {
             logger.error({ err: e }, 'Failed to send log message');
+            return undefined;
         });
+        this.trackGroupMessage(logJid, sent?.key);
     }
 
     private resolveBanType(arg: string): string {
@@ -162,7 +206,7 @@ export class MessageHandler {
             case 'comunidade':
             case 'comm': return 'COMUNIDADE';
             case 'temporario':
-            case 'temp': 
+            case 'temp':
             default: return 'TEMPORARIO';
         }
     }
@@ -174,18 +218,6 @@ export class MessageHandler {
             COMUNIDADE: 'comunidade',
         };
         return map[t] || t;
-    }
-
-    private async isGroupAdminJid(targetJid: string, groupJid: string): Promise<boolean> {
-        try {
-            const metadata = await this.sock.groupMetadata(groupJid);
-            const normalize = (id: string) => id.split('@')[0].split(':')[0];
-            return metadata.participants.some(
-                (p: any) => normalize(p.id) === normalize(targetJid) && (p.admin === 'admin' || p.admin === 'superadmin')
-            );
-        } catch {
-            return false;
-        }
     }
 
     private getTargetJid(msg: any): { jid: string | null; fromQuoted: boolean } {
@@ -212,7 +244,7 @@ export class MessageHandler {
             return;
         }
 
-        let metadata: any;
+        let metadata: GroupMetadata;
         try {
             metadata = await this.sock.groupMetadata(jid);
         } catch (err) {
@@ -221,13 +253,10 @@ export class MessageHandler {
             return;
         }
 
-        const participantId = msg.key.participant! || msg.key.remoteJid;
-        const normalize = (id: string) => id.split('@')[0].split(':')[0];
-        const isGroupAdmin = metadata.participants.some(
-            (p: any) => normalize(p.id) === normalize(participantId) && (p.admin === 'admin' || p.admin === 'superadmin')
-        );
+        const senderRaw = msg.key.participant! || msg.key.remoteJid!;
+        const senderParticipant = findParticipant(metadata, senderRaw);
 
-        if (!isGroupAdmin) {
+        if (!isGroupAdmin(senderParticipant)) {
             await this.replySafe(jid, '❌ Apenas admins do grupo podem registrar o grupo de admins.');
             return;
         }
@@ -235,6 +264,55 @@ export class MessageHandler {
         await this.adminService.registerGroup(jid);
         await this.replySafe(jid, `✅ Grupo registrado como admin/log.\nID: \`${jid}\``);
         logger.info({ groupJid: jid }, 'Admin group registered');
+    }
+
+    /**
+     * Diagnóstico rápido — sobretudo útil depois de trocar o número do bot
+     * (perda/ban do número atual), pra confirmar que ele reconectou com o
+     * número certo e que os dados persistidos (grupos de admin, banimentos)
+     * seguiram intactos, já que nada disso depende do número do bot.
+     */
+    private async statusCommand(msg: any): Promise<void> {
+        if (!(await this.isAuthorized(msg))) return;
+
+        const jid = msg.key.remoteJid!;
+        const botNumber = this.sock.user?.id?.split(':')[0]?.split('@')[0] || 'desconhecido';
+        const adminGroups = await this.adminService.getAdminGroups();
+        const bans = await this.banService.getBans();
+        const activeBans = bans.filter((b) => !b.expiresAt || new Date(b.expiresAt) > new Date());
+
+        const text = [
+            '🤖 *Status do bot*',
+            `Número conectado: ${botNumber}`,
+            `Grupos de admin registrados: ${adminGroups.length}`,
+            `Banimentos ativos: ${activeBans.length} (histórico total: ${bans.length})`,
+        ].join('\n');
+
+        await this.replySafe(jid, text);
+    }
+
+    /**
+     * Sem exigir isAuthorized() de propósito: é justamente quem ainda não sabe
+     * usar o bot (ou nem foi adicionado ao grupo de admins ainda) que mais
+     * precisa conseguir ver isso.
+     */
+    private async helpCommand(msg: any): Promise<void> {
+        const jid = msg.key.remoteJid!;
+        const prefix = botConfig.commands.prefix;
+
+        const text = [
+            '🤖 *Comandos principais*',
+            '',
+            `${prefix}home — registra este grupo como grupo de administração`,
+            `${prefix}ban @user [permanente|temporario|comunidade] [motivo] — bane alguém (ou responda a mensagem dela)`,
+            `${prefix}unban @user — remove o banimento (menção, reply, ou número)`,
+            `${prefix}bans — lista quem está banido`,
+            '',
+            `📖 Guia completo com todos os comandos e como o banimento funciona:`,
+            botConfig.docsUrl,
+        ].join('\n');
+
+        await this.replySafe(jid, text);
     }
 
     private async replySafe(jid: string, text: string): Promise<void> {
@@ -246,10 +324,15 @@ export class MessageHandler {
     }
 
     private async sendSafe(jid: string, content: any): Promise<void> {
+        // Pausa curta e aleatória — resposta sempre instantânea é um dos padrões que
+        // os modelos de detecção de bot da Meta mais pesam.
+        await humanReplyDelay();
+
         const maxRetries = 5;
         for (let i = 0; i < maxRetries; i++) {
             try {
-                await this.sock.sendMessage(jid, content);
+                const sent = await this.sock.sendMessage(jid, content);
+                this.trackGroupMessage(jid, sent?.key);
                 return;
             } catch (err) {
                 const isSessionError = (err as any)?.name === 'SessionError'
@@ -270,19 +353,24 @@ export class MessageHandler {
         if (!(await this.isAuthorized(msg))) return;
 
         const jid = msg.key.remoteJid!;
-        const { jid: targetJid, fromQuoted } = this.getTargetJid(msg);
+        const metadata = await this.sock.groupMetadata(jid);
+        const { jid: targetRaw, fromQuoted } = this.getTargetJid(msg);
 
-        if (!targetJid) {
+        if (!targetRaw) {
             await this.replySafe(jid, '❌ Marque o usuário ou responda a mensagem dele. Ex: $ban @user permanente motivo');
             return;
         }
 
+        const targetParticipant = findParticipant(metadata, targetRaw);
+
         // Não permite banir admins
-        const isTargetAdmin = await this.isGroupAdminJid(targetJid, jid);
-        if (isTargetAdmin) {
+        if (isGroupAdmin(targetParticipant)) {
             await this.replySafe(jid, '❌ Não é possível banir um admin do grupo.');
             return;
         }
+
+        const targetJid = await resolvePnJid(this.sock, targetRaw, metadata);
+        const bannedBy = await resolvePnJid(this.sock, msg.key.participant! || msg.key.remoteJid!, metadata);
 
         // Parse args: se veio de reply, args começa do tipo. Se veio de menção, args[0] é a menção
         const mentionedJid = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid;
@@ -292,10 +380,10 @@ export class MessageHandler {
         const reason = args.slice(mentionOffset + 1).join(' ') || 'Não informado';
 
         const banType = this.resolveBanType(banTypeArg);
-        const bannedBy = msg.key.participant! || msg.key.remoteJid!;
 
         await this.banService.ban({
             userJid: targetJid,
+            displayName: targetParticipant?.notify || targetParticipant?.name || undefined,
             groupJid: jid,
             banType: banType as any,
             reason,
@@ -307,22 +395,20 @@ export class MessageHandler {
 
         // Remoção
         if (banType === 'COMUNIDADE') {
+            // "comunidade" = todos os grupos que o bot administra, não a feature nativa de Community do WhatsApp
             const allGroups = await this.sock.groupFetchAllParticipating();
-            // Descobre a comunidade do grupo atual
-            const currentMeta = allGroups[jid];
-            const communityId = currentMeta?.linkedParent;
-            if (communityId) {
-                // Só remove de grupos que pertencem à MESMA comunidade
-                for (const [gid, meta] of Object.entries(allGroups)) {
-                    if (gid !== jid && (meta as any)?.linkedParent === communityId) {
-                        await this.sock.groupParticipantsUpdate(gid, [targetJid], 'remove').catch(() => {});
-                    }
+            for (const [gid, meta] of Object.entries(allGroups)) {
+                const p = findParticipant(meta as GroupMetadata, targetJid);
+                if (p) {
+                    // Espaça as remoções — várias saídas de grupo em sequência rápida, vindas
+                    // do mesmo número, é um padrão que a detecção de bot da Meta observa.
+                    await humanBulkActionDelay();
+                    await this.sock.groupParticipantsUpdate(gid, [p.id], 'remove').catch(() => {});
                 }
             }
-            // Se o grupo atual não tiver linkedParent, não remove de nenhum outro
+        } else if (targetParticipant) {
+            await this.sock.groupParticipantsUpdate(jid, [targetParticipant.id], 'remove').catch(() => {});
         }
-
-        await this.sock.groupParticipantsUpdate(jid, [targetJid], 'remove').catch(() => {});
 
         // Resposta no grupo
         const escopoLabel = banType === 'COMUNIDADE' ? 'removido de todos os grupos' : 'removido do grupo';
@@ -330,7 +416,7 @@ export class MessageHandler {
 
         // Log no grupo admin
         await this.sendLog(
-            `🚫 Membro @${targetJid.split('@')[0]} banido — ${this.resolveBanTypeLabel(banType)} — ${banType === 'COMUNIDADE' ? 'removido de todos os grupos' : 'removido do grupo'} — Motivo: ${reason}`,
+            `🚫 Membro @${targetJid.split('@')[0]} banido — ${this.resolveBanTypeLabel(banType)} — ${escopoLabel} — Motivo: ${reason}`,
             [targetJid],
         );
 
@@ -342,30 +428,40 @@ export class MessageHandler {
 
         const jid = msg.key.remoteJid!;
 
-        if (!args.length) {
-            await this.replySafe(jid, '❌ Use: $unban 5541995850310 (número do usuário sem @ nem +)');
+        // Alvo por menção/reply (mesmo se a pessoa já não estiver mais no grupo) ou, se
+        // nenhum dos dois vier, pelo número completo como fallback: $unban 5541995850310
+        const { jid: targetRaw } = this.getTargetJid(msg);
+        let userJid: string;
+
+        if (targetRaw) {
+            const metadata = await this.sock.groupMetadata(jid).catch(() => undefined);
+            userJid = await resolvePnJid(this.sock, targetRaw, metadata);
+        } else if (args[0]) {
+            const rawNumber = args[0].replace(/\D/g, '');
+            if (rawNumber.length < 10) {
+                await this.replySafe(jid, '❌ Número inválido. Use o DDI + DDD + número. Ex: 5541995850310');
+                return;
+            }
+            userJid = `${rawNumber}@s.whatsapp.net`;
+        } else {
+            await this.replySafe(jid, '❌ Marque a pessoa, responda a mensagem dela, ou use: $unban 5541995850310');
             return;
         }
 
-        const rawNumber = args[0].replace(/\D/g, '');
-        if (rawNumber.length < 10) {
-            await this.replySafe(jid, '❌ Número inválido. Use o DDI + DDD + número. Ex: 5541995850310');
-            return;
-        }
-
-        const userJid = `${rawNumber}@s.whatsapp.net`;
+        const number = userJid.split('@')[0];
         const count = await this.banService.unban(userJid);
 
         await this.reactSafe(jid, msg.key, '✅');
 
         if (count > 0) {
-            await this.replySafe(jid, `✅ Usuário ${rawNumber} foi desbanido (${count} registro(s) removido(s)).`);
+            await this.replySafe(jid, `✅ Usuário @${number} foi desbanido (${count} registro(s) removido(s)).`);
 
             await this.sendLog(
-                `✅ Membro ${rawNumber} desbanido — ${count} registro(s) removido(s).`,
+                `✅ Membro @${number} desbanido — ${count} registro(s) removido(s).`,
+                [userJid],
             );
         } else {
-            await this.replySafe(jid, `❌ Nenhum banimento encontrado para ${rawNumber}.`);
+            await this.replySafe(jid, `❌ Nenhum banimento encontrado para @${number}.`);
         }
 
         logger.info({ userJid, count }, 'User unbanned');
@@ -384,8 +480,9 @@ export class MessageHandler {
 
         const lines = bans.map((b, i) => {
             const number = b.userJid.split('@')[0];
+            const name = b.displayName ? ` (${b.displayName})` : '';
             const expires = b.expiresAt ? ` (expira: ${new Date(b.expiresAt).toLocaleString('pt-BR')})` : '';
-            return `${i + 1}. ${number} — ${b.banType}${expires}\n   Motivo: ${b.reason}`;
+            return `${i + 1}. ${number}${name} — ${b.banType}${expires}\n   Motivo: ${b.reason}`;
         });
 
         const text = `📋 *Usuários Banidos (${bans.length})*\n\n${lines.join('\n')}`;
@@ -410,17 +507,52 @@ export class MessageHandler {
         }
     }
 
+    /**
+     * Apaga (delete for everyone) os comandos digitados pro bot e as respostas
+     * dele nesse grupo. Requer o bot ser admin do grupo — o WhatsApp só permite
+     * apagar mensagens de terceiros nessa condição.
+     */
+    private async clearCommand(msg: any): Promise<void> {
+        if (!(await this.isAuthorized(msg))) return;
+
+        const jid = msg.key.remoteJid!;
+        const tracked = this.groupMessageLog.get(jid) ?? [];
+        this.groupMessageLog.delete(jid);
+
+        const seen = new Set<string>();
+        const toDelete: WAMessageKey[] = [];
+        for (const key of [...tracked, msg.key]) {
+            if (!key?.id || seen.has(key.id)) continue;
+            seen.add(key.id);
+            toDelete.push(key);
+        }
+
+        let deleted = 0;
+        for (const key of toDelete) {
+            try {
+                await this.sock.sendMessage(jid, { delete: key });
+                deleted++;
+            } catch (err) {
+                logger.warn({ err, key }, '[clearCommand] failed to delete message');
+            }
+        }
+
+        logger.info({ jid, deleted, attempted: toDelete.length }, 'Cleared bot-related messages from group');
+    }
+
     private async baneditCommand(msg: any, args: string[]): Promise<void> {
         if (!(await this.isAuthorized(msg))) return;
 
         const jid = msg.key.remoteJid!;
-        const { jid: targetJid } = this.getTargetJid(msg);
+        const metadata = await this.sock.groupMetadata(jid);
+        const { jid: targetRaw } = this.getTargetJid(msg);
 
-        if (!targetJid || args.length < 2) {
+        if (!targetRaw || args.length < 2) {
             await this.replySafe(jid, '❌ Use: $banedit @user [tipo|tempo] [valor]\nOu responda a mensagem + $banedit tipo permanente\nEx: $banedit @user tipo permanente\nEx: $banedit @user tempo 7d');
             return;
         }
 
+        const targetJid = await resolvePnJid(this.sock, targetRaw, metadata);
         const field = args[0]?.toLowerCase();
         const value = args.slice(1).join(' ');
 
