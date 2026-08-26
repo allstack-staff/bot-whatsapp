@@ -1,3 +1,7 @@
+---
+title: Troca de Número
+---
+
 # Troca de Número (perda, ban, ou qualquer motivo)
 
 Se o número atual do bot for perdido, banido, ou precisar ser trocado por qualquer motivo, **nenhum dado é perdido**. Nada no banco (grupos de admin, banimentos) é gravado com base no número do bot — só com base no JID de quem é banido e em qual grupo. O número do bot é só a "porta de entrada" da sessão do WhatsApp, totalmente desacoplado do estado que importa.

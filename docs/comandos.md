@@ -1,3 +1,7 @@
+---
+title: Comandos
+---
+
 # Comandos
 
 Prefixo padrão: `$` (configurável via `BOT_PREFIX`).

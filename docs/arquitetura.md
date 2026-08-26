@@ -1,3 +1,7 @@
+---
+title: Arquitetura
+---
+
 # Arquitetura
 
 Visão técnica pra quem for mexer no código.

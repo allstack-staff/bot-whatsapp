@@ -1,3 +1,8 @@
+---
+title: All Stack Bot
+permalink: /
+---
+
 # All Stack Bot
 
 Bot de WhatsApp da All Stack Community, construído sobre [Baileys](https://github.com/WhiskeySockets/Baileys) (protocolo WhatsApp Web, sem API oficial).

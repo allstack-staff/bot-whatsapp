@@ -1,3 +1,7 @@
+---
+title: Como o Banimento Funciona
+---
+
 # Como o Banimento Funciona
 
 ## Os três tipos

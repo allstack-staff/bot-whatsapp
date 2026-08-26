@@ -1,3 +1,7 @@
+---
+title: Instalação e Configuração
+---
+
 # Instalação e Configuração
 
 ## Pré-requisitos
