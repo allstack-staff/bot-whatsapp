@@ -194,7 +194,7 @@ Além dos comandos acima (que já exigem admin + estar no grupo de admins), esse
 
 ### `$advertir`
 
-Dá uma advertência a alguém nesse grupo. **3 ou mais advertências no mesmo mês** (o contador reseta todo mês) aplicam automaticamente um banimento temporário de 7 dias — sem precisar de mais nenhum comando. A moderação automática por IA usa o mesmo contador.
+Dá uma advertência a alguém nesse grupo. Aceita o alvo por **menção** ou **respondendo à mensagem dele**, igual ao `$ban`. **3 ou mais advertências no mesmo mês** (o contador reseta todo mês) aplicam automaticamente um banimento temporário de 7 dias — sem precisar de mais nenhum comando. A moderação automática por IA usa o mesmo contador.
 
 ```
 $advertir @user [motivo]
@@ -207,6 +207,11 @@ Exemplo:
 $advertir @5541999999999 flood no grupo pela segunda vez essa semana
 ```
 → `⚠️ @5541999999999 advertido (2/3 esse mês).` — e, se fosse a 3ª, seguiria com `🚫 ...banido automaticamente (temporário, 7 dias)`.
+
+Respondendo à mensagem de alguém, sem precisar mencionar:
+```
+$advertir flood no grupo pela segunda vez essa semana
+```
 
 ### `$regras`
 

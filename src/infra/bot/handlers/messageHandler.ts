@@ -1403,7 +1403,7 @@ export class MessageHandler {
 
         const jid = msg.key.remoteJid!;
         const metadata = await this.sock.groupMetadata(jid);
-        const { jid: targetRaw } = this.getTargetJid(msg);
+        const { jid: targetRaw, fromQuoted } = this.getTargetJid(msg);
 
         if (!targetRaw) {
             await this.replySafe(jid, '❌ Marque a pessoa ou responda a mensagem dela. Ex: $advertir @user flood no grupo');
@@ -1412,7 +1412,11 @@ export class MessageHandler {
 
         const targetJid = await resolvePnJid(this.sock, targetRaw, metadata);
         const issuedBy = await resolvePnJid(this.sock, msg.key.participant! || msg.key.remoteJid!, metadata);
-        const reason = args.join(' ') || 'Não informado';
+
+        // Se veio de menção, args[0] é o "@numero" literal no texto — pula pro motivo de verdade.
+        const mentionedJid = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid;
+        const mentionOffset = (!fromQuoted && mentionedJid?.length) ? 1 : 0;
+        const reason = args.slice(mentionOffset).join(' ') || 'Não informado';
 
         await this.warningService.issue(targetJid, jid, reason, issuedBy);
         const count = await this.warningService.countThisMonth(targetJid, jid);

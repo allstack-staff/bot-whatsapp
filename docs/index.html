@@ -640,8 +640,8 @@ $banedit @user tempo 7d</span>
 
     <div class="cmd">
       <div class="cmd-head"><code class="name">$advertir</code><span class="who">admin</span></div>
-      <p class="simple-only">Dá uma advertência a alguém. 3 ou mais no mesmo mês banem a pessoa automaticamente (temporário, 7 dias) — sem precisar de mais nenhum comando.</p>
-      <p class="tech-only"><code>WarningService.issue()</code> grava em <code>Warning</code>; <code>countThisMonth</code> conta desde o dia 1 do mês corrente. Ao atingir 3, chama o mesmo <code>BanService.ban()</code> do <code>$ban</code>. A moderação por IA usa o mesmo <code>issue()</code>.</p>
+      <p class="simple-only">Dá uma advertência a alguém — marque ou responda a mensagem dela. 3 ou mais no mesmo mês banem a pessoa automaticamente (temporário, 7 dias) — sem precisar de mais nenhum comando.</p>
+      <p class="tech-only"><code>WarningService.issue()</code> grava em <code>Warning</code>; <code>countThisMonth</code> conta desde o dia 1 do mês corrente. Ao atingir 3, chama o mesmo <code>BanService.ban()</code> do <code>$ban</code>. A moderação por IA usa o mesmo <code>issue()</code>. Alvo resolvido via <code>getTargetJid</code> (menção ou reply), mesmo padrão do <code>$ban</code>.</p>
       <span class="syntax">$advertir @user [motivo]</span>
       <span class="example"><b>Exemplo:</b> <code>$advertir @5541999999999 flood</code> → <code>⚠️ advertido (2/3 esse mês).</code></span>
     </div>
