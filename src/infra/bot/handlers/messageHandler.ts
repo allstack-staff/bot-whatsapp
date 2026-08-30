@@ -178,16 +178,26 @@ export class MessageHandler {
 
                 // Se várias pessoas banidas entrarem juntas (add em lote), espaça as remoções.
                 await humanBulkActionDelay();
-                await this.sock.groupParticipantsUpdate(id, [participantId], 'remove').catch((e: any) => {
-                    logger.error({ err: e }, 'Failed to remove banned user on re-entry');
-                    return;
-                });
+                const removeFailed = await this.sock.groupParticipantsUpdate(id, [participantId], 'remove')
+                    .then(() => false)
+                    .catch((e: any) => {
+                        logger.error({ err: e }, 'Failed to remove banned user on re-entry');
+                        return true;
+                    });
 
                 const number = resolvedJid.split('@')[0];
                 const banTypeLabel = this.resolveBanTypeLabel(ban.banType);
                 const expires = ban.expiresAt
                     ? ` (expira: ${new Date(ban.expiresAt).toLocaleString('pt-BR')})`
                     : '';
+
+                if (removeFailed) {
+                    await this.sendLog(
+                        `⚠️ @${number} reentrou com banimento ativo (${banTypeLabel}${expires} — Motivo: ${ban.reason}) mas não consegui removê-lo(a) automaticamente. Confira manualmente.`,
+                        [resolvedJid],
+                    );
+                    continue;
+                }
 
                 const msg = `🚫 @${number} removido — banimento ativo\nTipo: ${banTypeLabel}${expires}\nMotivo: ${ban.reason}`;
                 await this.replySafe(id, msg);
@@ -219,12 +229,23 @@ export class MessageHandler {
 
             const ban = await this.banService.getActiveBan(resolvedJid, id);
             if (ban) {
-                await this.sock.groupRequestParticipantsUpdate(id, [participant], 'reject').catch((e: any) => {
-                    logger.error({ err: e }, 'Failed to reject join request from banned user');
-                });
-
                 const number = resolvedJid.split('@')[0];
                 const banTypeLabel = this.resolveBanTypeLabel(ban.banType);
+
+                const rejectFailed = await this.sock.groupRequestParticipantsUpdate(id, [participant], 'reject')
+                    .then(() => false)
+                    .catch((e: any) => {
+                        logger.error({ err: e }, 'Failed to reject join request from banned user');
+                        return true;
+                    });
+
+                if (rejectFailed) {
+                    await this.sendLog(
+                        `⚠️ @${number} pediu entrada com banimento ${banTypeLabel} ativo (Motivo: ${ban.reason}) mas não consegui rejeitar automaticamente. Confira manualmente.`,
+                        [resolvedJid],
+                    );
+                    return;
+                }
 
                 logger.info({ resolvedJid, groupId: id, reason: ban.reason }, 'Rejected join request from banned user');
 
@@ -271,6 +292,7 @@ export class MessageHandler {
             groups = await this.sock.groupFetchAllParticipating();
         } catch (err) {
             logger.warn({ err }, '[checkAndApplyGroupPhotos] falha ao listar grupos');
+            await this.sendLog('⚠️ Falha na varredura automática de fotos de grupo (não consegui nem listar os grupos). Confira os logs do servidor.').catch(() => {});
             return;
         }
 
@@ -301,6 +323,7 @@ export class MessageHandler {
                         logger.debug({ groupId: gid }, '[checkAndApplyGroupPhotos] bot não é admin nesse grupo, pulando por 24h');
                     } else {
                         logger.warn({ err, groupId: gid }, '[checkAndApplyGroupPhotos] falha ao aplicar logo');
+                        await this.sendLog(`⚠️ Não consegui aplicar a logo automaticamente no grupo *${(groups[gid] as GroupMetadata)?.subject || gid}*. Confira os logs do servidor.`).catch(() => {});
                     }
                 }
             }
@@ -517,7 +540,22 @@ export class MessageHandler {
                 if (lock) {
                     logger.info({ groupId: gid }, '[handleGroupsUpdate] descrição alterada durante trava — restaurando');
                     this.recentSelfDescriptionUpdate.set(gid, Date.now());
-                    await this.sock.groupUpdateDescription(gid, lock.frozenDescription ?? undefined).catch(() => {});
+                    const revertFailed = await this.sock.groupUpdateDescription(gid, lock.frozenDescription ?? undefined)
+                        .then(() => false)
+                        .catch((err: any) => {
+                            logger.error({ err, groupId: gid }, '[handleGroupsUpdate] falha ao reverter descrição travada');
+                            return true;
+                        });
+
+                    if (revertFailed) {
+                        this.recentSelfDescriptionUpdate.delete(gid);
+                        this.descriptionCache.set(gid, newDesc);
+                        await this.sendLog(
+                            `⚠️ Grupo *${update.subject || gid}* está travado (rejeitado anteriormente) e a descrição foi alterada de novo, mas não consegui reverter automaticamente. Confira/reverta manualmente. Trava até ${lock.lockedUntil.toLocaleString('pt-BR')}.`,
+                        );
+                        continue;
+                    }
+
                     this.descriptionCache.set(gid, lock.frozenDescription ?? undefined);
                     await this.sendLog(
                         `🔒 Grupo *${update.subject || gid}* está com a descrição travada (rejeitada anteriormente) — mudança revertida automaticamente. Trava até ${lock.lockedUntil.toLocaleString('pt-BR')}.`,
