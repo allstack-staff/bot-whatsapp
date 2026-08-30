@@ -29,6 +29,16 @@ Além das básicas (`BOT_PREFIX`, `SESSION_PATH`, `DATABASE_URL`), tem uma que �
 - **Guarda de variáveis vazias** — se `terraform output -raw trigger_url` ou `gcloud auth print-identity-token` vierem vazios, o pipeline falha explicitamente com uma mensagem clara, em vez de tentar continuar com uma URL/token inválido.
 - **`concurrency` group** — impede dois `terraform apply` rodando ao mesmo tempo sobre o mesmo state (um risco real se dois pushes em `main` acontecerem próximos).
 
+## Redeploy manual (`scripts/deploy.sh`)
+
+Pra atualizar a VM na mão (sem depender do pipeline), rode na própria VM:
+
+```bash
+sudo bash /opt/bot-whatsapp/scripts/deploy.sh
+```
+
+Ele **para o bot antes de mexer no código**, atualiza (`git reset --hard`), reinstala dependências, reconstrói (`rm -rf dist && tsc`) e só então sobe o processo de novo. Essa ordem importa: rodar `git reset`/build com o processo antigo ainda de pé cria uma janela em que o PM2 pode tentar reiniciar sozinho no meio da reconstrução e crashar com `Cannot find module dist/index.js` — foi exatamente o que apareceu nos logs depois de alguns redeploys manuais feitos fora dessa ordem.
+
 ## Pendência conhecida — sem arquivos Terraform versionados
 
 **Não existe nenhum arquivo `.tf` neste repositório** (conferido na branch atual e na antiga). O pipeline roda `terraform init/plan/apply` e depois lê um output (`trigger_url`) que não está definido em lugar nenhum do código versionado. A infra (VM, Cloud Function) provavelmente foi criada direto no console do GCP, ou os `.tf` existem em outro lugar não sincronizado com este repo.
