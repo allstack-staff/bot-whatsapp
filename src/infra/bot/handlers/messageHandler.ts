@@ -355,6 +355,29 @@ export class MessageHandler {
     }
 
     /**
+     * TEMPORÁRIO — só pra confirmar como o Baileys marca grupos vinculados a
+     * uma Community antes de implementar a trava de escopo de verdade. Remover
+     * depois de confirmar os campos.
+     */
+    async debugLogCommunityMetadata(): Promise<void> {
+        try {
+            const groups = await this.sock.groupFetchAllParticipating();
+            for (const [gid, meta] of Object.entries(groups)) {
+                const m = meta as GroupMetadata;
+                logger.info({
+                    gid,
+                    subject: m.subject,
+                    isCommunity: (m as any).isCommunity,
+                    isCommunityAnnounce: (m as any).isCommunityAnnounce,
+                    linkedParent: (m as any).linkedParent,
+                }, '[debugLogCommunityMetadata] grupo');
+            }
+        } catch (err) {
+            logger.warn({ err }, '[debugLogCommunityMetadata] falha ao listar grupos');
+        }
+    }
+
+    /**
      * Detecta mudança de descrição de grupo (evento `groups.update`). Três
      * casos: (1) foi o próprio bot que mudou (ex: $regras) — só atualiza o
      * cache; (2) o grupo está travado por rejeição anterior — restaura a
