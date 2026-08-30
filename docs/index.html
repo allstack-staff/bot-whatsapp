@@ -89,7 +89,7 @@
   }
 
   a { color: var(--accent); }
-  a:focus-visible, button:focus-visible, .toggle-btn:focus-visible {
+  a:focus-visible, button:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
   }
@@ -130,33 +130,68 @@
     font-size: 1.05rem;
     white-space: nowrap;
   }
-  .toggle {
+  .controls {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  /* ---------- sliding switches (tema, audiencia) ---------- */
+
+  .switch-field {
     display: inline-flex;
-    padding: 3px;
-    background: var(--paper-sunken);
-    border: 1px solid var(--line);
-    border-radius: 999px;
-    gap: 2px;
+    align-items: center;
+    gap: 8px;
   }
-  .toggle-btn {
-    appearance: none;
-    border: none;
-    background: transparent;
-    color: var(--ink-soft);
-    font: inherit;
+  .switch-label {
     font-family: "IBM Plex Sans", sans-serif;
-    font-size: 0.8rem;
+    font-size: 0.78rem;
     font-weight: 600;
-    letter-spacing: 0.01em;
-    padding: 7px 16px;
+    color: var(--ink-soft);
+    white-space: nowrap;
+  }
+  .switch-track {
+    position: relative;
+    appearance: none;
+    border: 1px solid var(--line);
+    background: var(--paper-sunken);
+    width: 46px;
+    height: 26px;
     border-radius: 999px;
+    padding: 0;
     cursor: pointer;
-    transition: background 0.15s ease, color 0.15s ease;
+    flex: none;
+    transition: background 0.18s ease, border-color 0.18s ease;
   }
-  .toggle-btn[aria-pressed="true"] {
+  .switch-track[aria-checked="true"] {
     background: var(--accent);
-    color: var(--accent-ink);
+    border-color: var(--accent);
   }
+  .switch-knob {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--paper-raised);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+    transition: transform 0.18s ease;
+  }
+  .switch-track[aria-checked="true"] .switch-knob {
+    transform: translateX(20px);
+  }
+  .switch-track .sun-icon,
+  .switch-track .moon-icon {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 12px;
+    line-height: 1;
+    pointer-events: none;
+  }
+  .switch-track .sun-icon { left: 5px; }
+  .switch-track .moon-icon { right: 5px; }
 
   /* ---------- layout ---------- */
 
@@ -432,9 +467,20 @@
 
 <div class="topbar">
   <div class="brand"><img src="assets/logo.jpg" alt=""> All Stack Bot</div>
-  <div class="toggle" role="group" aria-label="Nível de detalhe">
-    <button class="toggle-btn" id="btn-simple" aria-pressed="true">Modo simples</button>
-    <button class="toggle-btn" id="btn-tech" aria-pressed="false">Modo técnico</button>
+  <div class="controls">
+    <div class="switch-field">
+      <span class="switch-label" id="audience-label">Modo simples</span>
+      <button type="button" class="switch-track" id="audience-toggle" role="switch" aria-checked="false" aria-labelledby="audience-label">
+        <span class="switch-knob"></span>
+      </button>
+    </div>
+    <div class="switch-field">
+      <button type="button" class="switch-track" id="theme-toggle" role="switch" aria-checked="false" aria-label="Tema escuro">
+        <span class="sun-icon">☀</span>
+        <span class="moon-icon">☾</span>
+        <span class="switch-knob"></span>
+      </button>
+    </div>
   </div>
 </div>
 
@@ -620,24 +666,48 @@ resolvePnJid(sock, jid, metadata?)
 <script>
   (function () {
     var root = document.getElementById('doc');
-    var btnSimple = document.getElementById('btn-simple');
-    var btnTech = document.getElementById('btn-tech');
-    var STORAGE_KEY = 'allstack-bot-doc-audience';
+    var audienceToggle = document.getElementById('audience-toggle');
+    var audienceLabel = document.getElementById('audience-label');
+    var AUDIENCE_KEY = 'allstack-bot-doc-audience';
 
     function setAudience(mode) {
       root.setAttribute('data-audience', mode);
-      btnSimple.setAttribute('aria-pressed', String(mode === 'simple'));
-      btnTech.setAttribute('aria-pressed', String(mode === 'tech'));
-      try { localStorage.setItem(STORAGE_KEY, mode); } catch (e) {}
+      audienceToggle.setAttribute('aria-checked', String(mode === 'tech'));
+      audienceLabel.textContent = mode === 'tech' ? 'Modo técnico' : 'Modo simples';
+      try { localStorage.setItem(AUDIENCE_KEY, mode); } catch (e) {}
     }
 
-    btnSimple.addEventListener('click', function () { setAudience('simple'); });
-    btnTech.addEventListener('click', function () { setAudience('tech'); });
+    audienceToggle.addEventListener('click', function () {
+      setAudience(root.getAttribute('data-audience') === 'tech' ? 'simple' : 'tech');
+    });
 
     try {
-      var saved = localStorage.getItem(STORAGE_KEY);
-      if (saved === 'simple' || saved === 'tech') setAudience(saved);
+      var savedAudience = localStorage.getItem(AUDIENCE_KEY);
+      if (savedAudience === 'simple' || savedAudience === 'tech') setAudience(savedAudience);
     } catch (e) {}
+  })();
+
+  (function () {
+    var html = document.documentElement;
+    var themeToggle = document.getElementById('theme-toggle');
+    var THEME_KEY = 'allstack-bot-doc-theme';
+
+    function setTheme(mode) {
+      html.setAttribute('data-theme', mode);
+      themeToggle.setAttribute('aria-checked', String(mode === 'dark'));
+      themeToggle.setAttribute('aria-label', mode === 'dark' ? 'Mudar para tema claro' : 'Mudar para tema escuro');
+      try { localStorage.setItem(THEME_KEY, mode); } catch (e) {}
+    }
+
+    themeToggle.addEventListener('click', function () {
+      setTheme(html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+    });
+
+    // Claro é o padrão explícito — só cai pra escuro se a pessoa escolher aqui,
+    // não porque o sistema operacional dela está no modo escuro.
+    var savedTheme;
+    try { savedTheme = localStorage.getItem(THEME_KEY); } catch (e) {}
+    setTheme(savedTheme === 'dark' ? 'dark' : 'light');
   })();
 </script>
 </body>
