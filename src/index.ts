@@ -1,3 +1,8 @@
+// Precisa vir antes de qualquer outro import — a VM roda em UTC, mas toda data
+// mostrada pro usuário (ex: "Expira: ...") e log do bot devem refletir o
+// horário de Brasília, não o do servidor.
+process.env.TZ = 'America/Sao_Paulo';
+
 import pino from 'pino';
 import * as qrcode from 'qrcode-terminal';
 import * as dotenv from 'dotenv';
