@@ -12,6 +12,7 @@ import { AiModerationService } from '../services/aiModerationService';
 import { logger } from '../utils/logger';
 import { findParticipant, isGroupAdmin, resolvePnJid } from '../utils/jid';
 import { humanBulkActionDelay, humanReplyDelay } from '../utils/delay';
+import { parseDurationMs } from '../utils/duration';
 
 const DEFAULT_LOGO_PATH = path.join(process.cwd(), 'assets', 'logo.jpg');
 
@@ -901,9 +902,19 @@ export class MessageHandler {
         const mentionOffset = (!fromQuoted && mentionedJid?.length) ? 1 : 0;
 
         const banTypeArg = args[mentionOffset]?.toLowerCase() || 'temporario';
-        const reason = args.slice(mentionOffset + 1).join(' ') || 'Não informado';
-
         const banType = this.resolveBanType(banTypeArg);
+
+        // Duração opcional logo após o tipo (só faz sentido pra TEMPORARIO) — ex:
+        // "$ban @user temporario 1m motivo". Se não vier ou não bater o formato,
+        // usa o padrão de 7 dias e trata o token como parte do motivo mesmo.
+        const durationArg = args[mentionOffset + 1];
+        const durationMs = durationArg ? parseDurationMs(durationArg) : null;
+        const reasonOffset = mentionOffset + (durationMs !== null ? 2 : 1);
+        const reason = args.slice(reasonOffset).join(' ') || 'Não informado';
+
+        const expiresAt = banType === 'TEMPORARIO'
+            ? new Date(Date.now() + (durationMs ?? 7 * 24 * 60 * 60 * 1000))
+            : undefined;
 
         await this.banService.ban({
             userJid: targetJid,
@@ -911,7 +922,7 @@ export class MessageHandler {
             groupJid: jid,
             banType: banType as any,
             reason,
-            expiresAt: banType === 'TEMPORARIO' ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) : undefined,
+            expiresAt,
             bannedBy,
         });
 
@@ -936,11 +947,12 @@ export class MessageHandler {
 
         // Resposta no grupo
         const escopoLabel = banType === 'COMUNIDADE' ? 'removido de todos os grupos' : 'removido do grupo';
-        await this.replySafe(jid, `🚫 *Banido*\nUsuário: @${targetJid.split('@')[0]}\nTipo: ${this.resolveBanTypeLabel(banType)}\nMotivo: ${reason}`);
+        const expiresLabel = expiresAt ? `\nExpira: ${expiresAt.toLocaleString('pt-BR')}` : '';
+        await this.replySafe(jid, `🚫 *Banido*\nUsuário: @${targetJid.split('@')[0]}\nTipo: ${this.resolveBanTypeLabel(banType)}${expiresLabel}\nMotivo: ${reason}`);
 
         // Log no grupo admin
         await this.sendLog(
-            `🚫 Membro @${targetJid.split('@')[0]} banido — ${this.resolveBanTypeLabel(banType)} — ${escopoLabel} — Motivo: ${reason}`,
+            `🚫 Membro @${targetJid.split('@')[0]} banido — ${this.resolveBanTypeLabel(banType)}${expiresLabel} — ${escopoLabel} — Motivo: ${reason}`,
             [targetJid],
         );
 
@@ -1098,20 +1110,10 @@ export class MessageHandler {
             );
 
         } else if (field === 'tempo') {
-            const match = value.match(/^(\d+)([dhms])$/);
-            if (!match) {
+            const ms = parseDurationMs(value);
+            if (ms === null) {
                 await this.replySafe(jid, '❌ Formato inválido. Use: 7d (dias), 12h (horas), 30m (minutos)');
                 return;
-            }
-
-            const num = parseInt(match[1]);
-            const unit = match[2];
-            let ms = 0;
-            switch (unit) {
-                case 'd': ms = num * 86400000; break;
-                case 'h': ms = num * 3600000; break;
-                case 'm': ms = num * 60000; break;
-                case 's': ms = num * 1000; break;
             }
 
             const expiresAt = new Date(Date.now() + ms);

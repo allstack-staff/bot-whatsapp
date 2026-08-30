@@ -591,10 +591,10 @@
 
     <div class="cmd">
       <div class="cmd-head"><code class="name">$ban</code><span class="who">admin</span></div>
-      <p class="simple-only">Marque a pessoa ou responda a mensagem dela. Diz o tipo (veja abaixo) e o motivo — os dois são opcionais.</p>
-      <p class="tech-only">Resolve o alvo via <code>getTargetJid</code> (menção ou <code>contextInfo.participant</code>) → <code>resolvePnJid</code> → upsert em <code>BannedUser</code>. Bloqueia se o alvo for admin do grupo. Remoção imediata: no grupo atual pra <code>PERMANENTE</code>/<code>TEMPORARIO</code>; em todos os grupos via <code>groupFetchAllParticipating()</code> pra <code>COMUNIDADE</code>, com <code>humanBulkActionDelay()</code> entre cada remoção.</p>
-      <span class="syntax">$ban @user [permanente|temporario|comunidade] [motivo]</span>
-      <span class="example"><b>Exemplo:</b> <code>$ban @5541999999999 permanente flood</code></span>
+      <p class="simple-only">Marque a pessoa ou responda a mensagem dela. Diz o tipo, opcionalmente uma duração (só pra temporário) e o motivo — todos opcionais. Motivo com várias palavras não precisa de aspas.</p>
+      <p class="tech-only">Resolve o alvo via <code>getTargetJid</code> (menção ou <code>contextInfo.participant</code>) → <code>resolvePnJid</code> → upsert em <code>BannedUser</code>. Bloqueia se o alvo for admin do grupo. O token logo após o tipo é testado contra <code>parseDurationMs</code> (<code>^\d+[dhms]$</code>) — se bater, vira a duração; senão, cai no motivo, que default é 7 dias. Remoção imediata: no grupo atual pra <code>PERMANENTE</code>/<code>TEMPORARIO</code>; em todos os grupos via <code>groupFetchAllParticipating()</code> pra <code>COMUNIDADE</code>, com <code>humanBulkActionDelay()</code> entre cada remoção.</p>
+      <span class="syntax">$ban @user [permanente|temporario|comunidade] [duracao] [motivo]</span>
+      <span class="example"><b>Exemplo:</b> <code>$ban @5541999999999 permanente flood</code> · <code>$ban @5541999999999 temporario 1m teste</code></span>
     </div>
 
     <div class="cmd">

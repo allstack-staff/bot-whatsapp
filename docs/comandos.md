@@ -58,23 +58,25 @@ Todo `$ban`, auto-remoção por reentrada e `$banedit` manda uma cópia do log n
 Bane um membro de um grupo. Aceita o alvo por **menção** ou **respondendo à mensagem dele**.
 
 ```
-$ban @user [permanente|temporario|comunidade] [motivo]
+$ban @user [permanente|temporario|comunidade] [duracao] [motivo]
 ```
 
-- Tipo é opcional — padrão é `temporario` (7 dias).
-- Motivo é opcional — padrão "Não informado".
+- Tipo é opcional — padrão é `temporario`.
+- Duração é opcional e só vale pra `temporario` — formato `7d` (dias), `12h` (horas), `30m` (minutos) ou `45s` (segundos). Sem ela, o padrão é 7 dias.
+- Motivo é opcional (todas as palavras depois do tipo/duração) — padrão "Não informado". Não precisa de aspas pra motivo com várias palavras.
 - Não é possível banir um admin do grupo.
 
-**Comportamento:** reage ✅ na mensagem do comando, responde com o resumo do banimento **no grupo onde rodou**, e manda uma cópia da mesma mensagem pro **grupo de admins**. Se o tipo for `comunidade`, remove a pessoa de todos os grupos que o bot administra (com pausa entre cada remoção).
+**Comportamento:** reage ✅ na mensagem do comando, responde com o resumo do banimento (incluindo quando expira, se for `temporario`) **no grupo onde rodou**, e manda uma cópia da mesma mensagem pro **grupo de admins**. Se o tipo for `comunidade`, remove a pessoa de todos os grupos que o bot administra (com pausa entre cada remoção).
 
 Exemplos:
 ```
 $ban @5541999999999 permanente flood
 $ban comunidade spam repetido em vários grupos
+$ban @5541999999999 temporario 1m banimento de teste, expira em 1 minuto
 ```
 Respondendo à mensagem de alguém, sem precisar mencionar:
 ```
-$ban temporario 3 dias fazendo propaganda fora de contexto
+$ban temporario 3d fazendo propaganda fora de contexto
 ```
 
 Veja o significado de cada tipo em [Como o Banimento Funciona](banimentos.md).
