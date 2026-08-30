@@ -295,6 +295,16 @@
     overflow-x: auto;
     color: var(--ink);
   }
+  .cmd .example {
+    display: block;
+    margin-top: 6px;
+    padding-left: 12px;
+    border-left: 2px solid var(--line);
+    font-size: 0.82rem;
+    color: var(--ink-faint);
+  }
+  .cmd .example b { color: var(--ink-soft); font-weight: 600; }
+  .cmd .example code { color: var(--accent); }
 
   /* ---------- ban type pills ---------- */
 
@@ -500,6 +510,7 @@
       <div class="cmd-head"><code class="name">$ajuda</code><span class="who">qualquer pessoa</span></div>
       <p class="simple-only">O bot responde na hora com os comandos mais usados e o link pra essa página. Não precisa ser admin de nada pra usar esse.</p>
       <p class="tech-only">Não passa por <code>isAuthorized()</code> de propósito — é o único comando sem checagem de permissão, já que é o ponto de entrada pra quem ainda não está no grupo de admins.</p>
+      <span class="example"><b>Exemplo:</b> <code>$ajuda</code> → o bot responde com os comandos principais e o link dessa página.</span>
     </div>
   </section>
 
@@ -527,6 +538,7 @@
       <p class="simple-only">Roda uma vez, dentro do grupo de administração, pra registrar ele como tal. Todo log de banimento cai ali.</p>
       <p class="tech-only">Upsert em <code>AdminService.registerGroup(jid)</code> → tabela <code>AdminGroup</code>. Não precisa rodar de novo depois de trocar o número do bot — o registro não depende do número.</p>
       <span class="syntax">$home</span>
+      <span class="example"><b>Exemplo:</b> <code>$home</code> → <code>✅ Grupo registrado como admin/log.</code></span>
     </div>
 
     <div class="cmd">
@@ -534,6 +546,7 @@
       <p class="simple-only">Marque a pessoa ou responda a mensagem dela. Diz o tipo (veja abaixo) e o motivo — os dois são opcionais.</p>
       <p class="tech-only">Resolve o alvo via <code>getTargetJid</code> (menção ou <code>contextInfo.participant</code>) → <code>resolvePnJid</code> → upsert em <code>BannedUser</code>. Bloqueia se o alvo for admin do grupo. Remoção imediata: no grupo atual pra <code>PERMANENTE</code>/<code>TEMPORARIO</code>; em todos os grupos via <code>groupFetchAllParticipating()</code> pra <code>COMUNIDADE</code>, com <code>humanBulkActionDelay()</code> entre cada remoção.</p>
       <span class="syntax">$ban @user [permanente|temporario|comunidade] [motivo]</span>
+      <span class="example"><b>Exemplo:</b> <code>$ban @5541999999999 permanente flood</code></span>
     </div>
 
     <div class="cmd">
@@ -541,6 +554,7 @@
       <p class="simple-only">Marque a pessoa, responda uma mensagem antiga dela (funciona mesmo se ela já saiu do grupo), ou digite o número completo.</p>
       <p class="tech-only">Mesma resolução de alvo do <code>$ban</code>; se não vier menção/reply, cai pro fallback de número cru (<code>args[0].replace(/\D/g, '')</code>). Remove <strong>todos</strong> os registros daquele <code>userJid</code>, em qualquer grupo, independente do tipo.</p>
       <span class="syntax">$unban @user</span>
+      <span class="example"><b>Exemplo:</b> <code>$unban 5541995850310</code></span>
     </div>
 
     <div class="cmd">
@@ -548,6 +562,7 @@
       <p class="simple-only">Lista quem está banido agora, com o motivo e (quando o bot souber) o nome público da pessoa.</p>
       <p class="tech-only"><code>BanService.getBans()</code>, ordenado por <code>createdAt desc</code>. <code>displayName</code> é capturado de <code>participant.notify</code> no momento do <code>$ban</code> — bans anteriores a essa mudança não têm retroativamente.</p>
       <span class="syntax">$bans</span>
+      <span class="example"><b>Exemplo:</b> <code>$bans</code> → <code>📋 Usuários Banidos (2)...</code></span>
     </div>
 
     <div class="cmd">
@@ -556,6 +571,7 @@
       <p class="tech-only"><code>updateBanType</code> / <code>updateExpiresAt</code> em <code>BanService</code>, escopados por <code>[userJid, groupJid]</code>.</p>
       <span class="syntax">$banedit @user tipo comunidade
 $banedit @user tempo 7d</span>
+      <span class="example"><b>Exemplo:</b> <code>$banedit @5541999999999 tempo 7d</code></span>
     </div>
 
     <div class="cmd">
@@ -563,6 +579,7 @@ $banedit @user tempo 7d</span>
       <p class="simple-only">Apaga os comandos digitados pro bot e as respostas dele nesse grupo — deixa tudo limpo, inclusive o próprio <code>$clear</code>.</p>
       <p class="tech-only">Rastro em memória por grupo (<code>groupMessageLog</code>), populado em <code>trackGroupMessage</code> a cada mensagem enviada/recebida. Apaga via <code>sendMessage(jid, &#123; delete: key &#125;)</code> — exige o bot ser admin do grupo pra apagar mensagem de terceiros. Não sobrevive a um restart (é intencional).</p>
       <span class="syntax">$clear</span>
+      <span class="example"><b>Exemplo:</b> <code>$clear</code> → apaga tudo que foi trocado com o bot nesse grupo, incluindo o próprio comando.</span>
     </div>
 
     <div class="cmd">
@@ -570,6 +587,23 @@ $banedit @user tempo 7d</span>
       <p class="simple-only">Mostra o número conectado e quantos banimentos existem. Útil pra confirmar que uma troca de número deu certo.</p>
       <p class="tech-only">Lê <code>sock.user.id</code>, <code>AdminService.getAdminGroups()</code> e <code>BanService.getBans()</code>. Nenhuma dessas fontes depende do número atual da sessão.</p>
       <span class="syntax">$status</span>
+      <span class="example"><b>Exemplo:</b> <code>$status</code> → <code>Número conectado: 555181061198...</code></span>
+    </div>
+
+    <div class="cmd">
+      <div class="cmd-head"><code class="name">$advertir</code><span class="who">admin</span></div>
+      <p class="simple-only">Dá uma advertência a alguém. 3 ou mais no mesmo mês banem a pessoa automaticamente (temporário, 7 dias) — sem precisar de mais nenhum comando.</p>
+      <p class="tech-only"><code>WarningService.issue()</code> grava em <code>Warning</code>; <code>countThisMonth</code> conta desde o dia 1 do mês corrente. Ao atingir 3, chama o mesmo <code>BanService.ban()</code> do <code>$ban</code>. A moderação por IA usa o mesmo <code>issue()</code>.</p>
+      <span class="syntax">$advertir @user [motivo]</span>
+      <span class="example"><b>Exemplo:</b> <code>$advertir @5541999999999 flood</code> → <code>⚠️ advertido (2/3 esse mês).</code></span>
+    </div>
+
+    <div class="cmd">
+      <div class="cmd-head"><code class="name">$regras</code><span class="who">admin</span></div>
+      <p class="simple-only">Aplica o link das regras da comunidade na descrição de todos os grupos que o bot administra, na próxima linha livre — pula quem já tem o link.</p>
+      <p class="tech-only">Ação em massa: uma <code>groupUpdateDescription</code> por grupo, com <code>humanBulkActionDelay()</code> entre cada uma. Marca cada escrita em <code>recentSelfDescriptionUpdate</code> pra não disparar o fluxo de votação de mudança de descrição.</p>
+      <span class="syntax">$regras</span>
+      <span class="example"><b>Exemplo:</b> <code>$regras</code> → <code>✅ Link das regras aplicado em 6 grupo(s) (2 já tinham).</code></span>
     </div>
   </section>
 

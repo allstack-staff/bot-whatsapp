@@ -4,7 +4,6 @@ title: Comandos
 
 <a href="./"><img src="assets/logo.jpg" alt="All Stack" width="48" style="border-radius:8px"></a>
 
-
 # Comandos
 
 Prefixo padrão: `$` (configurável via `BOT_PREFIX`).
@@ -16,6 +15,12 @@ Mostra um resumo rápido dos comandos mais usados direto no WhatsApp, com o link
 ```
 $ajuda
 ```
+
+Exemplo:
+```
+$ajuda
+```
+→ o bot responde na hora com a lista de comandos principais e o link da doc.
 
 ## Quem pode usar
 
@@ -34,6 +39,12 @@ Registra o grupo atual como grupo de administração/logs. Precisa ser rodado um
 $home
 ```
 
+Exemplo (dentro do grupo "Admins All Stack"):
+```
+$home
+```
+→ `✅ Grupo registrado como admin/log.`
+
 Todo `$ban`, auto-remoção por reentrada e `$banedit` manda uma cópia do log nesse grupo.
 
 ## `$ban`
@@ -42,7 +53,6 @@ Bane um membro de um grupo. Aceita o alvo por **menção** ou **respondendo à m
 
 ```
 $ban @user [permanente|temporario|comunidade] [motivo]
-$ban [permanente|temporario|comunidade] [motivo]   ← respondendo a uma mensagem do membro
 ```
 
 - Tipo é opcional — padrão é `temporario` (7 dias).
@@ -54,9 +64,9 @@ Exemplos:
 $ban @5541999999999 permanente flood
 $ban comunidade spam repetido em vários grupos
 ```
-(respondendo à mensagem de alguém) 
+Respondendo à mensagem de alguém, sem precisar mencionar:
 ```
-$banedit @5541999999999 tipo comunidade
+$ban temporario 3 dias fazendo propaganda fora de contexto
 ```
 
 Veja o significado de cada tipo em [Como o Banimento Funciona](banimentos.md).
@@ -67,6 +77,11 @@ Remove **todos** os banimentos de um usuário, em qualquer grupo. Aceita **menç
 
 ```
 $unban @user
+```
+
+Exemplos:
+```
+$unban @5541995850310
 $unban 5541995850310   ← se não quiser/puder marcar a pessoa
 ```
 (ou responda a uma mensagem antiga dela com `$unban`, sem argumento nenhum)
@@ -77,6 +92,20 @@ Lista todos os usuários banidos atualmente (qualquer grupo), com número, tipo,
 
 ```
 $bans
+```
+
+Exemplo:
+```
+$bans
+```
+→
+```
+📋 Usuários Banidos (2)
+
+1. 554195850310 (Baiano) — PERMANENTE
+   Motivo: flood
+2. 554199990099 — TEMPORARIO (expira: 02/09/2026 14:00)
+   Motivo: propaganda fora de contexto
 ```
 
 ## `$banedit`
@@ -91,6 +120,12 @@ $banedit @user tempo <7d|12h|30m|45s>
 - `tipo` muda o tipo do banimento (ex: de temporário pra permanente ou comunidade).
 - `tempo` redefine quando um banimento expira, contando a partir de agora.
 
+Exemplos:
+```
+$banedit @5541999999999 tipo comunidade
+$banedit @5541999999999 tempo 7d
+```
+
 Não existe um comando dedicado para "remover só a restrição" — use `$unban` mesmo, ele já cobre isso independente do tipo do banimento.
 
 ## `$clear`
@@ -100,6 +135,12 @@ Apaga (delete-for-everyone) os comandos digitados pro bot e as respostas dele **
 ```
 $clear
 ```
+
+Exemplo:
+```
+$clear
+```
+→ some com todo comando/resposta trocado com o bot naquele grupo, incluindo essa mensagem.
 
 - Só apaga mensagens rastreadas desde que o bot está de pé — mensagens de antes de um restart não entram na limpeza.
 - Depende do bot ser admin do grupo (mesmo requisito de apagar mensagem de terceiros no WhatsApp) — sem isso, só consegue apagar as próprias mensagens dele.
@@ -112,3 +153,47 @@ Diagnóstico rápido: número conectado, quantos grupos de admin estão registra
 ```
 $status
 ```
+
+Exemplo:
+```
+$status
+```
+→
+```
+🤖 Status do bot
+Número conectado: 555181061198
+Grupos de admin registrados: 1
+Banimentos ativos: 2 (histórico total: 5)
+```
+
+## Comandos de administração da comunidade
+
+Além dos comandos acima (que já exigem admin + estar no grupo de admins), esses dois lidam com a comunidade como um todo — mais sensíveis, use com atenção.
+
+### `$advertir`
+
+Dá uma advertência a alguém nesse grupo. **3 ou mais advertências no mesmo mês** (o contador reseta todo mês) aplicam automaticamente um banimento temporário de 7 dias — sem precisar de mais nenhum comando. A moderação automática por IA usa o mesmo contador.
+
+```
+$advertir @user [motivo]
+```
+
+Exemplo:
+```
+$advertir @5541999999999 flood no grupo pela segunda vez essa semana
+```
+→ `⚠️ @5541999999999 advertido (2/3 esse mês).` — e, se fosse a 3ª, seguiria com `🚫 ...banido automaticamente (temporário, 7 dias)`.
+
+### `$regras`
+
+Aplica o link das [regras da comunidade](regras.md) na descrição de **todos os grupos** que o bot administra, na próxima linha livre — pula quem já tem o link. É uma ação em massa: o bot espaça as atualizações entre os grupos de propósito, pra não parecer uma rajada de mudanças vindas do mesmo número.
+
+```
+$regras
+```
+
+Exemplo:
+```
+$regras
+```
+→ `✅ Link das regras aplicado em 6 grupo(s) (2 já tinham o link).`

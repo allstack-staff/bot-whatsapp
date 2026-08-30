@@ -22,6 +22,10 @@ export class MessageHandler {
     private groupMessageLog: Map<string, WAMessageKey[]> = new Map();
     private static readonly MAX_TRACKED_PER_GROUP = 300;
 
+    // Marca mudanças de descrição feitas pelo próprio bot, pra não confundir
+    // com edição manual de admin (que dispara votação — feature futura).
+    private recentSelfDescriptionUpdate: Map<string, number> = new Map();
+
     constructor(private sock: WASocket) {
         this.banService = new BanService();
         this.adminService = new AdminService();
@@ -39,6 +43,7 @@ export class MessageHandler {
         status: (msg: any) => this.statusCommand(msg),
         ajuda: (msg: any) => this.helpCommand(msg),
         help: (msg: any) => this.helpCommand(msg),
+        regras: (msg: any) => this.regrasCommand(msg),
     };
 
     private trackGroupMessage(jid: string | undefined, key: WAMessageKey | undefined): void {
@@ -393,6 +398,56 @@ export class MessageHandler {
         ].join('\n');
 
         await this.replySafe(jid, text);
+    }
+
+    /**
+     * Aplica o link das regras da comunidade na descrição de TODOS os grupos
+     * que o bot administra, na próxima linha livre — pula quem já tem o link.
+     * É uma ação em massa (uma escrita por grupo), então espaça cada escrita
+     * pra não parecer uma rajada de mudanças vindas do mesmo número.
+     */
+    private async regrasCommand(msg: any): Promise<void> {
+        if (!(await this.isAuthorized(msg))) return;
+
+        const jid = msg.key.remoteJid!;
+        const rulesUrl = `${botConfig.docsUrl}regras.html`;
+
+        let groups: Record<string, any>;
+        try {
+            groups = await this.sock.groupFetchAllParticipating();
+        } catch (err) {
+            logger.warn({ err }, '[regrasCommand] falha ao listar grupos');
+            await this.replySafe(jid, '❌ Erro ao listar os grupos. Tente novamente.');
+            return;
+        }
+
+        let updated = 0;
+        let skipped = 0;
+
+        for (const [gid, meta] of Object.entries(groups)) {
+            const currentDesc: string = (meta as any).desc || '';
+            if (currentDesc.includes(rulesUrl)) {
+                skipped++;
+                continue;
+            }
+
+            const newDesc = currentDesc
+                ? `${currentDesc}\n\n📋 Regras: ${rulesUrl}`
+                : `📋 Regras: ${rulesUrl}`;
+
+            await humanBulkActionDelay();
+            try {
+                this.recentSelfDescriptionUpdate.set(gid, Date.now());
+                await this.sock.groupUpdateDescription(gid, newDesc);
+                updated++;
+            } catch (err) {
+                logger.warn({ err, groupId: gid }, '[regrasCommand] falha ao atualizar descrição');
+            }
+        }
+
+        await this.reactSafe(jid, msg.key, '✅');
+        await this.replySafe(jid, `✅ Link das regras aplicado em ${updated} grupo(s) (${skipped} já tinham o link).`);
+        await this.sendLog(`📋 $regras rodado — ${updated} grupo(s) atualizado(s), ${skipped} já tinham o link.`);
     }
 
     private async replySafe(jid: string, text: string): Promise<void> {

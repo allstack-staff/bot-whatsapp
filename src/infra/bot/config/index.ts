@@ -44,6 +44,10 @@ export const botConfig = {
                 description: 'Dá uma advertência; 3 no mês geram banimento temporário automático',
                 usage: '$advertir @user [motivo]',
             },
+            regras: {
+                description: 'Aplica o link das regras da comunidade na descrição de todos os grupos',
+                usage: '$regras',
+            },
         },
     },
     features: {
