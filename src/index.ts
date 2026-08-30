@@ -53,9 +53,6 @@ async function startBot(): Promise<void> {
             messageHandler.primeDescriptionCache().catch((err) => {
                 logger.warn({ err }, 'Falha ao preencher cache inicial de descrições');
             });
-            messageHandler.debugLogCommunityMetadata().catch((err) => {
-                logger.warn({ err }, 'Falha no debug de metadados de community');
-            });
 
             if (hourlyTick) clearInterval(hourlyTick);
             hourlyTick = setInterval(() => {

@@ -115,6 +115,14 @@ export class MessageHandler {
             }
 
             try {
+                // O número do bot participa de várias outras communities/grupos sem
+                // relação com a All Stack — em grupo, o bot só processa/reage se
+                // for um grupo vinculado à All Stack Community. Privado (DM) segue liberado.
+                const remoteJid = msg.key.remoteJid;
+                if (remoteJid?.endsWith('@g.us') && !(await this.isCommunityGroup(remoteJid))) {
+                    continue;
+                }
+
                 const text: string =
                     msgContent.conversation ||
                     msgContent.extendedTextMessage?.text ||
@@ -139,6 +147,7 @@ export class MessageHandler {
         logger.debug({ id, participants, action }, '[handleGroupParticipantsUpdate] event received');
 
         if (action !== 'add' || !participants?.length) return;
+        if (!(await this.isCommunityGroup(id))) return;
 
         for (const participant of participants) {
             try {
@@ -191,6 +200,7 @@ export class MessageHandler {
         logger.debug({ id, participant, action }, '[handleGroupJoinRequest] event received');
 
         if (action !== 'created') return;
+        if (!(await this.isCommunityGroup(id))) return;
 
         try {
             const resolvedJid = participantPn || (await resolvePnJid(this.sock, participant));
@@ -253,8 +263,11 @@ export class MessageHandler {
         }
 
         const logoBuffer = fs.readFileSync(DEFAULT_LOGO_PATH);
+        const communityGroupIds = await this.getCommunityGroupIds();
 
         for (const gid of Object.keys(groups)) {
+            if (!communityGroupIds.has(gid)) continue;
+
             const lastNotAuthorized = this.notAuthorizedPhotoGroups.get(gid);
             if (lastNotAuthorized && Date.now() - lastNotAuthorized < MessageHandler.PHOTO_RETRY_COOLDOWN_MS) {
                 continue;
@@ -346,7 +359,9 @@ export class MessageHandler {
     async primeDescriptionCache(): Promise<void> {
         try {
             const groups = await this.sock.groupFetchAllParticipating();
+            const communityGroupIds = await this.getCommunityGroupIds();
             for (const [gid, meta] of Object.entries(groups)) {
+                if (!communityGroupIds.has(gid)) continue;
                 this.descriptionCache.set(gid, (meta as any).desc);
             }
         } catch (err) {
@@ -354,27 +369,42 @@ export class MessageHandler {
         }
     }
 
-    /**
-     * TEMPORÁRIO — só pra confirmar como o Baileys marca grupos vinculados a
-     * uma Community antes de implementar a trava de escopo de verdade. Remover
-     * depois de confirmar os campos.
-     */
-    async debugLogCommunityMetadata(): Promise<void> {
+    // Cache dos grupos que pertencem à All Stack Community (via linkedParent).
+    // O número do bot participa de dezenas de outros grupos/communities sem
+    // relação nenhuma com a All Stack — nada disso pode ser tocado pelo bot.
+    private communityGroupIdsCache: { ids: Set<string>; at: number } | undefined;
+    private static readonly COMMUNITY_CACHE_TTL_MS = 10 * 60 * 1000;
+
+    private async getCommunityGroupIds(): Promise<Set<string>> {
+        if (!botConfig.communityJid) {
+            logger.warn('[getCommunityGroupIds] COMMUNITY_JID não configurado — nenhuma ação em massa vai rodar');
+            return new Set();
+        }
+
+        if (this.communityGroupIdsCache && Date.now() - this.communityGroupIdsCache.at < MessageHandler.COMMUNITY_CACHE_TTL_MS) {
+            return this.communityGroupIdsCache.ids;
+        }
+
+        const ids = new Set<string>([botConfig.communityJid]);
         try {
             const groups = await this.sock.groupFetchAllParticipating();
             for (const [gid, meta] of Object.entries(groups)) {
-                const m = meta as GroupMetadata;
-                logger.info({
-                    gid,
-                    subject: m.subject,
-                    isCommunity: (m as any).isCommunity,
-                    isCommunityAnnounce: (m as any).isCommunityAnnounce,
-                    linkedParent: (m as any).linkedParent,
-                }, '[debugLogCommunityMetadata] grupo');
+                if ((meta as GroupMetadata).linkedParent === botConfig.communityJid) {
+                    ids.add(gid);
+                }
             }
         } catch (err) {
-            logger.warn({ err }, '[debugLogCommunityMetadata] falha ao listar grupos');
+            logger.warn({ err }, '[getCommunityGroupIds] falha ao listar grupos');
         }
+
+        this.communityGroupIdsCache = { ids, at: Date.now() };
+        return ids;
+    }
+
+    private async isCommunityGroup(gid: string | undefined): Promise<boolean> {
+        if (!gid) return false;
+        const ids = await this.getCommunityGroupIds();
+        return ids.has(gid);
     }
 
     /**
@@ -388,6 +418,7 @@ export class MessageHandler {
         for (const update of updates) {
             const gid = update.id;
             if (!gid || update.desc === undefined) continue;
+            if (!(await this.isCommunityGroup(gid))) continue;
 
             const newDesc = update.desc;
             const oldDesc = this.descriptionCache.get(gid);
@@ -764,8 +795,11 @@ export class MessageHandler {
 
         let updated = 0;
         let skipped = 0;
+        const communityGroupIds = await this.getCommunityGroupIds();
 
         for (const [gid, meta] of Object.entries(groups)) {
+            if (!communityGroupIds.has(gid)) continue;
+
             const currentDesc: string = (meta as any).desc || '';
             if (currentDesc.includes(rulesUrl)) {
                 skipped++;
@@ -793,10 +827,16 @@ export class MessageHandler {
 
     /** Acha o grupo "Avisos" que o WhatsApp cria automaticamente pra toda Community. */
     private async findCommunityAnnounceGroupJid(): Promise<string | null> {
+        // O bot participa do "Avisos" de várias communities diferentes — tem que
+        // ser especificamente o vinculado à All Stack (linkedParent === communityJid),
+        // senão o anúncio de promoção pode ir parar na community errada.
+        if (!botConfig.communityJid) return null;
+
         try {
             const groups = await this.sock.groupFetchAllParticipating();
             for (const [gid, meta] of Object.entries(groups)) {
-                if ((meta as GroupMetadata).isCommunityAnnounce) return gid;
+                const m = meta as GroupMetadata;
+                if (m.isCommunityAnnounce && m.linkedParent === botConfig.communityJid) return gid;
             }
         } catch (err) {
             logger.warn({ err }, '[findCommunityAnnounceGroupJid] falha ao listar grupos');
@@ -958,9 +998,12 @@ export class MessageHandler {
 
         // Remoção
         if (banType === 'COMUNIDADE') {
-            // "comunidade" = todos os grupos que o bot administra, não a feature nativa de Community do WhatsApp
+            // "comunidade" = todos os grupos vinculados à All Stack Community (via
+            // linkedParent) — nunca outros grupos/communities onde o bot só por acaso participa.
             const allGroups = await this.sock.groupFetchAllParticipating();
+            const communityGroupIds = await this.getCommunityGroupIds();
             for (const [gid, meta] of Object.entries(allGroups)) {
+                if (!communityGroupIds.has(gid)) continue;
                 const p = findParticipant(meta as GroupMetadata, targetJid);
                 if (p) {
                     // Espaça as remoções — várias saídas de grupo em sequência rápida, vindas

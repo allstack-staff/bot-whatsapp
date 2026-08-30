@@ -13,15 +13,15 @@ title: Como o Banimento Funciona
 |---|---|---|
 | `permanente` | Só o grupo onde foi aplicado o ban | Não |
 | `temporario` (padrão) | Só o grupo onde foi aplicado o ban | Sim — 7 dias por padrão, ajustável com `$banedit ... tempo` |
-| `comunidade` | **Todos** os grupos que o bot administra | Só se você definir um tempo com `$banedit ... tempo`; por padrão não expira |
+| `comunidade` | **Todos** os grupos vinculados à Community "All Stack Community" no WhatsApp | Só se você definir um tempo com `$banedit ... tempo`; por padrão não expira |
 
-Importante: **"comunidade" aqui não é a feature nativa "Community" do WhatsApp** (aquele agrupamento de grupos ligados por `linkedParent`). É "todos os grupos que o bot está e administra", que é como a All Stack Community realmente opera — vários grupos distintos, não necessariamente ligados pela feature nativa do WhatsApp.
+Importante: **"comunidade" é a feature nativa "Community" do WhatsApp** (os grupos ligados à All Stack Community por `linkedParent`). O número do bot participa de dezenas de outros grupos/communities sem relação nenhuma com a All Stack (grupos de terceiros, pessoais, etc.) — nenhuma ação de `comunidade`, `$regras` ou qualquer coisa em massa afeta esses outros grupos, só os que realmente são da All Stack Community. Isso é configurado uma vez no servidor via `COMMUNITY_JID` (veja [Deploy](deploy.md)).
 
 ## O que acontece quando alguém é banido
 
 1. O bot grava o banimento no banco (usuário, grupo, tipo, motivo, quem baniu, quando expira).
 2. Remove o membro imediatamente:
-   - Se for `comunidade`: de **todo** grupo em que o bot está e o membro está presente.
+   - Se for `comunidade`: de **todo** grupo da All Stack Community em que o membro está presente.
    - Se for `permanente`/`temporario`: só do grupo onde o comando foi rodado.
 3. Manda um log no grupo de admins (registrado via `$home`).
 

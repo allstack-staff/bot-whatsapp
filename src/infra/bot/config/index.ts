@@ -5,6 +5,11 @@ export const botConfig = {
     sessionPath: process.env.SESSION_PATH || './auth',
     logLevel: process.env.LOG_LEVEL || 'info',
     docsUrl: process.env.DOCS_URL || 'https://allstack-staff.github.io/bot-whatsapp/',
+    // JID da WhatsApp Community "All Stack Community" — o número do bot participa de
+    // dezenas de outros grupos/communities sem relação nenhuma com a All Stack, e toda
+    // ação em massa ou automática do bot deve ficar restrita a grupos vinculados aqui
+    // (meta.linkedParent === communityJid). Descoberto uma vez via debugLogCommunityMetadata.
+    communityJid: process.env.COMMUNITY_JID,
     commands: {
         prefix: process.env.BOT_PREFIX || '$',
         list: {

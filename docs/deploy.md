@@ -17,6 +17,12 @@ O pipeline (`.github/workflows/deploy.yml`) roda a cada push na branch `main`:
 4. Essa função reinicia a VM `baileys-bot-server` (GCP Compute Engine).
 5. Ao reiniciar, o `metadata_startup_script` da VM faz `git pull` e sobe o bot de novo via PM2.
 
+## Variáveis de ambiente obrigatórias no `.env` da VM
+
+Além das básicas (`BOT_PREFIX`, `SESSION_PATH`, `DATABASE_URL`), tem uma que é crítica:
+
+- **`COMMUNITY_JID`** — o JID da Community "All Stack Community" no WhatsApp. O número do bot participa de dezenas de outros grupos/communities sem relação nenhuma com a All Stack, e toda ação em massa ou automática (`$regras`, foto automática, `$ban comunidade`, moderação por IA, votação de mudança de descrição) só age em grupos vinculados a esse JID. **Sem essa variável configurada, todas essas ações ficam desativadas por segurança** (silenciosamente, com um aviso no log) — em vez de arriscar agir em algum grupo de terceiros. Veja [Como o Banimento Funciona](banimentos.md).
+
 ## Correções de robustez já aplicadas
 
 - **`curl --fail-with-body`** no disparo do trigger — antes, um HTTP 500 da própria Cloud Function (que ela retorna quando falha ao reiniciar a VM) passava como sucesso no pipeline, porque `curl` sem essa flag só falha em erro de rede/DNS, não em resposta HTTP de erro.
