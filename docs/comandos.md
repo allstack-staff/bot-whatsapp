@@ -196,13 +196,15 @@ Além dos comandos acima (que já exigem admin + estar no grupo de admins), esse
 
 ### `$advertir`
 
-Dá uma advertência a alguém nesse grupo. Aceita o alvo por **menção** ou **respondendo à mensagem dele**, igual ao `$ban`. **3 ou mais advertências no mesmo mês** (o contador reseta todo mês) aplicam automaticamente um banimento temporário de 7 dias — sem precisar de mais nenhum comando. A moderação automática por IA usa o mesmo contador.
+Dá uma advertência a alguém nesse grupo. Aceita o alvo por **menção** ou **respondendo à mensagem dele**, igual ao `$ban`. **3 ou mais advertências no mesmo mês** (o contador reseta todo mês) aplicam automaticamente um banimento — sem precisar de mais nenhum comando. A moderação automática por IA usa o mesmo contador.
+
+O banimento automático escalona por reincidência **nesse grupo**: 1ª vez = temporário 7 dias, 2ª vez = temporário 30 dias, 3ª vez em diante = permanente (com um aviso pros admins avaliarem se deve virar banimento de comunidade — isso não é automático, fica a critério de vocês, usando `$banedit ... tipo comunidade`).
 
 ```
 $advertir @user [motivo]
 ```
 
-**Comportamento:** reage ⚠️, responde no grupo onde rodou com a contagem atual (`X/3`), e manda cópia pro grupo de admins. Se bater 3, o banimento automático que segue reage/responde/loga como um `$ban` normal, na sequência.
+**Comportamento:** reage ⚠️, responde no grupo onde rodou com a contagem atual (`X/3`), e manda cópia pro grupo de admins. Se bater 3, o banimento automático que segue reage/responde/loga como um `$ban` normal, na sequência — **e pode ser desfeito** direto no grupo de admins (veja abaixo).
 
 Exemplo:
 ```
@@ -307,7 +309,16 @@ Isso não é um comando — é automático. Sempre que um admin edita a descriç
 
 Também não é um comando. A cada hora, se houve mensagem nova em algum grupo desde a última checagem (senão nem chama a IA), o bot avalia o conteúdo contra as regras da comunidade usando o Gemini (grátis, configurado via `GEMINI_API_KEY` no `.env` — sem a chave, esse ciclo simplesmente não faz nada).
 
-**Comportamento:** nunca responde no grupo onde a violação aconteceu. Violação grave (discriminação, conteúdo explícito, ato ilícito) → banimento de comunidade direto, avisado no grupo de admins. Qualquer outra violação → uma advertência comum (mesmo mecanismo do `$advertir`, mesmo limite de 3/mês), também só avisada no grupo de admins.
+**Comportamento:** nunca responde no grupo onde a violação aconteceu. Violação grave (discriminação, conteúdo explícito, ato ilícito) → banimento de comunidade direto, avisado no grupo de admins **e revertível** (veja abaixo). Qualquer outra violação → uma advertência comum (mesmo mecanismo do `$advertir`, mesmo limite de 3/mês, mesmo escalonamento por reincidência), também só avisada no grupo de admins.
+
+### Desfazer uma punição automática
+
+Também não é um comando (é uma reação a uma mensagem existente). Toda vez que a moderação por IA bane alguém, ou que o acúmulo de advertências dispara um banimento automático, o aviso no grupo de admins vem com a opção de desfazer:
+
+- **Reaja ❌** na mensagem do aviso — desfaz sem motivo registrado.
+- **Responda** a mensagem do aviso com um texto — desfaz **com** esse texto registrado como motivo.
+
+**Comportamento:** qualquer uma das duas ações remove o banimento, tenta readicionar a pessoa ao grupo (mesmo mecanismo do `$unban`) e posta uma confirmação no grupo de admins deixando claro que foi revisão humana que reverteu — algo como *"A moderação automática identificou um comportamento e baniu @pessoa, mas o admin @fulano revisou e reverteu a medida"* (+ motivo, se veio um). Só funciona enquanto a punição ainda estiver ativa (não desfeita antes) — quem pode reagir/responder é qualquer pessoa do grupo de administração.
 
 ### Readição automática ao expirar um banimento temporário
 

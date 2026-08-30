@@ -83,3 +83,37 @@ model GroupDescriptionLock {
     lockedUntil       DateTime
     frozenDescription String?  // descrição que o bot restaura se um admin tentar mudar durante a trava
 }
+
+// Quantas vezes essa pessoa já foi punida automaticamente por acúmulo de
+// advertências nesse grupo — usado pra escalonar: 1ª = temporário 7 dias,
+// 2ª = temporário 30 dias, 3ª+ = permanente (com aviso pros admins avaliarem
+// se deve virar banimento de comunidade).
+model WarningPunishmentHistory {
+    userJid   String
+    groupJid  String
+    count     Int      @default(0)
+    updatedAt DateTime @updatedAt
+
+    @@id([userJid, groupJid])
+}
+
+// Toda punição automática (moderação por IA, ou acúmulo de advertências)
+// avisada no grupo de admins com opção de desfazer — por reação ❌ (sem
+// motivo) ou por reply com texto (motivo registrado). Desfazer sempre
+// remove o banimento e tenta readicionar a pessoa ao grupo.
+model AutomatedPunishment {
+    id         String    @id @default(cuid())
+    userJid    String
+    groupJid   String
+    banType    String    // PERMANENTE | TEMPORARIO | COMUNIDADE
+    reason     String
+    source     String    // ia | advertencias
+    messageId  String?   // key.id da notificação no grupo de admins
+    status     String    @default("ACTIVE") // ACTIVE | REVERTED
+    revertedBy String?
+    revertReason String?
+    createdAt  DateTime  @default(now())
+    resolvedAt DateTime?
+
+    @@index([messageId])
+}

@@ -640,8 +640,8 @@ $banedit @user tempo 7d</span>
 
     <div class="cmd">
       <div class="cmd-head"><code class="name">$advertir</code><span class="who">admin</span></div>
-      <p class="simple-only">Dá uma advertência a alguém — marque ou responda a mensagem dela. 3 ou mais no mesmo mês banem a pessoa automaticamente (temporário, 7 dias) — sem precisar de mais nenhum comando.</p>
-      <p class="tech-only"><code>WarningService.issue()</code> grava em <code>Warning</code>; <code>countThisMonth</code> conta desde o dia 1 do mês corrente. Ao atingir 3, chama o mesmo <code>BanService.ban()</code> do <code>$ban</code>. A moderação por IA usa o mesmo <code>issue()</code>. Alvo resolvido via <code>getTargetJid</code> (menção ou reply), mesmo padrão do <code>$ban</code>.</p>
+      <p class="simple-only">Dá uma advertência a alguém — marque ou responda a mensagem dela. 3 ou mais no mesmo mês banem a pessoa automaticamente, escalonando por reincidência nesse grupo: 1ª vez 7 dias, 2ª vez 30 dias, 3ª vez em diante permanente (com aviso pros admins avaliarem se vira banimento de comunidade).</p>
+      <p class="tech-only"><code>WarningService.issue()</code> grava em <code>Warning</code>; <code>countThisMonth</code> conta desde o dia 1 do mês corrente. Ao atingir 3, <code>applyWarningPunishment</code> chama <code>incrementPunishmentCount</code> (tabela <code>WarningPunishmentHistory</code>) pra decidir o tier, e o mesmo <code>BanService.ban()</code> do <code>$ban</code>. A moderação por IA usa o mesmo <code>issue()</code>/<code>applyWarningPunishment</code>. Alvo resolvido via <code>getTargetJid</code> (menção ou reply), mesmo padrão do <code>$ban</code>.</p>
       <span class="syntax">$advertir @user [motivo]</span>
       <span class="example"><b>Exemplo:</b> <code>$advertir @5541999999999 flood</code> → <code>⚠️ advertido (2/3 esse mês).</code></span>
     </div>
@@ -719,7 +719,12 @@ $banedit @user tempo 7d</span>
     <div class="cmd">
       <div class="cmd-head"><span>Readição ao expirar um banimento temporário (a cada 5 min)</span></div>
       <p class="simple-only">Quando um banimento <code>temporario</code> vence, o bot tenta readicionar a pessoa ao grupo sozinho, sem esperar ela pedir. Sempre avisa no grupo de admins: ✅ se conseguiu, ⚠️ com o link de convite se não conseguiu (privacidade da pessoa não permite ser adicionada direto).</p>
-      <p class="tech-only"><code>BanService.getExpiredTemporaryBans()</code> a cada <code>BAN_EXPIRY_TICK_MS</code> (5min). Remove o registro de qualquer forma (o prazo já passou); a readição via <code>groupParticipantsUpdate(..., 'add')</code> é só cortesia por cima disso. Status ≠ <code>'200'</code> → busca <code>groupInviteCode</code> e inclui o link no aviso de falha.</p>
+      <p class="tech-only"><code>BanService.getExpiredTemporaryBans()</code> a cada <code>BAN_EXPIRY_TICK_MS</code> (5min). Remove o registro de qualquer forma (o prazo já passou); a readição via <code>tryReAddToGroup</code> (<code>groupParticipantsUpdate(..., 'add')</code>) é só cortesia por cima disso. Status ≠ <code>'200'</code> → busca <code>groupInviteCode</code> e inclui o link no aviso de falha.</p>
+    </div>
+    <div class="cmd">
+      <div class="cmd-head"><span>Desfazer punição automática (reação ou reply no aviso)</span></div>
+      <p class="simple-only">Todo banimento automático (IA ou acúmulo de advertências) vem com opção de desfazer no próprio aviso, no grupo de admins: reaja ❌ pra desfazer sem motivo, ou responda com um texto pra desfazer com motivo registrado. Remove o banimento, readiciona a pessoa e deixa claro que foi revisão humana.</p>
+      <p class="tech-only"><code>AutomatedPunishment</code> grava toda punição automática com o <code>messageId</code> do aviso. <code>handleReaction</code> checa esse messageId primeiro (antes da votação de descrição) pra reação ❌; <code>handleMessage</code> checa <code>contextInfo.stanzaId</code> de replies não-comando contra a mesma tabela pra desfazer com motivo. Ambos chamam <code>revertAutomatedPunishment</code>: <code>unban</code> + <code>tryReAddToGroup</code> + log explicando que foi revertido por revisão humana.</p>
     </div>
   </section>
 

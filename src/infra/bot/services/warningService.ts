@@ -31,4 +31,18 @@ export class WarningService {
         const count = await this.countThisMonth(userJid, groupJid);
         return count >= WARNINGS_TO_PUNISH;
     }
+
+    /**
+     * Incrementa e retorna quantas vezes essa pessoa já foi punida (por
+     * acúmulo de advertências) nesse grupo, historicamente — usado pra
+     * escalonar a punição (1ª/2ª/3ª+ vez).
+     */
+    async incrementPunishmentCount(userJid: string, groupJid: string): Promise<number> {
+        const row = await prisma.warningPunishmentHistory.upsert({
+            where: { userJid_groupJid: { userJid, groupJid } },
+            update: { count: { increment: 1 } },
+            create: { userJid, groupJid, count: 1 },
+        });
+        return row.count;
+    }
 }

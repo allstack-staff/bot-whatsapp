@@ -10,6 +10,7 @@ import { DescriptionChangeService } from '../services/descriptionChangeService';
 import { AdminResponsibilityService } from '../services/adminResponsibilityService';
 import { AiModerationService } from '../services/aiModerationService';
 import { CommunityGroupService } from '../services/communityGroupService';
+import { AutomatedPunishmentService } from '../services/automatedPunishmentService';
 import { logger } from '../utils/logger';
 import { findParticipant, isGroupAdmin, resolvePnJid } from '../utils/jid';
 import { humanBulkActionDelay, humanReplyDelay } from '../utils/delay';
@@ -25,6 +26,7 @@ export class MessageHandler {
     private adminResponsibilityService: AdminResponsibilityService;
     private aiModerationService: AiModerationService;
     private communityGroupService: CommunityGroupService;
+    private automatedPunishmentService: AutomatedPunishmentService;
 
     // Mensagens de grupo desde a última checagem da IA — se estiver vazio na
     // hora do ciclo, não submete nada (nem gasta chamada de API à toa).
@@ -74,6 +76,7 @@ export class MessageHandler {
         this.adminResponsibilityService = new AdminResponsibilityService();
         this.aiModerationService = new AiModerationService();
         this.communityGroupService = new CommunityGroupService();
+        this.automatedPunishmentService = new AutomatedPunishmentService();
     }
 
     private commands: Record<string, (msg: any, args: string[]) => Promise<void>> = {
@@ -141,6 +144,22 @@ export class MessageHandler {
                     '';
 
                 if (!text) continue;
+
+                // Reply com texto (sem ser um comando) numa notificação de punição
+                // automática ainda ativa = desfazer com motivo (em vez de reação ❌,
+                // que desfaz sem motivo — ver handleReaction).
+                const stanzaId = msgContent.extendedTextMessage?.contextInfo?.stanzaId;
+                if (stanzaId && !text.startsWith(botConfig.commands.prefix)) {
+                    const punishment = await this.automatedPunishmentService.findActiveByMessageId(stanzaId);
+                    if (punishment) {
+                        const senderRaw = msg.key.participant || msg.key.remoteJid!;
+                        const senderJid = await resolvePnJid(this.sock, senderRaw);
+                        if (await this.isMemberOfAdminGroup(senderRaw, senderJid)) {
+                            await this.revertAutomatedPunishment(punishment, senderJid, text.trim());
+                        }
+                        continue;
+                    }
+                }
 
                 this.bufferForModeration(msg.key.remoteJid, msg.key.participant || msg.key.remoteJid, text);
 
@@ -371,9 +390,9 @@ export class MessageHandler {
                                 await this.sendLog(`⚠️ IA baniu @${number} mas não consegui removê-lo(a) do grupo *${metadata?.subject || groupJid}* automaticamente. Confira manualmente.`, [resolvedJid]);
                             });
                         }
-                        await this.sendLog(
+                        await this.notifyRevertiblePunishment(
+                            { userJid: resolvedJid, groupJid, banType: 'COMUNIDADE', reason: violation.reason, source: 'ia' },
                             `🤖🚫 IA detectou violação grave de @${number} em *${metadata?.subject || groupJid}* — banido de toda a comunidade.\nMotivo: ${violation.reason}`,
-                            [resolvedJid],
                         );
                     } else {
                         await this.warningService.issue(resolvedJid, groupJid, `[IA] ${violation.reason}`, 'ia-moderacao');
@@ -641,12 +660,21 @@ export class MessageHandler {
             if (!key?.id) continue;
 
             try {
-                const change = await this.descriptionChangeService.findPendingByVoteMessageId(key.id);
-                if (!change) continue;
-
                 const emoji: string | undefined = reaction?.text;
                 const reactorRaw: string | undefined = reaction?.key?.participant || reaction?.key?.remoteJid;
                 if (!reactorRaw) continue;
+
+                const punishment = await this.automatedPunishmentService.findActiveByMessageId(key.id);
+                if (punishment) {
+                    if (emoji === '❌') {
+                        const reactorJid = await resolvePnJid(this.sock, reactorRaw);
+                        await this.revertAutomatedPunishment(punishment, reactorJid);
+                    }
+                    continue;
+                }
+
+                const change = await this.descriptionChangeService.findPendingByVoteMessageId(key.id);
+                if (!change) continue;
 
                 const votes = this.descriptionVotes.get(key.id) ?? new Map<string, 'approve' | 'reject'>();
                 if (emoji === '✅') {
@@ -785,9 +813,9 @@ export class MessageHandler {
         return groups.length > 0 ? groups[0] : null;
     }
 
-    private async sendLog(text: string, mentions?: string[]): Promise<void> {
+    private async sendLog(text: string, mentions?: string[]): Promise<WAMessageKey | undefined> {
         const logJid = await this.getLogJid();
-        if (!logJid) return;
+        if (!logJid) return undefined;
         const opts: any = { text };
         if (mentions?.length) opts.mentions = mentions;
         const sent = await this.sock.sendMessage(logJid, opts).catch((e: any) => {
@@ -795,6 +823,7 @@ export class MessageHandler {
             return undefined;
         });
         this.trackGroupMessage(logJid, sent?.key);
+        return sent?.key;
     }
 
     private resolveBanType(arg: string): string {
@@ -1492,26 +1521,99 @@ export class MessageHandler {
     /** Aplica banimento temporário automático quando o limite de advertências do mês é atingido. */
     private async applyWarningPunishment(targetJid: string, groupJid: string, metadata: GroupMetadata): Promise<void> {
         const targetParticipant = findParticipant(metadata, targetJid);
+        const tier = await this.warningService.incrementPunishmentCount(targetJid, groupJid);
+
+        // Escalonamento por reincidência nesse grupo: 1ª vez = 7 dias, 2ª = 30
+        // dias, 3ª+ = permanente (com aviso pros admins avaliarem se deve virar
+        // banimento de comunidade — isso fica a critério humano, não automático).
+        let banType: string = 'TEMPORARIO';
+        let expiresAt: Date | undefined;
+        let durationLabel: string;
+        let tierNote = '';
+
+        if (tier <= 1) {
+            expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+            durationLabel = 'temporário, 7 dias';
+        } else if (tier === 2) {
+            expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+            durationLabel = 'temporário, 30 dias';
+        } else {
+            banType = 'PERMANENTE';
+            durationLabel = 'permanente';
+            tierNote = '\n⚠️ Essa é a 3ª vez (ou mais) que essa pessoa é punida por acúmulo de advertências nesse grupo — avaliem se deve virar banimento de comunidade (use $banedit @user tipo comunidade se decidirem).';
+        }
+
+        const reason = `Acúmulo de 3 ou mais advertências no mês (${tier}ª punição nesse grupo)`;
 
         await this.banService.ban({
             userJid: targetJid,
             displayName: targetParticipant?.notify || targetParticipant?.name || undefined,
             groupJid,
-            banType: 'TEMPORARIO' as any,
-            reason: 'Acúmulo de 3 ou mais advertências no mês',
-            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+            banType: banType as any,
+            reason,
+            expiresAt,
             bannedBy: 'sistema (advertências)',
         });
 
         if (targetParticipant) {
-            await this.sock.groupParticipantsUpdate(groupJid, [targetParticipant.id], 'remove').catch(() => {});
+            const removeFailed = await this.sock.groupParticipantsUpdate(groupJid, [targetParticipant.id], 'remove')
+                .then(() => false)
+                .catch((err: any) => {
+                    logger.error({ err, groupJid, targetJid }, '[applyWarningPunishment] falha ao remover');
+                    return true;
+                });
+            if (removeFailed) {
+                await this.sendLog(`⚠️ @${targetJid.split('@')[0]} atingiu 3 advertências no mês (banimento ${durationLabel} aplicado) mas não consegui removê-lo(a) do grupo automaticamente. Confira manualmente.`, [targetJid]);
+            }
         }
 
         const number = targetJid.split('@')[0];
-        await this.replySafe(groupJid, `🚫 @${number} atingiu 3 advertências no mês e foi banido automaticamente (temporário, 7 dias).`);
-        await this.sendLog(
-            `🚫 @${number} banido automaticamente por acúmulo de advertências (3/mês) — temporário, 7 dias.`,
-            [targetJid],
+        await this.replySafe(groupJid, `🚫 @${number} atingiu 3 advertências no mês e foi banido automaticamente (${durationLabel}).`);
+
+        await this.notifyRevertiblePunishment({ userJid: targetJid, groupJid, banType, reason, source: 'advertencias' },
+            `🚫 @${number} banido automaticamente por acúmulo de advertências (3/mês) — ${durationLabel}.${tierNote}`,
         );
+    }
+
+    /**
+     * Registra uma punição automática (IA ou acúmulo de advertências) e posta
+     * o aviso no grupo de admins com instrução de como desfazer — por reação
+     * ❌ (sem motivo) ou respondendo a mensagem com um texto (motivo
+     * registrado). Ver handleReaction / handleMessage pra onde isso é lido.
+     */
+    private async notifyRevertiblePunishment(
+        data: { userJid: string; groupJid: string; banType: string; reason: string; source: 'ia' | 'advertencias' },
+        headline: string,
+    ): Promise<void> {
+        const punishment = await this.automatedPunishmentService.create(data);
+        const messageKey = await this.sendLog(
+            `${headline}\n\nReaja ❌ pra desfazer, ou responda esta mensagem com o motivo pra desfazer com justificativa.`,
+            [data.userJid],
+        );
+        if (messageKey?.id) {
+            await this.automatedPunishmentService.setMessageId(punishment.id, messageKey.id);
+        }
+    }
+
+    /**
+     * Um admin (do grupo de admins) desfez uma punição automática — remove o
+     * banimento, tenta readicionar a pessoa, e deixa claro no log que foi
+     * revisão humana que reverteu uma ação automática (não um erro do bot).
+     */
+    private async revertAutomatedPunishment(punishment: any, revertedBy: string, revertReason?: string): Promise<void> {
+        await this.automatedPunishmentService.revert(punishment.id, revertedBy, revertReason);
+        await this.banService.unban(punishment.userJid, punishment.groupJid);
+
+        const number = punishment.userJid.split('@')[0];
+        const admin = revertedBy.split('@')[0];
+        const sourceLabel = punishment.source === 'ia' ? 'A moderação automática por IA' : 'O acúmulo de advertências';
+        const reasonLabel = revertReason ? `\nMotivo do admin: ${revertReason}` : '';
+
+        await this.sendLog(
+            `🔄 ${sourceLabel} identificou um comportamento e puniu @${number}, mas o admin @${admin} revisou e reverteu a medida.${reasonLabel}`,
+            [punishment.userJid],
+        );
+
+        await this.tryReAddToGroup(punishment.userJid, punishment.groupJid, 'a punição automática foi revertida por um admin');
     }
 }
