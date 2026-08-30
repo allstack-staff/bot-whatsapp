@@ -47,6 +47,14 @@ export class MessageHandler {
     // num restart só significa recomeçar a contagem, não perder a trava/estado.
     private descriptionVotes: Map<string, Map<string, 'approve' | 'reject'>> = new Map();
 
+    // Grupos onde o bot não é admin (logo não pode trocar a foto), com o
+    // horário da última tentativa. Evita reenviar updateProfilePicture pro
+    // WhatsApp toda hora pra um grupo que vai sempre falhar até alguém tornar
+    // o bot admin lá — tanto por ruído de log quanto por ser uma chamada
+    // repetitiva e previsível de mais pro gosto de "legit em relação a ban".
+    private notAuthorizedPhotoGroups: Map<string, number> = new Map();
+    private static readonly PHOTO_RETRY_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
     constructor(private sock: WASocket) {
         this.banService = new BanService();
         this.adminService = new AdminService();
@@ -246,16 +254,28 @@ export class MessageHandler {
         const logoBuffer = fs.readFileSync(DEFAULT_LOGO_PATH);
 
         for (const gid of Object.keys(groups)) {
+            const lastNotAuthorized = this.notAuthorizedPhotoGroups.get(gid);
+            if (lastNotAuthorized && Date.now() - lastNotAuthorized < MessageHandler.PHOTO_RETRY_COOLDOWN_MS) {
+                continue;
+            }
+
             try {
                 await this.sock.profilePictureUrl(gid, 'image');
                 // já tem foto — não mexe
+                this.notAuthorizedPhotoGroups.delete(gid);
             } catch {
                 await humanBulkActionDelay();
                 try {
                     await this.sock.updateProfilePicture(gid, logoBuffer);
                     logger.info({ groupId: gid }, '[checkAndApplyGroupPhotos] logo aplicado (grupo sem foto)');
+                    this.notAuthorizedPhotoGroups.delete(gid);
                 } catch (err) {
-                    logger.warn({ err, groupId: gid }, '[checkAndApplyGroupPhotos] falha ao aplicar logo');
+                    if (err instanceof Error && err.message === 'not-authorized') {
+                        this.notAuthorizedPhotoGroups.set(gid, Date.now());
+                        logger.debug({ groupId: gid }, '[checkAndApplyGroupPhotos] bot não é admin nesse grupo, pulando por 24h');
+                    } else {
+                        logger.warn({ err, groupId: gid }, '[checkAndApplyGroupPhotos] falha ao aplicar logo');
+                    }
                 }
             }
         }
