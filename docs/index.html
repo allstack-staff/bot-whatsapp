@@ -225,6 +225,34 @@
     max-width: 46ch;
   }
 
+  .quicklinks {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 8px;
+    margin-top: 20px;
+  }
+  .quicklink {
+    display: block;
+    padding: 10px 14px;
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    color: var(--ink);
+    text-decoration: none;
+    font-size: 0.88rem;
+    font-weight: 600;
+    box-shadow: var(--shadow);
+    transition: border-color 0.15s ease;
+  }
+  .quicklink:hover { border-color: var(--accent); }
+  .quicklink span {
+    display: block;
+    font-weight: 400;
+    color: var(--ink-faint);
+    font-size: 0.78rem;
+    margin-top: 2px;
+  }
+
   section {
     margin-bottom: 44px;
   }
@@ -501,6 +529,21 @@
     <h1>Moderação de grupo, sem precisar decorar nada.</h1>
     <p class="lede simple-only">Essa página explica como usar o bot no dia a dia — banir, desbanir, ver quem tá banido. Sem termos técnicos.</p>
     <p class="lede tech-only">Referência técnica: comandos, regras de autorização, resolução de identidade (LID), persistência e o pipeline de deploy.</p>
+
+    <div class="quicklinks simple-only">
+      <a class="quicklink" href="#ajuda">Comece por aqui<span>$ajuda, quem pode usar</span></a>
+      <a class="quicklink" href="#comandos">Comandos<span>$ban, $unban, $bans...</span></a>
+      <a class="quicklink" href="#tipos">Tipos de banimento<span>permanente, temporário, comunidade</span></a>
+      <a class="quicklink" href="regras.html">Regras da comunidade<span>o que vale em todo grupo</span></a>
+      <a class="quicklink" href="governanca.html">Governança<span>como um admin é escolhido</span></a>
+      <a class="quicklink" href="#troca-numero">Perdeu o número?<span>nada se perde</span></a>
+    </div>
+    <div class="quicklinks tech-only">
+      <a class="quicklink" href="instalacao.html">Instalação<span>rodar localmente</span></a>
+      <a class="quicklink" href="#arquitetura">Arquitetura<span>stack, LID, anti-detecção</span></a>
+      <a class="quicklink" href="#migracao">Migração<span>trocar de servidor sem perder nada</span></a>
+      <a class="quicklink" href="#deploy">Deploy<span>pipeline CI/CD</span></a>
+    </div>
   </div>
 
   <section id="ajuda">
