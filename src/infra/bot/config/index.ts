@@ -40,6 +40,10 @@ export const botConfig = {
                 description: 'Mostra os comandos principais e o link da documentação completa',
                 usage: '$ajuda',
             },
+            advertir: {
+                description: 'Dá uma advertência; 3 no mês geram banimento temporário automático',
+                usage: '$advertir @user [motivo]',
+            },
         },
     },
     features: {

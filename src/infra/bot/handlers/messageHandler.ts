@@ -3,6 +3,7 @@ import { MessageUpsert } from '../types';
 import { botConfig } from '../config';
 import { BanService } from '../services/banService';
 import { AdminService } from '../services/adminService';
+import { WarningService } from '../services/warningService';
 import { logger } from '../utils/logger';
 import { findParticipant, isGroupAdmin, resolvePnJid } from '../utils/jid';
 import { humanBulkActionDelay, humanReplyDelay } from '../utils/delay';
@@ -10,6 +11,7 @@ import { humanBulkActionDelay, humanReplyDelay } from '../utils/delay';
 export class MessageHandler {
     private banService: BanService;
     private adminService: AdminService;
+    private warningService: WarningService;
 
     // Rastro (em memória) dos comandos digitados pro bot e das respostas dele em
     // cada grupo, só pra viabilizar o $clear. Não precisa sobreviver a um restart.
@@ -19,6 +21,7 @@ export class MessageHandler {
     constructor(private sock: WASocket) {
         this.banService = new BanService();
         this.adminService = new AdminService();
+        this.warningService = new WarningService();
     }
 
     private commands: Record<string, (msg: any, args: string[]) => Promise<void>> = {
@@ -27,6 +30,7 @@ export class MessageHandler {
         unban: (msg: any, args: string[]) => this.unbanCommand(msg, args),
         bans: (msg: any) => this.bansCommand(msg),
         banedit: (msg: any, args: string[]) => this.baneditCommand(msg, args),
+        advertir: (msg: any, args: string[]) => this.advertirCommand(msg, args),
         clear: (msg: any) => this.clearCommand(msg),
         status: (msg: any) => this.statusCommand(msg),
         ajuda: (msg: any) => this.helpCommand(msg),
@@ -637,5 +641,69 @@ export class MessageHandler {
         } else {
             await this.replySafe(jid, '❌ Campo inválido. Use: tipo ou tempo.');
         }
+    }
+
+    /**
+     * Advertência manual (a IA de moderação usa o mesmo WarningService.issue por
+     * baixo, sem passar por esse comando). Ao bater 3 advertências no mês
+     * corrente, aplica automaticamente um banimento temporário (7 dias) naquele
+     * grupo — mesmo mecanismo do $ban, só que disparado pelo acúmulo.
+     */
+    private async advertirCommand(msg: any, args: string[]): Promise<void> {
+        if (!(await this.isAuthorized(msg))) return;
+
+        const jid = msg.key.remoteJid!;
+        const metadata = await this.sock.groupMetadata(jid);
+        const { jid: targetRaw } = this.getTargetJid(msg);
+
+        if (!targetRaw) {
+            await this.replySafe(jid, '❌ Marque a pessoa ou responda a mensagem dela. Ex: $advertir @user flood no grupo');
+            return;
+        }
+
+        const targetJid = await resolvePnJid(this.sock, targetRaw, metadata);
+        const issuedBy = await resolvePnJid(this.sock, msg.key.participant! || msg.key.remoteJid!, metadata);
+        const reason = args.join(' ') || 'Não informado';
+
+        await this.warningService.issue(targetJid, jid, reason, issuedBy);
+        const count = await this.warningService.countThisMonth(targetJid, jid);
+
+        await this.reactSafe(jid, msg.key, '⚠️');
+        await this.replySafe(jid, `⚠️ @${targetJid.split('@')[0]} advertido (${count}/3 esse mês).\nMotivo: ${reason}`);
+
+        await this.sendLog(
+            `⚠️ @${targetJid.split('@')[0]} recebeu advertência (${count}/3 esse mês) — Motivo: ${reason}`,
+            [targetJid],
+        );
+
+        if (count >= 3) {
+            await this.applyWarningPunishment(targetJid, jid, metadata);
+        }
+    }
+
+    /** Aplica banimento temporário automático quando o limite de advertências do mês é atingido. */
+    private async applyWarningPunishment(targetJid: string, groupJid: string, metadata: GroupMetadata): Promise<void> {
+        const targetParticipant = findParticipant(metadata, targetJid);
+
+        await this.banService.ban({
+            userJid: targetJid,
+            displayName: targetParticipant?.notify || targetParticipant?.name || undefined,
+            groupJid,
+            banType: 'TEMPORARIO' as any,
+            reason: 'Acúmulo de 3 ou mais advertências no mês',
+            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+            bannedBy: 'sistema (advertências)',
+        });
+
+        if (targetParticipant) {
+            await this.sock.groupParticipantsUpdate(groupJid, [targetParticipant.id], 'remove').catch(() => {});
+        }
+
+        const number = targetJid.split('@')[0];
+        await this.replySafe(groupJid, `🚫 @${number} atingiu 3 advertências no mês e foi banido automaticamente (temporário, 7 dias).`);
+        await this.sendLog(
+            `🚫 @${number} banido automaticamente por acúmulo de advertências (3/mês) — temporário, 7 dias.`,
+            [targetJid],
+        );
     }
 }

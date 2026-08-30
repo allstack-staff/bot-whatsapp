@@ -26,3 +26,56 @@ model BannedUser {
     @@index([userJid])
     @@index([groupJid])
 }
+
+model Warning {
+    id        String   @id @default(cuid())
+    userJid   String
+    groupJid  String
+    reason    String
+    issuedBy  String   // admin JID, ou "ai" quando aplicada pela moderação automática
+    createdAt DateTime @default(now())
+
+    @@index([userJid])
+    @@index([groupJid])
+}
+
+// Qual admin é responsável por qual grupo (avisos de promoção, pendências como pedido de entrada)
+model AdminResponsibility {
+    adminJid   String
+    groupJid   String
+    assignedAt DateTime @default(now())
+
+    @@id([adminJid, groupJid])
+    @@index([groupJid])
+}
+
+model GroupDescriptionChange {
+    id             String    @id @default(cuid())
+    groupJid       String
+    oldDescription String?
+    newDescription String?
+    proposedBy     String
+    status         String    @default("PENDING") // PENDING | APPROVED | REJECTED
+    voteMessageId  String?   // key.id da mensagem de votação, pra casar com as reações
+    voteGroupJid   String?   // grupo onde a votação foi postada (grupo de admins)
+    createdAt      DateTime  @default(now())
+    resolvedAt     DateTime?
+
+    @@index([groupJid])
+    @@index([voteMessageId])
+}
+
+// Se uma proposta de mudança de descrição é rejeitada pela maioria, o grupo fica
+// travado (o bot restaura a versão anterior) por um tempo.
+model GroupDescriptionLock {
+    groupJid    String   @id
+    lockedUntil DateTime
+}
+
+// Uma linha por grupo — permite saber se chegou mensagem nova desde a última
+// checagem da IA, pra não gastar chamada de API à toa.
+model GroupModerationCheckpoint {
+    groupJid      String    @id
+    lastMessageAt DateTime?
+    lastCheckedAt DateTime?
+}
