@@ -765,6 +765,21 @@ export class MessageHandler {
         return false;
     }
 
+    /** "Admin de comunidade" = admin do próprio grupo de administração registrado (não só membro). */
+    private async isAdminOfAdminGroup(rawJid: string, resolvedJid: string): Promise<boolean> {
+        const adminGroups = await this.adminService.getAdminGroups();
+        for (const groupJid of adminGroups) {
+            try {
+                const meta = await this.sock.groupMetadata(groupJid);
+                const participant = findParticipant(meta, rawJid) || findParticipant(meta, resolvedJid);
+                if (isGroupAdmin(participant)) return true;
+            } catch (err) {
+                logger.warn({ err, groupJid }, '[isAdminOfAdminGroup] failed to fetch admin group metadata');
+            }
+        }
+        return false;
+    }
+
     private async getLogJid(): Promise<string | null> {
         const groups = await this.adminService.getAdminGroups();
         return groups.length > 0 ? groups[0] : null;
@@ -1235,12 +1250,16 @@ export class MessageHandler {
 
         // Alvo por menção/reply (mesmo se a pessoa já não estiver mais no grupo) ou, se
         // nenhum dos dois vier, pelo número completo como fallback: $unban 5541995850310
-        const { jid: targetRaw } = this.getTargetJid(msg);
+        const { jid: targetRaw, fromQuoted } = this.getTargetJid(msg);
+        const mentionedJid = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid;
         let userJid: string;
+        let reasonArgs: string[];
 
         if (targetRaw) {
             const metadata = await this.sock.groupMetadata(jid).catch(() => undefined);
             userJid = await resolvePnJid(this.sock, targetRaw, metadata);
+            // Menção deixa o "@numero" literal em args[0] — reply não deixa nada.
+            reasonArgs = (!fromQuoted && mentionedJid?.length) ? args.slice(1) : args;
         } else if (args[0]) {
             const rawNumber = args[0].replace(/\D/g, '');
             if (rawNumber.length < 10) {
@@ -1248,8 +1267,18 @@ export class MessageHandler {
                 return;
             }
             userJid = `${rawNumber}@s.whatsapp.net`;
+            reasonArgs = args.slice(1);
         } else {
             await this.replySafe(jid, '❌ Marque a pessoa, responda a mensagem dela, ou use: $unban 5541995850310');
+            return;
+        }
+
+        const reason = reasonArgs.join(' ').trim();
+        const senderRaw = msg.key.participant! || msg.key.remoteJid!;
+        const senderJid = await resolvePnJid(this.sock, senderRaw);
+
+        if (!reason && !(await this.isAdminOfAdminGroup(senderRaw, senderJid))) {
+            await this.replySafe(jid, '❌ Motivo obrigatório. Ex: $unban @user reavaliado, sem novas violações\n(admin de comunidade não precisa informar motivo)');
             return;
         }
 
@@ -1260,10 +1289,11 @@ export class MessageHandler {
         await this.reactSafe(jid, msg.key, '✅');
 
         if (count > 0) {
-            await this.replySafe(jid, `✅ Usuário @${number} foi desbanido (${count} registro(s) removido(s)).`);
+            const reasonLabel = reason ? `\nMotivo: ${reason}` : '';
+            await this.replySafe(jid, `✅ Usuário @${number} foi desbanido (${count} registro(s) removido(s)).${reasonLabel}`);
 
             await this.sendLog(
-                `✅ Membro @${number} desbanido — ${count} registro(s) removido(s).`,
+                `✅ Membro @${number} desbanido — ${count} registro(s) removido(s).${reasonLabel}`,
                 [userJid],
             );
 

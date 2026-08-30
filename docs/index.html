@@ -599,10 +599,10 @@
 
     <div class="cmd">
       <div class="cmd-head"><code class="name">$unban</code><span class="who">admin</span></div>
-      <p class="simple-only">Marque a pessoa, responda uma mensagem antiga dela (funciona mesmo se ela já saiu do grupo), ou digite o número completo. Também readiciona ela automaticamente aos grupos de onde foi removida.</p>
-      <p class="tech-only">Mesma resolução de alvo do <code>$ban</code>; se não vier menção/reply, cai pro fallback de número cru (<code>args[0].replace(/\D/g, '')</code>). Remove <strong>todos</strong> os registros daquele <code>userJid</code>, em qualquer grupo, independente do tipo — e chama <code>tryReAddToGroup</code> (mesmo helper do reAddExpiredBans) pra cada grupo afetado: todos os da comunidade se algum ban era COMUNIDADE, senão só o <code>groupJid</code> do registro.</p>
-      <span class="syntax">$unban @user</span>
-      <span class="example"><b>Exemplo:</b> <code>$unban 5541995850310</code></span>
+      <p class="simple-only">Marque a pessoa, responda uma mensagem antiga dela (funciona mesmo se ela já saiu do grupo), ou digite o número completo. Também readiciona ela automaticamente aos grupos de onde foi removida. Motivo é obrigatório, exceto pra admin de comunidade.</p>
+      <p class="tech-only">Mesma resolução de alvo do <code>$ban</code>; se não vier menção/reply, cai pro fallback de número cru (<code>args[0].replace(/\D/g, '')</code>). Remove <strong>todos</strong> os registros daquele <code>userJid</code>, em qualquer grupo, independente do tipo — e chama <code>tryReAddToGroup</code> (mesmo helper do reAddExpiredBans) pra cada grupo afetado: todos os da comunidade se algum ban era COMUNIDADE, senão só o <code>groupJid</code> do registro. Sem motivo, exige <code>isAdminOfAdminGroup</code> (admin do grupo de admins, não só membro).</p>
+      <span class="syntax">$unban @user [motivo]</span>
+      <span class="example"><b>Exemplo:</b> <code>$unban 5541995850310 reavaliado, sem novas violações</code></span>
     </div>
 
     <div class="cmd">
