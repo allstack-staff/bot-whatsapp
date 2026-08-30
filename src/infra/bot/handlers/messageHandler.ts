@@ -343,7 +343,10 @@ export class MessageHandler {
                             bannedBy: 'ia-moderacao',
                         });
                         if (targetParticipant) {
-                            await this.sock.groupParticipantsUpdate(groupJid, [targetParticipant.id], 'remove').catch(() => {});
+                            await this.sock.groupParticipantsUpdate(groupJid, [targetParticipant.id], 'remove').catch(async (err: any) => {
+                                logger.error({ err, groupJid, targetJid: resolvedJid }, '[runAiModerationCycle] falha ao remover após ban da IA');
+                                await this.sendLog(`⚠️ IA baniu @${number} mas não consegui removê-lo(a) do grupo *${metadata?.subject || groupJid}* automaticamente. Confira manualmente.`, [resolvedJid]);
+                            });
                         }
                         await this.sendLog(
                             `🤖🚫 IA detectou violação grave de @${number} em *${metadata?.subject || groupJid}* — banido de toda a comunidade.\nMotivo: ${violation.reason}`,
@@ -363,6 +366,64 @@ export class MessageHandler {
                 }
             } catch (err) {
                 logger.warn({ err, groupJid }, '[runAiModerationCycle] erro processando moderação do grupo');
+                await this.sendLog(`⚠️ Erro no ciclo de moderação por IA num grupo. Confira os logs do servidor.`).catch(() => {});
+            }
+        }
+    }
+
+    /**
+     * Roda periodicamente — readiciona automaticamente quem teve um
+     * banimento temporário expirado, sem esperar a pessoa pedir pra voltar.
+     * O registro do banimento é removido de qualquer forma (o tempo já
+     * passou), a tentativa de readição é só uma cortesia por cima disso.
+     */
+    async reAddExpiredBans(): Promise<void> {
+        let expired: any[];
+        try {
+            expired = await this.banService.getExpiredTemporaryBans();
+        } catch (err) {
+            logger.warn({ err }, '[reAddExpiredBans] falha ao buscar banimentos expirados');
+            return;
+        }
+
+        for (const ban of expired) {
+            const { userJid, groupJid } = ban;
+            const number = userJid.split('@')[0];
+
+            let metadata: GroupMetadata | undefined;
+            try {
+                metadata = await this.sock.groupMetadata(groupJid);
+            } catch {
+                // grupo não existe mais / bot saiu — só limpa o registro, nada pra readicionar
+                await this.banService.unban(userJid, groupJid).catch(() => {});
+                continue;
+            }
+
+            const alreadyIn = !!findParticipant(metadata, userJid);
+            await this.banService.unban(userJid, groupJid).catch(() => {});
+            if (alreadyIn) continue;
+
+            try {
+                await humanBulkActionDelay();
+                const result = await this.sock.groupParticipantsUpdate(groupJid, [userJid], 'add');
+                const status = result?.[0]?.status;
+
+                if (status === '200') {
+                    await this.sendLog(`✅ @${number} foi readicionado(a) ao grupo *${metadata.subject}* automaticamente — o banimento temporário expirou.`, [userJid]);
+                } else {
+                    let inviteLink = '';
+                    try {
+                        const code = await this.sock.groupInviteCode(groupJid);
+                        if (code) inviteLink = `\nLink de convite: https://chat.whatsapp.com/${code}`;
+                    } catch { /* segue sem link */ }
+                    await this.sendLog(
+                        `⚠️ O banimento temporário de @${number} no grupo *${metadata.subject}* expirou, mas não consegui readicionar automaticamente (provavelmente as configurações de privacidade dela não permitem). Precisa convidar manualmente.${inviteLink}`,
+                        [userJid],
+                    );
+                }
+            } catch (err) {
+                logger.error({ err, userJid, groupJid }, '[reAddExpiredBans] erro tentando readicionar');
+                await this.sendLog(`⚠️ Erro ao tentar readicionar @${number} automaticamente ao grupo *${metadata.subject}* (banimento temporário expirado). Confira manualmente.`, [userJid]).catch(() => {});
             }
         }
     }

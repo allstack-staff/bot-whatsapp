@@ -21,8 +21,10 @@ dotenv.config();
 
 const MAX_RECONNECT_ATTEMPTS = 5;
 const HOURLY_TICK_MS = 60 * 60 * 1000;
+const BAN_EXPIRY_TICK_MS = 5 * 60 * 1000;
 let reconnectAttempts = 0;
 let hourlyTick: ReturnType<typeof setInterval> | undefined;
+let banExpiryTick: ReturnType<typeof setInterval> | undefined;
 
 async function startBot(): Promise<void> {
     const { state, saveCreds } = await useMultiFileAuthState(botConfig.sessionPath);
@@ -68,6 +70,13 @@ async function startBot(): Promise<void> {
                     logger.warn({ err }, 'Falha no ciclo horário de moderação por IA');
                 });
             }, HOURLY_TICK_MS);
+
+            if (banExpiryTick) clearInterval(banExpiryTick);
+            banExpiryTick = setInterval(() => {
+                messageHandler.reAddExpiredBans().catch((err) => {
+                    logger.warn({ err }, 'Falha no ciclo de readição de banimentos expirados');
+                });
+            }, BAN_EXPIRY_TICK_MS);
         }
 
         if (connection === 'close') {

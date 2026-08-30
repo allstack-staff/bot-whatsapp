@@ -83,10 +83,10 @@ export class BanService {
         return result.count > 0;
     }
 
-    async cleanupExpired(): Promise<number> {
-        const result = await prisma.bannedUser.deleteMany({
+    /** Banimentos temporários já vencidos, ainda não processados. */
+    async getExpiredTemporaryBans(): Promise<any[]> {
+        return prisma.bannedUser.findMany({
             where: { banType: 'TEMPORARIO', expiresAt: { lte: new Date() } },
         });
-        return result.count;
     }
 }

@@ -301,3 +301,9 @@ Isso não é um comando — é automático. Sempre que um admin edita a descriç
 Também não é um comando. A cada hora, se houve mensagem nova em algum grupo desde a última checagem (senão nem chama a IA), o bot avalia o conteúdo contra as regras da comunidade usando o Gemini (grátis, configurado via `GEMINI_API_KEY` no `.env` — sem a chave, esse ciclo simplesmente não faz nada).
 
 **Comportamento:** nunca responde no grupo onde a violação aconteceu. Violação grave (discriminação, conteúdo explícito, ato ilícito) → banimento de comunidade direto, avisado no grupo de admins. Qualquer outra violação → uma advertência comum (mesmo mecanismo do `$advertir`, mesmo limite de 3/mês), também só avisada no grupo de admins.
+
+### Readição automática ao expirar um banimento temporário
+
+Também não é um comando. A cada 5 minutos, o bot confere se algum banimento `temporario` já expirou — se sim, tenta readicionar a pessoa ao grupo automaticamente, sem esperar ela pedir pra voltar.
+
+**Comportamento:** nunca responde no grupo (a pessoa nem está lá ainda). Sempre avisa no grupo de admins: ✅ se conseguiu readicionar, ⚠️ se não conseguiu (ex: configuração de privacidade da pessoa não permite ser adicionada direto) — nesse caso, o aviso já vem com o link de convite do grupo pra um admin encaminhar na mão.

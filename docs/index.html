@@ -536,7 +536,7 @@
       <a class="quicklink" href="#tipos">Tipos de banimento<span>permanente, temporário, comunidade</span></a>
       <a class="quicklink" href="regras.html">Regras da comunidade<span>o que vale em todo grupo</span></a>
       <a class="quicklink" href="governanca.html">Governança<span>como um admin é escolhido</span></a>
-      <a class="quicklink" href="#moderacao-automatica">Moderação automática<span>votação de descrição, IA</span></a>
+      <a class="quicklink" href="#moderacao-automatica">Moderação automática<span>votação de descrição, IA, readição</span></a>
       <a class="quicklink" href="#troca-numero">Perdeu o número?<span>nada se perde</span></a>
     </div>
     <div class="quicklinks tech-only">
@@ -715,6 +715,11 @@ $banedit @user tempo 7d</span>
       <div class="cmd-head"><span>Moderação por IA (a cada hora)</span></div>
       <p class="simple-only">Se houve mensagem nova em algum grupo desde a última checagem, o bot avalia contra as regras usando o Gemini (grátis). Violação grave = banimento de comunidade direto; o resto = advertência comum. Sem chave de API configurada, isso simplesmente não roda.</p>
       <p class="tech-only"><code>pendingModerationMessages</code> (buffer em memória, por grupo) — vazio, nem chama a IA. <code>AiModerationService.evaluateMessages()</code> pede JSON estrito ao Gemini; qualquer erro de rede/parse é tratado como "sem violação" (falha fechada).</p>
+    </div>
+    <div class="cmd">
+      <div class="cmd-head"><span>Readição ao expirar um banimento temporário (a cada 5 min)</span></div>
+      <p class="simple-only">Quando um banimento <code>temporario</code> vence, o bot tenta readicionar a pessoa ao grupo sozinho, sem esperar ela pedir. Sempre avisa no grupo de admins: ✅ se conseguiu, ⚠️ com o link de convite se não conseguiu (privacidade da pessoa não permite ser adicionada direto).</p>
+      <p class="tech-only"><code>BanService.getExpiredTemporaryBans()</code> a cada <code>BAN_EXPIRY_TICK_MS</code> (5min). Remove o registro de qualquer forma (o prazo já passou); a readição via <code>groupParticipantsUpdate(..., 'add')</code> é só cortesia por cima disso. Status ≠ <code>'200'</code> → busca <code>groupInviteCode</code> e inclui o link no aviso de falha.</p>
     </div>
   </section>
 
