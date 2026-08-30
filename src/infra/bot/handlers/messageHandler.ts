@@ -122,6 +122,40 @@ export class MessageHandler {
         }
     }
 
+    /**
+     * Pedido de entrada em grupo com aprovação de admin ativada — rejeita na hora
+     * se a pessoa tiver um banimento ativo pra esse grupo (comunidade, ou
+     * permanente/temporário daquele grupo específico), sem deixar ela entrar.
+     */
+    async handleGroupJoinRequest({ id, participant, participantPn, action }: any): Promise<void> {
+        logger.debug({ id, participant, action }, '[handleGroupJoinRequest] event received');
+
+        if (action !== 'created') return;
+
+        try {
+            const resolvedJid = participantPn || (await resolvePnJid(this.sock, participant));
+
+            const ban = await this.banService.getActiveBan(resolvedJid, id);
+            if (!ban) return;
+
+            await this.sock.groupRequestParticipantsUpdate(id, [participant], 'reject').catch((e: any) => {
+                logger.error({ err: e }, 'Failed to reject join request from banned user');
+            });
+
+            const number = resolvedJid.split('@')[0];
+            const banTypeLabel = this.resolveBanTypeLabel(ban.banType);
+
+            logger.info({ resolvedJid, groupId: id, reason: ban.reason }, 'Rejected join request from banned user');
+
+            await this.sendLog(
+                `🚫 Pedido de entrada de @${number} rejeitado automaticamente — banimento ${banTypeLabel} ativo — Motivo: ${ban.reason}`,
+                [resolvedJid],
+            );
+        } catch (err) {
+            logger.warn({ err, participant }, '[handleGroupJoinRequest] error checking join request');
+        }
+    }
+
     private async handleCommand(msg: any, parts: string[]): Promise<void> {
         const command = parts[0].slice(botConfig.commands.prefix.length).toLowerCase();
         const args = parts.slice(1);

@@ -84,6 +84,7 @@ async function startBot(): Promise<void> {
     sock.ev.on('creds.update', saveCreds);
     sock.ev.on('messages.upsert', messageHandler.handleMessage.bind(messageHandler));
     sock.ev.on('group-participants.update', messageHandler.handleGroupParticipantsUpdate.bind(messageHandler));
+    sock.ev.on('group.join-request', messageHandler.handleGroupJoinRequest.bind(messageHandler));
 }
 
 startBot().catch((err) => {

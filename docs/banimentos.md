@@ -26,6 +26,10 @@ Importante: **"comunidade" aqui não é a feature nativa "Community" do WhatsApp
 
 Se o membro banido for adicionado de novo (por qualquer pessoa) em um grupo onde o banimento se aplica, o bot detecta a entrada, remove automaticamente e avisa no grupo de admins — sem precisar de nenhum comando manual. Isso vale mesmo depois de reiniciar o bot: o estado do banimento está no banco, não em memória.
 
+## Pedido de entrada (grupos com aprovação de admin)
+
+Em grupos com "aprovação de admin" ativada pra novos membros, quem tem banimento ativo pra aquele grupo (comunidade, ou permanente/temporário daquele grupo específico) tem o pedido **rejeitado automaticamente**, assim que o bot processa o evento — a pessoa nunca chega a entrar. Isso é mais imediato que a reentrada normal (que remove depois de já ter entrado), já que intercepta o pedido antes de virar membro. O grupo de admins recebe o mesmo tipo de aviso nos dois casos.
+
 ## Sobre identidade (LID) — por que isso importa
 
 Desde meados de 2026 o WhatsApp passou a identificar participantes de grupo por um ID opaco (`@lid`), que **não tem relação com o número de telefone**. Isso quer dizer que, dependendo do momento, o WhatsApp pode entregar o mesmo usuário ora como `@lid`, ora como `@s.whatsapp.net` (o formato baseado em telefone).
