@@ -9,6 +9,7 @@ import { WarningService } from '../services/warningService';
 import { DescriptionChangeService } from '../services/descriptionChangeService';
 import { AdminResponsibilityService } from '../services/adminResponsibilityService';
 import { AiModerationService } from '../services/aiModerationService';
+import { CommunityGroupService } from '../services/communityGroupService';
 import { logger } from '../utils/logger';
 import { findParticipant, isGroupAdmin, resolvePnJid } from '../utils/jid';
 import { humanBulkActionDelay, humanReplyDelay } from '../utils/delay';
@@ -23,6 +24,7 @@ export class MessageHandler {
     private descriptionChangeService: DescriptionChangeService;
     private adminResponsibilityService: AdminResponsibilityService;
     private aiModerationService: AiModerationService;
+    private communityGroupService: CommunityGroupService;
 
     // Mensagens de grupo desde a última checagem da IA — se estiver vazio na
     // hora do ciclo, não submete nada (nem gasta chamada de API à toa).
@@ -63,6 +65,7 @@ export class MessageHandler {
         this.descriptionChangeService = new DescriptionChangeService();
         this.adminResponsibilityService = new AdminResponsibilityService();
         this.aiModerationService = new AiModerationService();
+        this.communityGroupService = new CommunityGroupService();
     }
 
     private commands: Record<string, (msg: any, args: string[]) => Promise<void>> = {
@@ -77,7 +80,8 @@ export class MessageHandler {
         ajuda: (msg: any) => this.helpCommand(msg),
         help: (msg: any) => this.helpCommand(msg),
         regras: (msg: any) => this.regrasCommand(msg),
-        responsavel: (msg: any) => this.responsavelCommand(msg),
+        grupos: (msg: any) => this.gruposCommand(msg),
+        responsavel: (msg: any, args: string[]) => this.responsavelCommand(msg, args),
         promover: (msg: any) => this.promoverCommand(msg),
     };
 
@@ -859,26 +863,87 @@ export class MessageHandler {
         return null;
     }
 
-    /** Marca um admin como responsável pelo grupo atual. */
-    private async responsavelCommand(msg: any): Promise<void> {
+    /**
+     * Lista os grupos da All Stack Community com um ID curto e estável (veja
+     * CommunityGroup no schema) — pra referenciar um grupo em $responsavel sem
+     * precisar colar o JID nem estar dentro dele.
+     */
+    private async gruposCommand(msg: any): Promise<void> {
         if (!(await this.isAuthorized(msg))) return;
 
         const jid = msg.key.remoteJid!;
-        const metadata = await this.sock.groupMetadata(jid);
+        const communityGroupIds = await this.getCommunityGroupIds();
+
+        let groups: Record<string, GroupMetadata>;
+        try {
+            groups = await this.sock.groupFetchAllParticipating();
+        } catch (err) {
+            logger.warn({ err }, '[gruposCommand] falha ao listar grupos');
+            await this.replySafe(jid, '❌ Erro ao listar os grupos. Tente novamente.');
+            return;
+        }
+
+        for (const [gid, meta] of Object.entries(groups)) {
+            if (!communityGroupIds.has(gid)) continue;
+            await this.communityGroupService.upsertSeen(gid, (meta as GroupMetadata).subject);
+        }
+
+        const entries = (await this.communityGroupService.getAll()).filter((e) => communityGroupIds.has(e.groupJid));
+
+        if (!entries.length) {
+            await this.replySafe(jid, '❌ Nenhum grupo da comunidade encontrado ainda.');
+            return;
+        }
+
+        const list = entries.map((e) => `${e.shortId}. ${e.subject || e.groupJid}`).join('\n');
+        await this.reactSafe(jid, msg.key, '✅');
+        await this.replySafe(
+            jid,
+            `📋 *Grupos da comunidade* (${entries.length})\n${list}\n\nUse o número pra referenciar o grupo, ex: $responsavel ${entries[0].shortId} @admin`,
+        );
+    }
+
+    /**
+     * Marca um admin como responsável por um grupo. Sem argumento numérico,
+     * usa o grupo atual (comportamento original). Com um ID no início (veja
+     * $grupos), referencia outro grupo — dá pra rodar isso do grupo de admins
+     * sem precisar entrar no grupo alvo.
+     */
+    private async responsavelCommand(msg: any, args: string[]): Promise<void> {
+        if (!(await this.isAuthorized(msg))) return;
+
+        const currentJid = msg.key.remoteJid!;
+
+        let targetGroupJid = currentJid;
+        const maybeId = args[0] && /^\d+$/.test(args[0]) ? parseInt(args[0], 10) : null;
+        if (maybeId !== null) {
+            const resolved = await this.communityGroupService.getJidByShortId(maybeId);
+            if (!resolved) {
+                await this.replySafe(currentJid, `❌ Nenhum grupo com o ID ${maybeId}. Use $grupos pra ver a lista.`);
+                return;
+            }
+            targetGroupJid = resolved;
+        }
+
+        const metadata = await this.sock.groupMetadata(targetGroupJid);
         const { jid: targetRaw } = this.getTargetJid(msg);
 
         if (!targetRaw) {
-            await this.replySafe(jid, '❌ Marque a pessoa ou responda a mensagem dela. Ex: $responsavel @admin');
+            await this.replySafe(currentJid, '❌ Marque a pessoa ou responda a mensagem dela. Ex: $responsavel @admin (ou $responsavel <id> @admin a partir do grupo de admins — veja $grupos)');
             return;
         }
 
         const targetJid = await resolvePnJid(this.sock, targetRaw, metadata);
-        await this.adminResponsibilityService.assign(targetJid, jid);
+        await this.adminResponsibilityService.assign(targetJid, targetGroupJid);
 
         const number = targetJid.split('@')[0];
-        await this.reactSafe(jid, msg.key, '✅');
-        await this.replySafe(jid, `✅ @${number} agora é responsável por este grupo.`);
-        await this.sendLog(`👤 @${number} marcado como responsável pelo grupo *${metadata.subject}*.`, [targetJid]);
+        await this.reactSafe(currentJid, msg.key, '✅');
+        await this.replySafe(currentJid, `✅ @${number} agora é responsável pelo grupo *${metadata.subject}*.`);
+
+        const logJid = await this.getLogJid();
+        if (logJid && logJid !== currentJid) {
+            await this.sendLog(`👤 @${number} marcado como responsável pelo grupo *${metadata.subject}*.`, [targetJid]);
+        }
     }
 
     /**

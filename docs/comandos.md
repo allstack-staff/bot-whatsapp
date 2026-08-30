@@ -224,21 +224,55 @@ $regras
 ```
 → `✅ Link das regras aplicado em 6 grupo(s) (2 já tinham o link).`
 
-### `$responsavel`
+### `$grupos`
 
-Marca um admin como responsável pelo grupo atual — usado pra rotear avisos de pendência (ex: pedido de entrada) e pra saber quem anunciar quando alguém é promovido.
+Lista os grupos da All Stack Community com um **ID curto e estável** (1, 2, 3...) — pra referenciar um grupo em `$responsavel` sem precisar colar o JID nem entrar nele. Atualiza a lista (nomes/novos grupos) toda vez que roda.
 
 ```
-$responsavel @admin
+$grupos
 ```
 
-**Comportamento:** reage ✅, responde no grupo onde rodou, e manda cópia pro grupo de admins. Não manda nada pro próprio admin marcado além disso.
+**Comportamento:** reage ✅ e responde no grupo onde rodou com a lista numerada. Não manda cópia pro grupo de admins (é uma consulta).
 
 Exemplo:
 ```
+$grupos
+```
+→
+```
+📋 Grupos da comunidade (4)
+1. SysAdmins
+2. DevOps
+3. Java Developers
+4. AllStack - Web Development
+
+Use o número pra referenciar o grupo, ex: $responsavel 1 @admin
+```
+
+### `$responsavel`
+
+Marca um admin como responsável por um grupo — usado pra rotear avisos de pendência (ex: pedido de entrada) e pra saber quem anunciar quando alguém é promovido.
+
+```
+$responsavel [id] @admin
+```
+
+- Sem `id`: usa o grupo atual (precisa rodar dentro dele).
+- Com `id` (veja `$grupos`): referencia outro grupo pelo número — dá pra rodar isso **direto do grupo de admins**, sem precisar entrar no grupo alvo.
+
+**Comportamento:** reage ✅, responde no grupo onde rodou. Manda cópia pro grupo de admins só se o comando não tiver rodado lá mesmo (senão seria a mesma mensagem duas vezes). Não manda nada pro próprio admin marcado além disso.
+
+Exemplo (dentro do grupo):
+```
 $responsavel @5541988887777
 ```
-→ `✅ @5541988887777 agora é responsável por este grupo.`
+→ `✅ @5541988887777 agora é responsável pelo grupo *Nome do Grupo*.`
+
+Exemplo (do grupo de admins, referenciando pelo ID visto em `$grupos`):
+```
+$responsavel 3 @5541988887777
+```
+→ marca a pessoa como responsável pelo grupo 3 (`Java Developers`, no exemplo acima), sem precisar sair do grupo de admins.
 
 ### `$promover`
 

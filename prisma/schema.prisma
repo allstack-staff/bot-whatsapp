@@ -12,6 +12,16 @@ model AdminGroup {
     createdAt    DateTime @default(now())
 }
 
+// ID curto e estável por grupo da comunidade — pra referenciar um grupo (ex: em
+// $responsavel) sem precisar colar o JID inteiro nem estar dentro do grupo.
+// Populado/atualizado pelo comando $grupos.
+model CommunityGroup {
+    shortId   Int      @id @default(autoincrement())
+    groupJid  String   @unique
+    subject   String?
+    updatedAt DateTime @updatedAt
+}
+
 model BannedUser {
     userJid     String   // user JID
     displayName String?  // nome público (notify) da pessoa no momento do ban, se disponível

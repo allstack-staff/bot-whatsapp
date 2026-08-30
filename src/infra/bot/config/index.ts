@@ -53,9 +53,13 @@ export const botConfig = {
                 description: 'Aplica o link das regras da comunidade na descrição de todos os grupos',
                 usage: '$regras',
             },
+            grupos: {
+                description: 'Lista os grupos da comunidade com um ID curto pra referenciar em outros comandos',
+                usage: '$grupos',
+            },
             responsavel: {
-                description: 'Marca um admin como responsável por este grupo',
-                usage: '$responsavel @admin',
+                description: 'Marca um admin como responsável por um grupo (atual, ou por ID — veja $grupos)',
+                usage: '$responsavel [id] @admin',
             },
             promover: {
                 description: 'Promove alguém a admin, marca como responsável e anuncia',

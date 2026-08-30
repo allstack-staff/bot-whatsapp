@@ -655,11 +655,19 @@ $banedit @user tempo 7d</span>
     </div>
 
     <div class="cmd">
+      <div class="cmd-head"><code class="name">$grupos</code><span class="who">admin</span></div>
+      <p class="simple-only">Lista os grupos da comunidade com um número curto — use esse número no <code>$responsavel</code> pra não precisar entrar no grupo alvo.</p>
+      <p class="tech-only"><code>CommunityGroupService.upsertSeen</code> atualiza o registro a cada chamada (nome/novos grupos), depois lista via <code>getAll()</code> filtrado pelos IDs de <code>getCommunityGroupIds()</code>.</p>
+      <span class="syntax">$grupos</span>
+      <span class="example"><b>Exemplo:</b> <code>$grupos</code> → <code>1. SysAdmins</code>, <code>2. DevOps</code>, ...</span>
+    </div>
+
+    <div class="cmd">
       <div class="cmd-head"><code class="name">$responsavel</code><span class="who">admin</span></div>
-      <p class="simple-only">Marca um admin como responsável por este grupo — o bot usa isso pra saber quem avisar quando há pendência (tipo pedido de entrada) e quem anunciar numa promoção.</p>
-      <p class="tech-only"><code>AdminResponsibilityService.assign(adminJid, groupJid)</code>. Usado por <code>handleGroupJoinRequest</code> pra rotear avisos de pedido pendente.</p>
-      <span class="syntax">$responsavel @admin</span>
-      <span class="example"><b>Exemplo:</b> <code>$responsavel @5541988887777</code> → <code>✅ agora é responsável por este grupo.</code></span>
+      <p class="simple-only">Marca um admin como responsável por um grupo — o bot usa isso pra saber quem avisar quando há pendência (tipo pedido de entrada) e quem anunciar numa promoção. Sem número, usa o grupo atual; com um número (veja <code>$grupos</code>), dá pra rodar direto do grupo de admins.</p>
+      <p class="tech-only"><code>AdminResponsibilityService.assign(adminJid, groupJid)</code>. Se <code>args[0]</code> for numérico, resolve o <code>groupJid</code> via <code>CommunityGroupService.getJidByShortId</code> em vez do grupo atual. Usado por <code>handleGroupJoinRequest</code> pra rotear avisos de pedido pendente.</p>
+      <span class="syntax">$responsavel [id] @admin</span>
+      <span class="example"><b>Exemplo:</b> <code>$responsavel @5541988887777</code> (no grupo) ou <code>$responsavel 3 @5541988887777</code> (do grupo de admins) → <code>✅ agora é responsável pelo grupo *Nome*.</code></span>
     </div>
 
     <div class="cmd">
