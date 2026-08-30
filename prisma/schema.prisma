@@ -7,8 +7,9 @@ generator client {
 }
 
 model AdminGroup {
-    id        String   @id // group JID
-    createdAt DateTime @default(now())
+    id           String   @id // group JID
+    communityJid String?  // linkedParent do grupo, detectado quando $home rodou (se o grupo for de uma Community)
+    createdAt    DateTime @default(now())
 }
 
 model BannedUser {

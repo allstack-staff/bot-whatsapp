@@ -376,20 +376,24 @@ export class MessageHandler {
     private static readonly COMMUNITY_CACHE_TTL_MS = 10 * 60 * 1000;
 
     private async getCommunityGroupIds(): Promise<Set<string>> {
-        if (!botConfig.communityJid) {
-            logger.warn('[getCommunityGroupIds] COMMUNITY_JID não configurado — nenhuma ação em massa vai rodar');
-            return new Set();
-        }
-
         if (this.communityGroupIdsCache && Date.now() - this.communityGroupIdsCache.at < MessageHandler.COMMUNITY_CACHE_TTL_MS) {
             return this.communityGroupIdsCache.ids;
         }
 
-        const ids = new Set<string>([botConfig.communityJid]);
+        // Preferência: Community detectada automaticamente quando $home rodou
+        // (gravada no banco); COMMUNITY_JID no .env é só um fallback manual,
+        // pra quando o grupo de admins registrado não é o de uma Community.
+        const communityJid = (await this.adminService.getCommunityJid()) || botConfig.communityJid;
+        if (!communityJid) {
+            logger.warn('[getCommunityGroupIds] nenhuma Community detectada (rode $home de novo, ou configure COMMUNITY_JID) — nenhuma ação em massa vai rodar');
+            return new Set();
+        }
+
+        const ids = new Set<string>([communityJid]);
         try {
             const groups = await this.sock.groupFetchAllParticipating();
             for (const [gid, meta] of Object.entries(groups)) {
-                if ((meta as GroupMetadata).linkedParent === botConfig.communityJid) {
+                if ((meta as GroupMetadata).linkedParent === communityJid) {
                     ids.add(gid);
                 }
             }
@@ -719,8 +723,19 @@ export class MessageHandler {
         }
 
         await this.adminService.registerGroup(jid);
-        await this.replySafe(jid, `✅ Grupo registrado como admin/log.\nID: \`${jid}\``);
-        logger.info({ groupJid: jid }, 'Admin group registered');
+
+        // Detecta a Community automaticamente a partir do próprio grupo de admins —
+        // elimina a necessidade de configurar COMMUNITY_JID na mão no servidor.
+        const communityJid = metadata.linkedParent;
+        if (communityJid) {
+            await this.adminService.setCommunityJid(jid, communityJid);
+            this.communityGroupIdsCache = undefined; // força recalcular já, sem esperar o cache expirar
+            await this.replySafe(jid, `✅ Grupo registrado como admin/log.\nID: \`${jid}\`\n🏘️ Community detectada — ações em massa (regras, foto, $ban comunidade, etc.) ficam restritas só aos grupos dela.`);
+        } else {
+            await this.replySafe(jid, `✅ Grupo registrado como admin/log.\nID: \`${jid}\`\n⚠️ Esse grupo não está vinculado a nenhuma Community do WhatsApp — ações em massa só funcionam se \`COMMUNITY_JID\` estiver configurado manualmente no servidor.`);
+        }
+
+        logger.info({ groupJid: jid, communityJid }, 'Admin group registered');
     }
 
     /**
@@ -828,15 +843,15 @@ export class MessageHandler {
     /** Acha o grupo "Avisos" que o WhatsApp cria automaticamente pra toda Community. */
     private async findCommunityAnnounceGroupJid(): Promise<string | null> {
         // O bot participa do "Avisos" de várias communities diferentes — tem que
-        // ser especificamente o vinculado à All Stack (linkedParent === communityJid),
-        // senão o anúncio de promoção pode ir parar na community errada.
-        if (!botConfig.communityJid) return null;
+        // ser especificamente o vinculado à All Stack, senão o anúncio de
+        // promoção pode ir parar na community errada.
+        const communityGroupIds = await this.getCommunityGroupIds();
+        if (!communityGroupIds.size) return null;
 
         try {
             const groups = await this.sock.groupFetchAllParticipating();
             for (const [gid, meta] of Object.entries(groups)) {
-                const m = meta as GroupMetadata;
-                if (m.isCommunityAnnounce && m.linkedParent === botConfig.communityJid) return gid;
+                if ((meta as GroupMetadata).isCommunityAnnounce && communityGroupIds.has(gid)) return gid;
             }
         } catch (err) {
             logger.warn({ err }, '[findCommunityAnnounceGroupJid] falha ao listar grupos');

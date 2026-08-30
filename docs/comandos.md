@@ -37,7 +37,7 @@ Se faltar qualquer um dos dois, o bot recusa com uma mensagem explicando qual cr
 
 ## `$home`
 
-Registra o grupo atual como grupo de administração/logs. Precisa ser rodado uma vez, dentro do grupo de admins, por um admin desse grupo.
+Registra o grupo atual como grupo de administração/logs. Precisa ser rodado uma vez, dentro do grupo de admins, por um admin desse grupo. Se esse grupo for vinculado a uma Community do WhatsApp, o bot também detecta e grava qual é a Community "oficial" — toda ação em massa (`$regras`, foto automática, `$ban comunidade`, moderação por IA) fica restrita só aos grupos dela, nunca a outros grupos/communities onde o número do bot só por acaso participa.
 
 ```
 $home
@@ -49,7 +49,9 @@ Exemplo (dentro do grupo "Admins All Stack"):
 ```
 $home
 ```
-→ `✅ Grupo registrado como admin/log.`
+→ `✅ Grupo registrado como admin/log.\nID: ...\n🏘️ Community detectada — ações em massa ficam restritas só aos grupos dela.`
+
+Se o grupo de admins não estiver numa Community, o bot avisa e ações em massa só funcionam com `COMMUNITY_JID` configurado manualmente no servidor (veja [Deploy](deploy.md)). Se você mudar de Community ou o grupo de admins, rode `$home` de novo no grupo certo pra atualizar a detecção.
 
 Todo `$ban`, auto-remoção por reentrada e `$banedit` manda uma cópia do log nesse grupo a partir daqui.
 

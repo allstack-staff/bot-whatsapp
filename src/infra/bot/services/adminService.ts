@@ -27,4 +27,17 @@ export class AdminService {
         const result = await prisma.adminGroup.deleteMany({ where: { id: groupJid } });
         return result.count > 0;
     }
+
+    /** Grava o JID da Community detectado a partir do grupo registrado via $home. */
+    async setCommunityJid(groupJid: string, communityJid: string): Promise<void> {
+        await prisma.adminGroup.update({ where: { id: groupJid }, data: { communityJid } });
+    }
+
+    /** Primeiro JID de Community conhecido entre os grupos de admin registrados. */
+    async getCommunityJid(): Promise<string | null> {
+        const group = await prisma.adminGroup.findFirst({
+            where: { communityJid: { not: null } },
+        });
+        return group?.communityJid ?? null;
+    }
 }

@@ -583,10 +583,10 @@
 
     <div class="cmd">
       <div class="cmd-head"><code class="name">$home</code><span class="who">admin</span></div>
-      <p class="simple-only">Roda uma vez, dentro do grupo de administração, pra registrar ele como tal. Todo log de banimento cai ali.</p>
-      <p class="tech-only">Upsert em <code>AdminService.registerGroup(jid)</code> → tabela <code>AdminGroup</code>. Não precisa rodar de novo depois de trocar o número do bot — o registro não depende do número.</p>
+      <p class="simple-only">Roda uma vez, dentro do grupo de administração, pra registrar ele como tal. Todo log de banimento cai ali. Se esse grupo for de uma Community do WhatsApp, o bot detecta sozinho qual é — ações em massa ficam restritas só a ela.</p>
+      <p class="tech-only">Upsert em <code>AdminService.registerGroup(jid)</code> → tabela <code>AdminGroup</code>. Se <code>metadata.linkedParent</code> existir, grava também em <code>AdminGroup.communityJid</code> — é isso que <code>getCommunityGroupIds()</code> lê primeiro (com <code>COMMUNITY_JID</code> do <code>.env</code> como fallback). Não precisa rodar de novo depois de trocar o número do bot — o registro não depende do número, mas rode de novo se trocar de grupo de admins ou de Community.</p>
       <span class="syntax">$home</span>
-      <span class="example"><b>Exemplo:</b> <code>$home</code> → <code>✅ Grupo registrado como admin/log.</code></span>
+      <span class="example"><b>Exemplo:</b> <code>$home</code> → <code>✅ Grupo registrado como admin/log. 🏘️ Community detectada...</code></span>
     </div>
 
     <div class="cmd">
