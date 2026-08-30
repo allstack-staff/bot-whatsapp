@@ -72,11 +72,3 @@ model GroupDescriptionLock {
     lockedUntil       DateTime
     frozenDescription String?  // descrição que o bot restaura se um admin tentar mudar durante a trava
 }
-
-// Uma linha por grupo — permite saber se chegou mensagem nova desde a última
-// checagem da IA, pra não gastar chamada de API à toa.
-model GroupModerationCheckpoint {
-    groupJid      String    @id
-    lastMessageAt DateTime?
-    lastCheckedAt DateTime?
-}

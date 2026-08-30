@@ -59,6 +59,9 @@ async function startBot(): Promise<void> {
                 messageHandler.checkAndApplyGroupPhotos().catch((err) => {
                     logger.warn({ err }, 'Falha na varredura horária de fotos de grupo');
                 });
+                messageHandler.runAiModerationCycle().catch((err) => {
+                    logger.warn({ err }, 'Falha no ciclo horário de moderação por IA');
+                });
             }, HOURLY_TICK_MS);
         }
 

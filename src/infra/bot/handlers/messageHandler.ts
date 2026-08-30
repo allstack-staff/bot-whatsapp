@@ -8,6 +8,7 @@ import { AdminService } from '../services/adminService';
 import { WarningService } from '../services/warningService';
 import { DescriptionChangeService } from '../services/descriptionChangeService';
 import { AdminResponsibilityService } from '../services/adminResponsibilityService';
+import { AiModerationService } from '../services/aiModerationService';
 import { logger } from '../utils/logger';
 import { findParticipant, isGroupAdmin, resolvePnJid } from '../utils/jid';
 import { humanBulkActionDelay, humanReplyDelay } from '../utils/delay';
@@ -20,6 +21,12 @@ export class MessageHandler {
     private warningService: WarningService;
     private descriptionChangeService: DescriptionChangeService;
     private adminResponsibilityService: AdminResponsibilityService;
+    private aiModerationService: AiModerationService;
+
+    // Mensagens de grupo desde a última checagem da IA — se estiver vazio na
+    // hora do ciclo, não submete nada (nem gasta chamada de API à toa).
+    private pendingModerationMessages: Map<string, { sender: string; text: string }[]> = new Map();
+    private static readonly MAX_PENDING_MESSAGES_PER_GROUP = 300;
 
     // Rastro (em memória) dos comandos digitados pro bot e das respostas dele em
     // cada grupo, só pra viabilizar o $clear. Não precisa sobreviver a um restart.
@@ -46,6 +53,7 @@ export class MessageHandler {
         this.warningService = new WarningService();
         this.descriptionChangeService = new DescriptionChangeService();
         this.adminResponsibilityService = new AdminResponsibilityService();
+        this.aiModerationService = new AiModerationService();
     }
 
     private commands: Record<string, (msg: any, args: string[]) => Promise<void>> = {
@@ -74,6 +82,16 @@ export class MessageHandler {
         this.groupMessageLog.set(jid, keys);
     }
 
+    private bufferForModeration(jid: string | undefined, sender: string | undefined, text: string): void {
+        if (!jid?.endsWith('@g.us') || !sender) return;
+        const buffer = this.pendingModerationMessages.get(jid) ?? [];
+        buffer.push({ sender, text });
+        if (buffer.length > MessageHandler.MAX_PENDING_MESSAGES_PER_GROUP) {
+            buffer.splice(0, buffer.length - MessageHandler.MAX_PENDING_MESSAGES_PER_GROUP);
+        }
+        this.pendingModerationMessages.set(jid, buffer);
+    }
+
     async handleMessage({ messages, type }: MessageUpsert): Promise<void> {
         if (type !== 'notify') return;
 
@@ -94,6 +112,8 @@ export class MessageHandler {
                     '';
 
                 if (!text) continue;
+
+                this.bufferForModeration(msg.key.remoteJid, msg.key.participant || msg.key.remoteJid, text);
 
                 if (text.startsWith(botConfig.commands.prefix)) {
                     logger.debug({ text, jid: msg.key.remoteJid }, '[handleMessage] command detected');
@@ -237,6 +257,66 @@ export class MessageHandler {
                 } catch (err) {
                     logger.warn({ err, groupId: gid }, '[checkAndApplyGroupPhotos] falha ao aplicar logo');
                 }
+            }
+        }
+    }
+
+    /**
+     * Ciclo horário de moderação por IA. Só olha grupos com mensagem nova desde
+     * a última vez (buffer não-vazio) — se não tiver nenhuma, nem chama a IA.
+     * Ações: `banir_comunidade` vai direto pro BanService (regras que preveem
+     * banimento imediato); qualquer outra violação vira uma advertência comum,
+     * que já escalona sozinha em 3/mês via WarningService.
+     */
+    async runAiModerationCycle(): Promise<void> {
+        if (!this.aiModerationService.isConfigured()) return;
+
+        for (const [groupJid, messages] of this.pendingModerationMessages.entries()) {
+            if (!messages.length) continue;
+            this.pendingModerationMessages.set(groupJid, []); // consome antes de processar
+
+            try {
+                const violations = await this.aiModerationService.evaluateMessages(messages);
+                if (!violations.length) continue;
+
+                let metadata: GroupMetadata | undefined;
+                try { metadata = await this.sock.groupMetadata(groupJid); } catch { /* segue sem nome bonito */ }
+
+                for (const violation of violations) {
+                    const resolvedJid = await resolvePnJid(this.sock, violation.sender, metadata);
+                    const number = resolvedJid.split('@')[0];
+
+                    if (violation.action === 'banir_comunidade') {
+                        const targetParticipant = metadata ? findParticipant(metadata, resolvedJid) : undefined;
+                        await this.banService.ban({
+                            userJid: resolvedJid,
+                            displayName: targetParticipant?.notify || targetParticipant?.name || undefined,
+                            groupJid,
+                            banType: 'COMUNIDADE' as any,
+                            reason: `[IA] ${violation.reason}`,
+                            bannedBy: 'ia-moderacao',
+                        });
+                        if (targetParticipant) {
+                            await this.sock.groupParticipantsUpdate(groupJid, [targetParticipant.id], 'remove').catch(() => {});
+                        }
+                        await this.sendLog(
+                            `🤖🚫 IA detectou violação grave de @${number} em *${metadata?.subject || groupJid}* — banido de toda a comunidade.\nMotivo: ${violation.reason}`,
+                            [resolvedJid],
+                        );
+                    } else {
+                        await this.warningService.issue(resolvedJid, groupJid, `[IA] ${violation.reason}`, 'ia-moderacao');
+                        const count = await this.warningService.countThisMonth(resolvedJid, groupJid);
+                        await this.sendLog(
+                            `🤖⚠️ IA advertiu @${number} em *${metadata?.subject || groupJid}* (${count}/3 esse mês).\nMotivo: ${violation.reason}`,
+                            [resolvedJid],
+                        );
+                        if (count >= 3 && metadata) {
+                            await this.applyWarningPunishment(resolvedJid, groupJid, metadata);
+                        }
+                    }
+                }
+            } catch (err) {
+                logger.warn({ err, groupJid }, '[runAiModerationCycle] erro processando moderação do grupo');
             }
         }
     }
