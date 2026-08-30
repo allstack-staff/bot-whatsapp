@@ -15,7 +15,9 @@ import { MessageHandler } from './infra/bot/handlers/messageHandler';
 dotenv.config();
 
 const MAX_RECONNECT_ATTEMPTS = 5;
+const HOURLY_TICK_MS = 60 * 60 * 1000;
 let reconnectAttempts = 0;
+let hourlyTick: ReturnType<typeof setInterval> | undefined;
 
 async function startBot(): Promise<void> {
     const { state, saveCreds } = await useMultiFileAuthState(botConfig.sessionPath);
@@ -44,6 +46,17 @@ async function startBot(): Promise<void> {
         if (connection === 'open') {
             reconnectAttempts = 0;
             logger.info(`Logged in as ${sock.user?.name || sock.user?.id}`);
+
+            messageHandler.checkAndApplyGroupPhotos().catch((err) => {
+                logger.warn({ err }, 'Falha na varredura inicial de fotos de grupo');
+            });
+
+            if (hourlyTick) clearInterval(hourlyTick);
+            hourlyTick = setInterval(() => {
+                messageHandler.checkAndApplyGroupPhotos().catch((err) => {
+                    logger.warn({ err }, 'Falha na varredura horária de fotos de grupo');
+                });
+            }, HOURLY_TICK_MS);
         }
 
         if (connection === 'close') {

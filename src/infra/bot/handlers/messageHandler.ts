@@ -1,3 +1,5 @@
+import * as fs from 'fs';
+import * as path from 'path';
 import { GroupMetadata, WAMessageKey, WASocket } from '@whiskeysockets/baileys';
 import { MessageUpsert } from '../types';
 import { botConfig } from '../config';
@@ -7,6 +9,8 @@ import { WarningService } from '../services/warningService';
 import { logger } from '../utils/logger';
 import { findParticipant, isGroupAdmin, resolvePnJid } from '../utils/jid';
 import { humanBulkActionDelay, humanReplyDelay } from '../utils/delay';
+
+const DEFAULT_LOGO_PATH = path.join(process.cwd(), 'assets', 'logo.jpg');
 
 export class MessageHandler {
     private banService: BanService;
@@ -157,6 +161,44 @@ export class MessageHandler {
             );
         } catch (err) {
             logger.warn({ err, participant }, '[handleGroupJoinRequest] error checking join request');
+        }
+    }
+
+    /**
+     * Varre todos os grupos que o bot participa e aplica o logo da comunidade
+     * em qualquer um que não tenha foto. Chamado ao conectar e a cada ciclo
+     * horário — só grava (updateProfilePicture) nos grupos que precisam, e
+     * espaça essas escritas pra não parecer uma rajada de ações do bot.
+     */
+    async checkAndApplyGroupPhotos(): Promise<void> {
+        if (!fs.existsSync(DEFAULT_LOGO_PATH)) {
+            logger.warn({ path: DEFAULT_LOGO_PATH }, '[checkAndApplyGroupPhotos] logo padrão não encontrado, pulando');
+            return;
+        }
+
+        let groups: Record<string, GroupMetadata>;
+        try {
+            groups = await this.sock.groupFetchAllParticipating();
+        } catch (err) {
+            logger.warn({ err }, '[checkAndApplyGroupPhotos] falha ao listar grupos');
+            return;
+        }
+
+        const logoBuffer = fs.readFileSync(DEFAULT_LOGO_PATH);
+
+        for (const gid of Object.keys(groups)) {
+            try {
+                await this.sock.profilePictureUrl(gid, 'image');
+                // já tem foto — não mexe
+            } catch {
+                await humanBulkActionDelay();
+                try {
+                    await this.sock.updateProfilePicture(gid, logoBuffer);
+                    logger.info({ groupId: gid }, '[checkAndApplyGroupPhotos] logo aplicado (grupo sem foto)');
+                } catch (err) {
+                    logger.warn({ err, groupId: gid }, '[checkAndApplyGroupPhotos] falha ao aplicar logo');
+                }
+            }
         }
     }
 
