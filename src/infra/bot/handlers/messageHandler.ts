@@ -391,8 +391,13 @@ export class MessageHandler {
                     continue;
                 }
 
-                await this.openDescriptionVote(gid, oldDesc, newDesc, update.descOwner || update.subjectOwner);
+                // Marca a descrição nova no cache ANTES de abrir a votação (que é
+                // assíncrona e demora, por causa do delay humanizado no envio). Se o
+                // WhatsApp disparar o mesmo evento de novo enquanto a votação ainda
+                // está sendo postada, essa segunda chamada já vê newDesc === oldDesc
+                // e ignora, em vez de abrir uma votação duplicada pra mesma mudança.
                 this.descriptionCache.set(gid, newDesc);
+                await this.openDescriptionVote(gid, oldDesc, newDesc, update.descOwner || update.subjectOwner);
             } catch (err) {
                 logger.warn({ err, groupId: gid }, '[handleGroupsUpdate] erro processando mudança de descrição');
             }
