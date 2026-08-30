@@ -21,8 +21,8 @@ Um admin pode acumular "admin de comunidade" com ser "responsável" por um ou ma
 ## Como um admin é recrutado
 
 1. **Indicação** — qualquer admin de comunidade pode indicar um membro pra virar admin, baseado em: tempo de comunidade, participação construtiva, e ter demonstrado entendimento das regras (na prática, moderando de forma informal ou ajudando outros membros).
-2. **Aprovação** — a indicação precisa de aprovação da maioria dos admins de comunidade ativos (mesmo mecanismo de votação por reação usado nas mudanças de descrição).
-3. **Promoção** — aprovado, o bot promove a pessoa no(s) grupo(s) relevantes e publica o anúncio no grupo "Avisos" da comunidade e no grupo pelo qual a pessoa passa a ser responsável.
+2. **Aprovação** — a indicação precisa de consenso/maioria dos admins de comunidade ativos, discutido no grupo de admins. Isso ainda é uma decisão humana — o bot não vota por vocês nessa etapa (diferente da aprovação de mudança de descrição, essa sim automatizada por reação).
+3. **Promoção** — combinado, um admin roda `$promover @pessoa` no grupo que ela vai ficar responsável. O bot promove no WhatsApp, marca a responsabilidade, e publica o anúncio automaticamente no grupo "Avisos" da comunidade e nesse grupo. Veja [Comandos](comandos.md#promover).
 
 ## Quando um admin pode ser removido
 
@@ -43,4 +43,4 @@ Grupos que ficarem sem admin responsável por muito tempo, ou sem atividade, pod
 
 ## Pendências e responsabilidade por grupo
 
-O bot associa cada admin a um ou mais grupos (via comando de admin) e usa isso pra rotear avisos — por exemplo, quando alguém pede pra entrar num grupo com aprovação manual, o bot marca o(s) admin(s) responsável(is) por aquele grupo no grupo de admins, em vez de avisar todo mundo genericamente.
+O bot associa cada admin a um ou mais grupos via `$responsavel @admin` (pra um admin que já existe) ou `$promover @pessoa` (que já inclui isso). Usa essa associação pra rotear avisos — por exemplo, quando alguém pede pra entrar num grupo com aprovação manual, o bot marca o(s) admin(s) responsável(is) por aquele grupo no grupo de admins, em vez de avisar todo mundo genericamente. Veja [Comandos](comandos.md).

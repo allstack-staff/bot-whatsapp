@@ -536,10 +536,12 @@
       <a class="quicklink" href="#tipos">Tipos de banimento<span>permanente, temporário, comunidade</span></a>
       <a class="quicklink" href="regras.html">Regras da comunidade<span>o que vale em todo grupo</span></a>
       <a class="quicklink" href="governanca.html">Governança<span>como um admin é escolhido</span></a>
+      <a class="quicklink" href="#moderacao-automatica">Moderação automática<span>votação de descrição, IA</span></a>
       <a class="quicklink" href="#troca-numero">Perdeu o número?<span>nada se perde</span></a>
     </div>
     <div class="quicklinks tech-only">
       <a class="quicklink" href="instalacao.html">Instalação<span>rodar localmente</span></a>
+      <a class="quicklink" href="#moderacao-automatica">Moderação por IA<span>Gemini, votação de descrição</span></a>
       <a class="quicklink" href="#arquitetura">Arquitetura<span>stack, LID, anti-detecção</span></a>
       <a class="quicklink" href="#migracao">Migração<span>trocar de servidor sem perder nada</span></a>
       <a class="quicklink" href="#deploy">Deploy<span>pipeline CI/CD</span></a>
@@ -648,6 +650,22 @@ $banedit @user tempo 7d</span>
       <span class="syntax">$regras</span>
       <span class="example"><b>Exemplo:</b> <code>$regras</code> → <code>✅ Link das regras aplicado em 6 grupo(s) (2 já tinham).</code></span>
     </div>
+
+    <div class="cmd">
+      <div class="cmd-head"><code class="name">$responsavel</code><span class="who">admin</span></div>
+      <p class="simple-only">Marca um admin como responsável por este grupo — o bot usa isso pra saber quem avisar quando há pendência (tipo pedido de entrada) e quem anunciar numa promoção.</p>
+      <p class="tech-only"><code>AdminResponsibilityService.assign(adminJid, groupJid)</code>. Usado por <code>handleGroupJoinRequest</code> pra rotear avisos de pedido pendente.</p>
+      <span class="syntax">$responsavel @admin</span>
+      <span class="example"><b>Exemplo:</b> <code>$responsavel @5541988887777</code> → <code>✅ agora é responsável por este grupo.</code></span>
+    </div>
+
+    <div class="cmd">
+      <div class="cmd-head"><code class="name">$promover</code><span class="who">admin</span></div>
+      <p class="simple-only">Promove alguém a admin do grupo, marca como responsável por ele, e anuncia a promoção — inclusive no grupo "Avisos" da Community, achado sozinho pelo bot.</p>
+      <p class="tech-only"><code>groupParticipantsUpdate(..., 'promote')</code> + <code>AdminResponsibilityService.assign()</code> + anúncio via <code>findCommunityAnnounceGroupJid()</code> (procura <code>isCommunityAnnounce</code> nos metadados).</p>
+      <span class="syntax">$promover @user</span>
+      <span class="example"><b>Exemplo:</b> <code>$promover @5541988887777</code> → <code>🎉 ...promovido(a)...</code> (no grupo e no "Avisos")</span>
+    </div>
   </section>
 
   <section id="tipos">
@@ -675,8 +693,22 @@ $banedit @user tempo 7d</span>
     <p class="tech-only">Evento <code>group.join-request</code> (não confundir com <code>group-participants.update</code>, que é pós-entrada): se <code>getActiveBan</code> encontrar banimento válido pro <code>id</code> do grupo, chama <code>groupRequestParticipantsUpdate(id, [participant], 'reject')</code> antes da pessoa virar membro.</p>
   </section>
 
+  <section id="moderacao-automatica">
+    <h2><span class="num">05</span> O que acontece sem nenhum comando</h2>
+    <div class="cmd">
+      <div class="cmd-head"><span>Aprovação de mudança de descrição</span></div>
+      <p class="simple-only">Se um admin edita a descrição de um grupo pelo próprio WhatsApp, o bot avisa no grupo de admins pedindo votação (✅/❌). Maioria rejeita → volta a versão antiga e o grupo fica travado 7 dias.</p>
+      <p class="tech-only">Detectado via evento <code>groups.update</code>, comparado contra <code>descriptionCache</code>. Voto por <code>messages.reaction</code>, tabulado em <code>descriptionVotes</code> (memória). Rejeição grava <code>GroupDescriptionLock.frozenDescription</code> e qualquer edição durante a trava é revertida na hora.</p>
+    </div>
+    <div class="cmd">
+      <div class="cmd-head"><span>Moderação por IA (a cada hora)</span></div>
+      <p class="simple-only">Se houve mensagem nova em algum grupo desde a última checagem, o bot avalia contra as regras usando o Gemini (grátis). Violação grave = banimento de comunidade direto; o resto = advertência comum. Sem chave de API configurada, isso simplesmente não roda.</p>
+      <p class="tech-only"><code>pendingModerationMessages</code> (buffer em memória, por grupo) — vazio, nem chama a IA. <code>AiModerationService.evaluateMessages()</code> pede JSON estrito ao Gemini; qualquer erro de rede/parse é tratado como "sem violação" (falha fechada).</p>
+    </div>
+  </section>
+
   <section id="troca-numero">
-    <h2><span class="num">05</span> Se o número do bot for perdido ou banido</h2>
+    <h2><span class="num">06</span> Se o número do bot for perdido ou banido</h2>
     <p class="simple-only">Fica tranquilo — nenhum banimento ou configuração se perde. O bot só precisa de um número novo pra voltar a funcionar.</p>
     <ol class="steps">
       <li><span class="simple-only">Escaneie o QR code com o número novo.</span><span class="tech-only">Apague <code>SESSION_PATH</code> (padrão <code>./auth</code>) e suba o processo de novo — um QR novo aparece.</span></li>
@@ -687,7 +719,7 @@ $banedit @user tempo 7d</span>
   </section>
 
   <section id="migracao" class="tech-only">
-    <h2><span class="num">06</span> Migração de hospedagem sem perda de dados</h2>
+    <h2><span class="num">07</span> Migração de hospedagem sem perda de dados</h2>
     <p>Diferente da <a href="#troca-numero">troca de número</a> (que assume um número novo e QR novo), migração é mover o bot pra outro servidor <strong>mantendo o mesmo número</strong> — sem re-escanear nada.</p>
     <ol class="steps">
       <li>Pare o processo no servidor antigo (<code>pm2 stop bot-whatsapp</code>).</li>
@@ -702,7 +734,7 @@ $banedit @user tempo 7d</span>
   </section>
 
   <section id="arquitetura" class="tech-only">
-    <h2><span class="num">07</span> Arquitetura</h2>
+    <h2><span class="num">08</span> Arquitetura</h2>
     <p>TypeScript (commonjs) sobre <a href="https://github.com/WhiskeySockets/Baileys" target="_blank" rel="noopener">Baileys</a> — protocolo WhatsApp Web, não a API oficial da Meta. Persistência via Prisma + <code>better-sqlite3</code>, arquivo único.</p>
     <div class="file-tree">src/infra/bot/
   handlers/messageHandler.ts &nbsp;<span class="c">// dispatch de comandos</span>
@@ -734,7 +766,7 @@ resolvePnJid(sock, jid, metadata?)
   </section>
 
   <section id="deploy" class="tech-only">
-    <h2><span class="num">08</span> Deploy</h2>
+    <h2><span class="num">09</span> Deploy</h2>
     <p>GitHub Actions → Terraform → Cloud Function (GCP) → reinicia a VM <code>baileys-bot-server</code> → <code>git pull</code> + PM2 via startup script.</p>
     <div class="callout warn">
       <strong>Pendência conhecida</strong>

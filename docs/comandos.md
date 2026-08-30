@@ -16,6 +16,8 @@ Mostra um resumo rápido dos comandos mais usados direto no WhatsApp, com o link
 $ajuda
 ```
 
+**Comportamento:** responde só no grupo/privado onde foi chamado. Não reage, não manda cópia pra lugar nenhum.
+
 Exemplo:
 ```
 $ajuda
@@ -29,7 +31,7 @@ Todo comando de administração exige **os dois critérios ao mesmo tempo**:
 1. Ser admin do grupo onde o comando foi digitado.
 2. Estar (como membro, admin ou não) no grupo registrado como grupo de admins via `$home`.
 
-Se faltar qualquer um dos dois, o bot recusa com uma mensagem explicando qual critério falhou.
+Se faltar qualquer um dos dois, o bot recusa com uma mensagem explicando qual critério falhou — só no grupo onde o comando foi tentado, nada vai pro grupo de admins nesse caso.
 
 ## `$home`
 
@@ -39,13 +41,15 @@ Registra o grupo atual como grupo de administração/logs. Precisa ser rodado um
 $home
 ```
 
+**Comportamento:** responde só no próprio grupo (é ele que está sendo registrado). Não reage, não manda cópia — ainda não existe grupo de log até esse comando rodar.
+
 Exemplo (dentro do grupo "Admins All Stack"):
 ```
 $home
 ```
 → `✅ Grupo registrado como admin/log.`
 
-Todo `$ban`, auto-remoção por reentrada e `$banedit` manda uma cópia do log nesse grupo.
+Todo `$ban`, auto-remoção por reentrada e `$banedit` manda uma cópia do log nesse grupo a partir daqui.
 
 ## `$ban`
 
@@ -58,6 +62,8 @@ $ban @user [permanente|temporario|comunidade] [motivo]
 - Tipo é opcional — padrão é `temporario` (7 dias).
 - Motivo é opcional — padrão "Não informado".
 - Não é possível banir um admin do grupo.
+
+**Comportamento:** reage ✅ na mensagem do comando, responde com o resumo do banimento **no grupo onde rodou**, e manda uma cópia da mesma mensagem pro **grupo de admins**. Se o tipo for `comunidade`, remove a pessoa de todos os grupos que o bot administra (com pausa entre cada remoção).
 
 Exemplos:
 ```
@@ -79,6 +85,8 @@ Remove **todos** os banimentos de um usuário, em qualquer grupo. Aceita **menç
 $unban @user
 ```
 
+**Comportamento:** reage ✅, responde no grupo onde rodou, e manda cópia pro grupo de admins.
+
 Exemplos:
 ```
 $unban @5541995850310
@@ -93,6 +101,8 @@ Lista todos os usuários banidos atualmente (qualquer grupo), com número, tipo,
 ```
 $bans
 ```
+
+**Comportamento:** responde só no grupo onde rodou. Não manda cópia pro grupo de admins (é uma consulta, não uma ação).
 
 Exemplo:
 ```
@@ -120,6 +130,8 @@ $banedit @user tempo <7d|12h|30m|45s>
 - `tipo` muda o tipo do banimento (ex: de temporário pra permanente ou comunidade).
 - `tempo` redefine quando um banimento expira, contando a partir de agora.
 
+**Comportamento:** reage ✅, responde no grupo onde rodou, e manda cópia pro grupo de admins.
+
 Exemplos:
 ```
 $banedit @5541999999999 tipo comunidade
@@ -135,6 +147,8 @@ Apaga (delete-for-everyone) os comandos digitados pro bot e as respostas dele **
 ```
 $clear
 ```
+
+**Comportamento:** não deixa resposta nenhuma de propósito (o próprio efeito — tudo sumindo — já é a confirmação). Não manda nada pro grupo de admins.
 
 Exemplo:
 ```
@@ -154,6 +168,8 @@ Diagnóstico rápido: número conectado, quantos grupos de admin estão registra
 $status
 ```
 
+**Comportamento:** responde só no grupo onde rodou. Não manda cópia pro grupo de admins.
+
 Exemplo:
 ```
 $status
@@ -168,7 +184,7 @@ Banimentos ativos: 2 (histórico total: 5)
 
 ## Comandos de administração da comunidade
 
-Além dos comandos acima (que já exigem admin + estar no grupo de admins), esses dois lidam com a comunidade como um todo — mais sensíveis, use com atenção.
+Além dos comandos acima (que já exigem admin + estar no grupo de admins), esses lidam com a comunidade como um todo — mais sensíveis, use com atenção.
 
 ### `$advertir`
 
@@ -177,6 +193,8 @@ Dá uma advertência a alguém nesse grupo. **3 ou mais advertências no mesmo m
 ```
 $advertir @user [motivo]
 ```
+
+**Comportamento:** reage ⚠️, responde no grupo onde rodou com a contagem atual (`X/3`), e manda cópia pro grupo de admins. Se bater 3, o banimento automático que segue reage/responde/loga como um `$ban` normal, na sequência.
 
 Exemplo:
 ```
@@ -192,12 +210,54 @@ Aplica o link das [regras da comunidade](regras.md) na descrição de **todos os
 $regras
 ```
 
+**Comportamento:** reage ✅ e responde no grupo onde rodou com o total (quantos grupos atualizados/já tinham). Manda cópia pro grupo de admins. Não notifica os outros grupos individualmente — só a descrição deles muda, silenciosamente.
+
 Exemplo:
 ```
 $regras
 ```
 → `✅ Link das regras aplicado em 6 grupo(s) (2 já tinham o link).`
 
+### `$responsavel`
+
+Marca um admin como responsável pelo grupo atual — usado pra rotear avisos de pendência (ex: pedido de entrada) e pra saber quem anunciar quando alguém é promovido.
+
+```
+$responsavel @admin
+```
+
+**Comportamento:** reage ✅, responde no grupo onde rodou, e manda cópia pro grupo de admins. Não manda nada pro próprio admin marcado além disso.
+
+Exemplo:
+```
+$responsavel @5541988887777
+```
+→ `✅ @5541988887777 agora é responsável por este grupo.`
+
+### `$promover`
+
+Promove alguém a admin do grupo atual (via WhatsApp mesmo), marca essa pessoa como responsável pelo grupo (equivalente a rodar `$responsavel` nela), e anuncia a promoção.
+
+```
+$promover @user
+```
+
+**Comportamento:** promove no WhatsApp, reage ✅, responde no grupo onde rodou, **e também publica o mesmo anúncio no grupo "Avisos" da Community** (o grupo que o WhatsApp cria automaticamente pra toda Community — detectado sozinho, não precisa configurar) — além da cópia de sempre no grupo de admins.
+
+Exemplo:
+```
+$promover @5541988887777
+```
+→ no grupo atual e no "Avisos": `🎉 @5541988887777 foi promovido(a) a admin — agora é responsável pelo grupo *Nome do Grupo*.`
+
 ### Aprovação automática de mudança de descrição
 
-Isso não é um comando — é automático. Sempre que um admin edita a descrição de um grupo pelo próprio WhatsApp (fora do `$regras`), o bot detecta, posta a mudança (antes/depois) no grupo de admins e pede votação por reação: **✅ aprova, ❌ rejeita**. Se a maioria dos membros do grupo de admins rejeitar, a versão anterior volta e o grupo fica **travado por 7 dias** — qualquer tentativa de mudar a descrição nesse período é revertida automaticamente pelo bot (não tem como impedir um admin de editar pelo WhatsApp, só reverter depois).
+Isso não é um comando — é automático. Sempre que um admin edita a descrição de um grupo pelo próprio WhatsApp (fora do `$regras`), o bot detecta e posta a mudança (antes/depois) **no grupo de admins**, pedindo votação por reação: **✅ aprova, ❌ rejeita**.
+
+**Comportamento:** nada aparece no grupo cuja descrição mudou — toda a interação (proposta + votos) acontece no grupo de admins. Se a maioria rejeitar, a versão anterior volta (o bot reverte direto no grupo original) e esse grupo fica **travado por 7 dias**: qualquer tentativa de mudar a descrição nesse período é detectada e revertida automaticamente (não tem como impedir um admin de editar pelo WhatsApp, só reverter depois).
+
+### Moderação automática por IA
+
+Também não é um comando. A cada hora, se houve mensagem nova em algum grupo desde a última checagem (senão nem chama a IA), o bot avalia o conteúdo contra as regras da comunidade usando o Gemini (grátis, configurado via `GEMINI_API_KEY` no `.env` — sem a chave, esse ciclo simplesmente não faz nada).
+
+**Comportamento:** nunca responde no grupo onde a violação aconteceu. Violação grave (discriminação, conteúdo explícito, ato ilícito) → banimento de comunidade direto, avisado no grupo de admins. Qualquer outra violação → uma advertência comum (mesmo mecanismo do `$advertir`, mesmo limite de 3/mês), também só avisada no grupo de admins.
