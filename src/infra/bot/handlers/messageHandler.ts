@@ -92,6 +92,7 @@ export class MessageHandler {
         help: (msg: any) => this.helpCommand(msg),
         regras: (msg: any) => this.regrasCommand(msg),
         grupos: (msg: any) => this.gruposCommand(msg),
+        assumir: (msg: any, args: string[]) => this.assumirCommand(msg, args),
         responsavel: (msg: any, args: string[]) => this.responsavelCommand(msg, args),
         promover: (msg: any) => this.promoverCommand(msg),
     };
@@ -1061,8 +1062,90 @@ export class MessageHandler {
         await this.reactSafe(jid, msg.key, '✅');
         await this.replySafe(
             jid,
-            `📋 *Grupos da comunidade* (${entries.length})\n${list}\n\nUse o número pra referenciar o grupo, ex: $responsavel ${entries[0].shortId} @admin`,
+            `📋 *Grupos da comunidade* (${entries.length})\n${list}\n\nUse o número pra referenciar o grupo, ex: $responsavel ${entries[0].shortId} @admin ou $assumir ${entries[0].shortId}`,
         );
+    }
+
+    /**
+     * Quem já está no grupo de administração pode virar admin de qualquer
+     * grupo da comunidade sem precisar que outro admin já-admin-daquele-grupo
+     * faça isso pelo WhatsApp — o bot promove direto. Roda no próprio grupo
+     * alvo, ou de qualquer lugar (tipicamente o grupo de admins) referenciando
+     * um grupo pelo ID curto de $grupos.
+     */
+    private async assumirCommand(msg: any, args: string[]): Promise<void> {
+        const currentJid = msg.key.remoteJid!;
+
+        if (!currentJid.endsWith('@g.us')) {
+            await this.replySafe(currentJid, '❌ Este comando só funciona em grupos.');
+            return;
+        }
+
+        const senderRaw = msg.key.participant! || msg.key.remoteJid!;
+        const senderJid = await resolvePnJid(this.sock, senderRaw);
+
+        if (!(await this.isMemberOfAdminGroup(senderRaw, senderJid))) {
+            await this.replySafe(currentJid, '❌ Você precisa estar no grupo de administração para usar este comando.');
+            return;
+        }
+
+        let targetGroupJid = currentJid;
+        const maybeId = args[0] && /^\d+$/.test(args[0]) ? parseInt(args[0], 10) : null;
+        if (maybeId !== null) {
+            const resolved = await this.communityGroupService.getJidByShortId(maybeId);
+            if (!resolved) {
+                await this.replySafe(currentJid, `❌ Nenhum grupo com o ID ${maybeId}. Use $grupos pra ver a lista.`);
+                return;
+            }
+            targetGroupJid = resolved;
+        }
+
+        if (!(await this.isCommunityGroup(targetGroupJid))) {
+            await this.replySafe(currentJid, '❌ Esse grupo não é da All Stack Community.');
+            return;
+        }
+
+        let metadata: GroupMetadata;
+        try {
+            metadata = await this.sock.groupMetadata(targetGroupJid);
+        } catch (err) {
+            logger.error({ err, targetGroupJid }, '[assumirCommand] falha ao buscar metadados');
+            await this.replySafe(currentJid, '❌ Erro ao buscar dados do grupo. Tente novamente.');
+            return;
+        }
+
+        const senderParticipant = findParticipant(metadata, senderRaw) || findParticipant(metadata, senderJid);
+        if (!senderParticipant) {
+            await this.replySafe(currentJid, `❌ Você não é membro do grupo *${metadata.subject}* — entre nele antes de usar $assumir.`);
+            return;
+        }
+        if (isGroupAdmin(senderParticipant)) {
+            await this.replySafe(currentJid, `⚠️ Você já é admin do grupo *${metadata.subject}*.`);
+            return;
+        }
+
+        const promoteFailed = await this.sock.groupParticipantsUpdate(targetGroupJid, [senderParticipant.id], 'promote')
+            .then(() => false)
+            .catch((err: any) => {
+                logger.error({ err, targetGroupJid, participantId: senderParticipant.id }, '[assumirCommand] falha ao promover');
+                return true;
+            });
+
+        const number = senderJid.split('@')[0];
+
+        if (promoteFailed) {
+            await this.replySafe(currentJid, `⚠️ Não consegui te tornar admin do grupo *${metadata.subject}* automaticamente. Confira se o bot ainda é admin lá.`);
+            await this.sendLog(`⚠️ @${number} tentou virar admin do grupo *${metadata.subject}* via $assumir, mas a promoção falhou. Confira manualmente.`, [senderJid]);
+            return;
+        }
+
+        await this.reactSafe(currentJid, msg.key, '✅');
+        await this.replySafe(currentJid, `✅ Você agora é admin do grupo *${metadata.subject}*.`);
+
+        const logJid = await this.getLogJid();
+        if (logJid && logJid !== currentJid) {
+            await this.sendLog(`👑 @${number} virou admin do grupo *${metadata.subject}* via $assumir.`, [senderJid]);
+        }
     }
 
     /**

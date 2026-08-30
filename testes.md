@@ -53,6 +53,9 @@ Build do GitHub Pages confirmado (`built`, sem erro). Todo o trabalho concluído
 - [ ] `$responsavel @admin` no grupo → marca ele como responsável (comportamento original, sem número).
 - [ ] `$responsavel <id> @admin` **do grupo de admins** (usando um número visto em `$grupos`) → marca a pessoa como responsável pelo grupo referenciado, sem precisar entrar nele. Confirme que só manda **uma** mensagem no grupo de admins (não duplicada).
 - [ ] `$promover @pessoa` → promove a admin no WhatsApp, marca como responsável, e publica o anúncio tanto no grupo atual quanto no "Avisos" da Community.
+- [ ] `$assumir` dentro de um grupo (sendo membro do grupo de admins, mas não admin daquele grupo ainda) → vira admin na hora.
+- [ ] `$assumir <id>` **do grupo de admins** → vira admin do grupo referenciado, sem precisar entrar nele antes.
+- [ ] `$assumir` de novo, já sendo admin → recusa avisando que você já é admin.
 - [ ] Pedido de entrada num grupo (participante não-banido, aprovação manual) → deve mencionar o(s) admin(s) responsável(is) daquele grupo no grupo de admins.
 - [ ] Pedido de entrada de alguém já banido (comunidade) → deve rejeitar automaticamente, sem precisar de nenhum admin agir.
 

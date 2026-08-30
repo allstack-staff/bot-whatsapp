@@ -656,10 +656,18 @@ $banedit @user tempo 7d</span>
 
     <div class="cmd">
       <div class="cmd-head"><code class="name">$grupos</code><span class="who">admin</span></div>
-      <p class="simple-only">Lista os grupos da comunidade com um número curto — use esse número no <code>$responsavel</code> pra não precisar entrar no grupo alvo.</p>
+      <p class="simple-only">Lista os grupos da comunidade com um número curto — use esse número no <code>$responsavel</code> ou <code>$assumir</code> pra não precisar entrar no grupo alvo.</p>
       <p class="tech-only"><code>CommunityGroupService.upsertSeen</code> atualiza o registro a cada chamada (nome/novos grupos), depois lista via <code>getAll()</code> filtrado pelos IDs de <code>getCommunityGroupIds()</code>.</p>
       <span class="syntax">$grupos</span>
       <span class="example"><b>Exemplo:</b> <code>$grupos</code> → <code>1. SysAdmins</code>, <code>2. DevOps</code>, ...</span>
+    </div>
+
+    <div class="cmd">
+      <div class="cmd-head"><code class="name">$assumir</code><span class="who">grupo de admins</span></div>
+      <p class="simple-only">Quem já está no grupo de administração pode virar admin de qualquer grupo da comunidade na hora — sem precisar que outro admin faça isso manualmente pelo WhatsApp.</p>
+      <p class="tech-only">Exige só <code>isMemberOfAdminGroup</code> (não <code>isGroupAdmin</code> do grupo atual — é isso que o comando resolve). Sem <code>args[0]</code> numérico, usa o grupo atual; com número, resolve via <code>CommunityGroupService.getJidByShortId</code>. Promove via <code>groupParticipantsUpdate(..., 'promote')</code>.</p>
+      <span class="syntax">$assumir [id]</span>
+      <span class="example"><b>Exemplo:</b> <code>$assumir</code> (no grupo) ou <code>$assumir 3</code> (do grupo de admins) → <code>✅ Você agora é admin do grupo *Nome*.</code></span>
     </div>
 
     <div class="cmd">

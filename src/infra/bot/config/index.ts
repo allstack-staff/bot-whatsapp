@@ -57,6 +57,10 @@ export const botConfig = {
                 description: 'Lista os grupos da comunidade com um ID curto pra referenciar em outros comandos',
                 usage: '$grupos',
             },
+            assumir: {
+                description: 'Vira admin de um grupo (atual, ou por ID — veja $grupos) se já estiver no grupo de admins',
+                usage: '$assumir [id]',
+            },
             responsavel: {
                 description: 'Marca um admin como responsável por um grupo (atual, ou por ID — veja $grupos)',
                 usage: '$responsavel [id] @admin',

@@ -258,6 +258,31 @@ $grupos
 Use o número pra referenciar o grupo, ex: $responsavel 1 @admin
 ```
 
+### `$assumir`
+
+Quem já está no grupo de administração pode virar admin de **qualquer** grupo da comunidade na hora, sem precisar que outro admin faça isso manualmente pelo WhatsApp — o bot promove direto.
+
+```
+$assumir [id]
+```
+
+- Sem `id`: promove você no grupo atual (precisa rodar dentro dele, e já ser membro).
+- Com `id` (veja `$grupos`): promove você no grupo referenciado, de qualquer lugar — inclusive do grupo de admins.
+
+**Comportamento:** reage ✅, responde no grupo onde rodou, e manda cópia pro grupo de admins (só se o comando não tiver rodado lá mesmo). Recusa se você já for admin do grupo, ou não for membro dele.
+
+Exemplo (dentro do grupo):
+```
+$assumir
+```
+→ `✅ Você agora é admin do grupo *Nome do Grupo*.`
+
+Exemplo (do grupo de admins, por ID):
+```
+$assumir 3
+```
+→ te promove no grupo 3 (visto em `$grupos`), sem precisar sair do grupo de admins.
+
 ### `$responsavel`
 
 Marca um admin como responsável por um grupo — usado pra rotear avisos de pendência (ex: pedido de entrada) e pra saber quem anunciar quando alguém é promovido.
