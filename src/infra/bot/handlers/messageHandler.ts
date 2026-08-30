@@ -7,6 +7,7 @@ import { BanService } from '../services/banService';
 import { AdminService } from '../services/adminService';
 import { WarningService } from '../services/warningService';
 import { DescriptionChangeService } from '../services/descriptionChangeService';
+import { AdminResponsibilityService } from '../services/adminResponsibilityService';
 import { logger } from '../utils/logger';
 import { findParticipant, isGroupAdmin, resolvePnJid } from '../utils/jid';
 import { humanBulkActionDelay, humanReplyDelay } from '../utils/delay';
@@ -18,6 +19,7 @@ export class MessageHandler {
     private adminService: AdminService;
     private warningService: WarningService;
     private descriptionChangeService: DescriptionChangeService;
+    private adminResponsibilityService: AdminResponsibilityService;
 
     // Rastro (em memória) dos comandos digitados pro bot e das respostas dele em
     // cada grupo, só pra viabilizar o $clear. Não precisa sobreviver a um restart.
@@ -43,6 +45,7 @@ export class MessageHandler {
         this.adminService = new AdminService();
         this.warningService = new WarningService();
         this.descriptionChangeService = new DescriptionChangeService();
+        this.adminResponsibilityService = new AdminResponsibilityService();
     }
 
     private commands: Record<string, (msg: any, args: string[]) => Promise<void>> = {
@@ -57,6 +60,8 @@ export class MessageHandler {
         ajuda: (msg: any) => this.helpCommand(msg),
         help: (msg: any) => this.helpCommand(msg),
         regras: (msg: any) => this.regrasCommand(msg),
+        responsavel: (msg: any) => this.responsavelCommand(msg),
+        promover: (msg: any) => this.promoverCommand(msg),
     };
 
     private trackGroupMessage(jid: string | undefined, key: WAMessageKey | undefined): void {
@@ -162,20 +167,36 @@ export class MessageHandler {
             const resolvedJid = participantPn || (await resolvePnJid(this.sock, participant));
 
             const ban = await this.banService.getActiveBan(resolvedJid, id);
-            if (!ban) return;
+            if (ban) {
+                await this.sock.groupRequestParticipantsUpdate(id, [participant], 'reject').catch((e: any) => {
+                    logger.error({ err: e }, 'Failed to reject join request from banned user');
+                });
 
-            await this.sock.groupRequestParticipantsUpdate(id, [participant], 'reject').catch((e: any) => {
-                logger.error({ err: e }, 'Failed to reject join request from banned user');
-            });
+                const number = resolvedJid.split('@')[0];
+                const banTypeLabel = this.resolveBanTypeLabel(ban.banType);
 
-            const number = resolvedJid.split('@')[0];
-            const banTypeLabel = this.resolveBanTypeLabel(ban.banType);
+                logger.info({ resolvedJid, groupId: id, reason: ban.reason }, 'Rejected join request from banned user');
 
-            logger.info({ resolvedJid, groupId: id, reason: ban.reason }, 'Rejected join request from banned user');
+                await this.sendLog(
+                    `🚫 Pedido de entrada de @${number} rejeitado automaticamente — banimento ${banTypeLabel} ativo — Motivo: ${ban.reason}`,
+                    [resolvedJid],
+                );
+                return;
+            }
 
+            // Não banido — só avisa quem é responsável pelo grupo, pra revisar manualmente.
+            const responsibleAdmins = await this.adminResponsibilityService.getResponsibleAdmins(id);
+            if (!responsibleAdmins.length) return;
+
+            let groupName = id;
+            try {
+                groupName = (await this.sock.groupMetadata(id)).subject;
+            } catch { /* usa o jid mesmo se falhar */ }
+
+            const mentionsText = responsibleAdmins.map((a) => `@${a.split('@')[0]}`).join(' ');
             await this.sendLog(
-                `🚫 Pedido de entrada de @${number} rejeitado automaticamente — banimento ${banTypeLabel} ativo — Motivo: ${ban.reason}`,
-                [resolvedJid],
+                `📥 Pedido de entrada pendente em *${groupName}* — @${resolvedJid.split('@')[0]}. ${mentionsText}, dá uma olhada quando puder.`,
+                [...responsibleAdmins, resolvedJid],
             );
         } catch (err) {
             logger.warn({ err, participant }, '[handleGroupJoinRequest] error checking join request');
@@ -632,6 +653,83 @@ export class MessageHandler {
         await this.reactSafe(jid, msg.key, '✅');
         await this.replySafe(jid, `✅ Link das regras aplicado em ${updated} grupo(s) (${skipped} já tinham o link).`);
         await this.sendLog(`📋 $regras rodado — ${updated} grupo(s) atualizado(s), ${skipped} já tinham o link.`);
+    }
+
+    /** Acha o grupo "Avisos" que o WhatsApp cria automaticamente pra toda Community. */
+    private async findCommunityAnnounceGroupJid(): Promise<string | null> {
+        try {
+            const groups = await this.sock.groupFetchAllParticipating();
+            for (const [gid, meta] of Object.entries(groups)) {
+                if ((meta as GroupMetadata).isCommunityAnnounce) return gid;
+            }
+        } catch (err) {
+            logger.warn({ err }, '[findCommunityAnnounceGroupJid] falha ao listar grupos');
+        }
+        return null;
+    }
+
+    /** Marca um admin como responsável pelo grupo atual. */
+    private async responsavelCommand(msg: any): Promise<void> {
+        if (!(await this.isAuthorized(msg))) return;
+
+        const jid = msg.key.remoteJid!;
+        const metadata = await this.sock.groupMetadata(jid);
+        const { jid: targetRaw } = this.getTargetJid(msg);
+
+        if (!targetRaw) {
+            await this.replySafe(jid, '❌ Marque a pessoa ou responda a mensagem dela. Ex: $responsavel @admin');
+            return;
+        }
+
+        const targetJid = await resolvePnJid(this.sock, targetRaw, metadata);
+        await this.adminResponsibilityService.assign(targetJid, jid);
+
+        const number = targetJid.split('@')[0];
+        await this.reactSafe(jid, msg.key, '✅');
+        await this.replySafe(jid, `✅ @${number} agora é responsável por este grupo.`);
+        await this.sendLog(`👤 @${number} marcado como responsável pelo grupo *${metadata.subject}*.`, [targetJid]);
+    }
+
+    /**
+     * Promove alguém a admin do grupo atual, marca ela como responsável por
+     * esse grupo, e anuncia no grupo "Avisos" da Community e no próprio grupo.
+     */
+    private async promoverCommand(msg: any): Promise<void> {
+        if (!(await this.isAuthorized(msg))) return;
+
+        const jid = msg.key.remoteJid!;
+        const metadata = await this.sock.groupMetadata(jid);
+        const { jid: targetRaw } = this.getTargetJid(msg);
+
+        if (!targetRaw) {
+            await this.replySafe(jid, '❌ Marque a pessoa ou responda a mensagem dela. Ex: $promover @user');
+            return;
+        }
+
+        const targetParticipant = findParticipant(metadata, targetRaw);
+        const targetJid = await resolvePnJid(this.sock, targetRaw, metadata);
+
+        if (!targetParticipant) {
+            await this.replySafe(jid, '❌ Essa pessoa não está nesse grupo.');
+            return;
+        }
+
+        await this.sock.groupParticipantsUpdate(jid, [targetParticipant.id], 'promote').catch((err: any) => {
+            logger.warn({ err }, '[promoverCommand] falha ao promover no WhatsApp');
+        });
+        await this.adminResponsibilityService.assign(targetJid, jid);
+
+        const number = targetJid.split('@')[0];
+        const announcement = `🎉 @${number} foi promovido(a) a admin — agora é responsável pelo grupo *${metadata.subject}*.`;
+
+        await this.reactSafe(jid, msg.key, '✅');
+        await this.replySafe(jid, announcement);
+
+        const announceJid = await this.findCommunityAnnounceGroupJid();
+        if (announceJid && announceJid !== jid) {
+            await this.sendSafe(announceJid, { text: announcement, mentions: [targetJid] });
+        }
+        await this.sendLog(announcement, [targetJid]);
     }
 
     private async replySafe(jid: string, text: string): Promise<void> {
