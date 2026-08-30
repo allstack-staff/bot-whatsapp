@@ -1,0 +1,644 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>All Stack Bot</title>
+<link rel="icon" type="image/jpeg" href="assets/logo.jpg">
+<style>
+  :root {
+    --ink: #1b2320;
+    --ink-soft: #49564e;
+    --ink-faint: #7b8880;
+    --paper: #eff2ed;
+    --paper-raised: #ffffff;
+    --paper-sunken: #e4e9e0;
+    --line: #d3dbd1;
+    --accent: #2f6f63;
+    --accent-ink: #ffffff;
+    --accent-soft: #dfeeea;
+    --accent-soft-line: #c3ddd5;
+    --ban-perm: #8b3a3a;
+    --ban-perm-bg: #f5e7e5;
+    --ban-temp: #8a5e17;
+    --ban-temp-bg: #f6ecdd;
+    --ban-comm: #3f4480;
+    --ban-comm-bg: #e7e8f5;
+    --code-bg: #e4e9e0;
+    --shadow: 0 1px 2px rgba(27, 35, 32, 0.06), 0 8px 24px -12px rgba(27, 35, 32, 0.18);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ink: #e7ece9;
+      --ink-soft: #aab6ae;
+      --ink-faint: #778078;
+      --paper: #101613;
+      --paper-raised: #182220;
+      --paper-sunken: #0b100e;
+      --line: #2a3531;
+      --accent: #63b3a1;
+      --accent-ink: #072019;
+      --accent-soft: #1b2b27;
+      --accent-soft-line: #2e463f;
+      --ban-perm: #e39c93;
+      --ban-perm-bg: #3a2220;
+      --ban-temp: #e3b463;
+      --ban-temp-bg: #382d16;
+      --ban-comm: #adb2ee;
+      --ban-comm-bg: #24263f;
+      --code-bg: #0b100e;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px -12px rgba(0, 0, 0, 0.5);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ink: #e7ece9;
+    --ink-soft: #aab6ae;
+    --ink-faint: #778078;
+    --paper: #101613;
+    --paper-raised: #182220;
+    --paper-sunken: #0b100e;
+    --line: #2a3531;
+    --accent: #63b3a1;
+    --accent-ink: #072019;
+    --accent-soft: #1b2b27;
+    --accent-soft-line: #2e463f;
+    --ban-perm: #e39c93;
+    --ban-perm-bg: #3a2220;
+    --ban-temp: #e3b463;
+    --ban-temp-bg: #382d16;
+    --ban-comm: #adb2ee;
+    --ban-comm-bg: #24263f;
+    --code-bg: #0b100e;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px -12px rgba(0, 0, 0, 0.5);
+  }
+
+  * { box-sizing: border-box; }
+
+  html { -webkit-text-size-adjust: 100%; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  a { color: var(--accent); }
+  a:focus-visible, button:focus-visible, .toggle-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  code, .mono {
+    font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+  }
+
+  h1, h2, h3 {
+    font-family: "Fraunces", Georgia, "Iowan Old Style", serif;
+    text-wrap: balance;
+    line-height: 1.15;
+    margin: 0;
+  }
+
+  /* ---------- top bar ---------- */
+
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px clamp(16px, 4vw, 40px);
+    background: color-mix(in srgb, var(--paper) 88%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line);
+  }
+
+  .brand {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    font-family: "Fraunces", Georgia, serif;
+    font-weight: 600;
+    font-size: 1.05rem;
+    white-space: nowrap;
+  }
+  .toggle {
+    display: inline-flex;
+    padding: 3px;
+    background: var(--paper-sunken);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    gap: 2px;
+  }
+  .toggle-btn {
+    appearance: none;
+    border: none;
+    background: transparent;
+    color: var(--ink-soft);
+    font: inherit;
+    font-family: "IBM Plex Sans", sans-serif;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    padding: 7px 16px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  .toggle-btn[aria-pressed="true"] {
+    background: var(--accent);
+    color: var(--accent-ink);
+  }
+
+  /* ---------- layout ---------- */
+
+  main {
+    max-width: 700px;
+    margin: 0 auto;
+    padding: clamp(28px, 6vw, 56px) clamp(16px, 4vw, 40px) 100px;
+  }
+
+  .hero {
+    padding-bottom: 28px;
+    margin-bottom: 28px;
+    border-bottom: 1px solid var(--line);
+  }
+  .hero .eyebrow {
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 10px;
+  }
+  .hero h1 {
+    font-size: clamp(1.9rem, 5vw, 2.5rem);
+    font-weight: 600;
+    margin-bottom: 12px;
+  }
+  .hero p {
+    color: var(--ink-soft);
+    font-size: 1.05rem;
+    max-width: 46ch;
+  }
+
+  section {
+    margin-bottom: 44px;
+  }
+  section > h2 {
+    font-size: 1.35rem;
+    font-weight: 600;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  section > h2 .num {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.75rem;
+    color: var(--ink-faint);
+    font-weight: 500;
+  }
+
+  p { margin: 0 0 14px; }
+  p:last-child { margin-bottom: 0; }
+  .lede { color: var(--ink-soft); }
+
+  ul, ol { margin: 0 0 14px; padding-left: 1.3em; }
+  li { margin-bottom: 6px; }
+
+  /* ---------- command cards ---------- */
+
+  .cmd {
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px 18px;
+    margin-bottom: 10px;
+    box-shadow: var(--shadow);
+  }
+  .cmd-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+  }
+  .cmd code.name {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--accent);
+    background: var(--accent-soft);
+    border: 1px solid var(--accent-soft-line);
+    padding: 2px 8px;
+    border-radius: 6px;
+  }
+  .cmd .who {
+    font-size: 0.72rem;
+    color: var(--ink-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+  }
+  .cmd p { color: var(--ink-soft); font-size: 0.95rem; }
+  .cmd .syntax {
+    display: block;
+    background: var(--code-bg);
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 0.85rem;
+    margin-top: 8px;
+    overflow-x: auto;
+    color: var(--ink);
+  }
+
+  /* ---------- ban type pills ---------- */
+
+  .pills {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .pill-card {
+    border: 1px solid var(--line);
+    background: var(--paper-raised);
+    border-radius: 10px;
+    padding: 14px 16px;
+    box-shadow: var(--shadow);
+  }
+  .pill {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    padding: 3px 10px;
+    border-radius: 999px;
+    margin-bottom: 8px;
+  }
+  .pill.perm { color: var(--ban-perm); background: var(--ban-perm-bg); }
+  .pill.temp { color: var(--ban-temp); background: var(--ban-temp-bg); }
+  .pill.comm { color: var(--ban-comm); background: var(--ban-comm-bg); }
+  .pill-card p { font-size: 0.9rem; color: var(--ink-soft); margin: 0; }
+  .pill-card .scope {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.78rem;
+    color: var(--ink-faint);
+    display: block;
+    margin-top: 8px;
+  }
+
+  /* ---------- steps ---------- */
+
+  .steps {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    counter-reset: step;
+  }
+  .steps li {
+    counter-increment: step;
+    position: relative;
+    padding-left: 40px;
+    margin-bottom: 16px;
+  }
+  .steps li::before {
+    content: counter(step);
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--accent-soft);
+    border: 1px solid var(--accent-soft-line);
+    color: var(--accent);
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.8rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* ---------- tech-only bits ---------- */
+
+  .code-block {
+    background: var(--code-bg);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 14px 16px;
+    font-size: 0.82rem;
+    overflow-x: auto;
+    margin: 10px 0 14px;
+    line-height: 1.55;
+  }
+  .code-block .c { color: var(--ink-faint); }
+
+  .file-tree {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.82rem;
+    background: var(--paper-sunken);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 14px 18px;
+    line-height: 1.7;
+    overflow-x: auto;
+    margin: 10px 0 14px;
+    color: var(--ink-soft);
+  }
+  .file-tree .hl { color: var(--accent); font-weight: 600; }
+
+  .callout {
+    border-left: 3px solid var(--accent);
+    background: var(--accent-soft);
+    border-radius: 0 8px 8px 0;
+    padding: 12px 16px;
+    font-size: 0.92rem;
+    color: var(--ink);
+    margin: 14px 0;
+  }
+  .callout.warn {
+    border-left-color: var(--ban-temp);
+    background: var(--ban-temp-bg);
+  }
+  .callout strong { display: block; margin-bottom: 3px; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+    margin: 10px 0 14px;
+  }
+  th, td {
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--line);
+  }
+  th { color: var(--ink-faint); font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.03em; }
+  td { color: var(--ink-soft); font-family: "IBM Plex Mono", monospace; font-size: 0.82rem; }
+
+  /* mode visibility */
+  [data-audience="simple"] .tech-only { display: none; }
+  [data-audience="tech"] .simple-only { display: none; }
+
+  .mode-tag {
+    display: inline-block;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    background: var(--paper-sunken);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 2px 7px;
+    margin-bottom: 10px;
+  }
+
+  footer {
+    max-width: 700px;
+    margin: 0 auto;
+    padding: 24px clamp(16px, 4vw, 40px) 60px;
+    color: var(--ink-faint);
+    font-size: 0.85rem;
+    border-top: 1px solid var(--line);
+  }
+  footer code { color: var(--ink-soft); }
+
+  @media (max-width: 480px) {
+    .brand span.full { display: none; }
+  }
+
+  .brand img {
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    flex: none;
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand"><img src="assets/logo.jpg" alt=""> All Stack Bot</div>
+  <div class="toggle" role="group" aria-label="Nível de detalhe">
+    <button class="toggle-btn" id="btn-simple" aria-pressed="true">Modo simples</button>
+    <button class="toggle-btn" id="btn-tech" aria-pressed="false">Modo técnico</button>
+  </div>
+</div>
+
+<main id="doc" data-audience="simple">
+
+  <div class="hero">
+    <div class="eyebrow">Guia do bot &middot; All Stack Community</div>
+    <h1>Moderação de grupo, sem precisar decorar nada.</h1>
+    <p class="lede simple-only">Essa página explica como usar o bot no dia a dia — banir, desbanir, ver quem tá banido. Sem termos técnicos.</p>
+    <p class="lede tech-only">Referência técnica: comandos, regras de autorização, resolução de identidade (LID), persistência e o pipeline de deploy.</p>
+  </div>
+
+  <section id="ajuda">
+    <h2><span class="num">01</span> Comece por aqui</h2>
+    <p>Em qualquer grupo ou no privado, mande:</p>
+    <div class="cmd">
+      <div class="cmd-head"><code class="name">$ajuda</code><span class="who">qualquer pessoa</span></div>
+      <p class="simple-only">O bot responde na hora com os comandos mais usados e o link pra essa página. Não precisa ser admin de nada pra usar esse.</p>
+      <p class="tech-only">Não passa por <code>isAuthorized()</code> de propósito — é o único comando sem checagem de permissão, já que é o ponto de entrada pra quem ainda não está no grupo de admins.</p>
+    </div>
+  </section>
+
+  <section id="quem-pode">
+    <h2><span class="num">02</span> Quem pode dar ordem ao bot</h2>
+    <p class="simple-only">Pra usar os comandos de moderação, você precisa das duas coisas ao mesmo tempo:</p>
+    <ol class="simple-only">
+      <li>Ser admin do grupo onde você digitou o comando.</li>
+      <li>Estar dentro do grupo de administração da comunidade (o grupo que foi registrado com <code>$home</code>).</li>
+    </ol>
+    <p class="simple-only">Faltando qualquer um dos dois, o bot recusa e explica qual dos dois tá faltando.</p>
+
+    <p class="tech-only">Verificado em <code>MessageHandler.isAuthorized()</code>: checa admin do grupo atual via <code>findParticipant(metadata, senderRaw)</code> + <code>isGroupAdmin()</code>, depois varre os JIDs em <code>AdminService.getAdminGroups()</code> buscando o remetente (resolvido por PN e pela forma crua) em cada um via <code>findParticipant</code>. As duas checagens são obrigatórias — nenhuma supre a outra.</p>
+    <div class="callout tech-only">
+      <strong>Não reintroduza comparação de string crua entre JIDs.</strong>
+      Desde a migração do WhatsApp pra <code>@lid</code>, comparar <code>id.split('@')[0]</code> direto quebra silenciosamente. Use sempre <code>resolvePnJid</code>/<code>findParticipant</code> de <code>utils/jid.ts</code>.
+    </div>
+  </section>
+
+  <section id="comandos">
+    <h2><span class="num">03</span> Comandos essenciais</h2>
+
+    <div class="cmd">
+      <div class="cmd-head"><code class="name">$home</code><span class="who">admin</span></div>
+      <p class="simple-only">Roda uma vez, dentro do grupo de administração, pra registrar ele como tal. Todo log de banimento cai ali.</p>
+      <p class="tech-only">Upsert em <code>AdminService.registerGroup(jid)</code> → tabela <code>AdminGroup</code>. Não precisa rodar de novo depois de trocar o número do bot — o registro não depende do número.</p>
+      <span class="syntax">$home</span>
+    </div>
+
+    <div class="cmd">
+      <div class="cmd-head"><code class="name">$ban</code><span class="who">admin</span></div>
+      <p class="simple-only">Marque a pessoa ou responda a mensagem dela. Diz o tipo (veja abaixo) e o motivo — os dois são opcionais.</p>
+      <p class="tech-only">Resolve o alvo via <code>getTargetJid</code> (menção ou <code>contextInfo.participant</code>) → <code>resolvePnJid</code> → upsert em <code>BannedUser</code>. Bloqueia se o alvo for admin do grupo. Remoção imediata: no grupo atual pra <code>PERMANENTE</code>/<code>TEMPORARIO</code>; em todos os grupos via <code>groupFetchAllParticipating()</code> pra <code>COMUNIDADE</code>, com <code>humanBulkActionDelay()</code> entre cada remoção.</p>
+      <span class="syntax">$ban @user [permanente|temporario|comunidade] [motivo]</span>
+    </div>
+
+    <div class="cmd">
+      <div class="cmd-head"><code class="name">$unban</code><span class="who">admin</span></div>
+      <p class="simple-only">Marque a pessoa, responda uma mensagem antiga dela (funciona mesmo se ela já saiu do grupo), ou digite o número completo.</p>
+      <p class="tech-only">Mesma resolução de alvo do <code>$ban</code>; se não vier menção/reply, cai pro fallback de número cru (<code>args[0].replace(/\D/g, '')</code>). Remove <strong>todos</strong> os registros daquele <code>userJid</code>, em qualquer grupo, independente do tipo.</p>
+      <span class="syntax">$unban @user</span>
+    </div>
+
+    <div class="cmd">
+      <div class="cmd-head"><code class="name">$bans</code><span class="who">admin</span></div>
+      <p class="simple-only">Lista quem está banido agora, com o motivo e (quando o bot souber) o nome público da pessoa.</p>
+      <p class="tech-only"><code>BanService.getBans()</code>, ordenado por <code>createdAt desc</code>. <code>displayName</code> é capturado de <code>participant.notify</code> no momento do <code>$ban</code> — bans anteriores a essa mudança não têm retroativamente.</p>
+      <span class="syntax">$bans</span>
+    </div>
+
+    <div class="cmd">
+      <div class="cmd-head"><code class="name">$banedit</code><span class="who">admin</span></div>
+      <p class="simple-only">Muda o tipo de um banimento já existente, ou quanto tempo falta pra expirar.</p>
+      <p class="tech-only"><code>updateBanType</code> / <code>updateExpiresAt</code> em <code>BanService</code>, escopados por <code>[userJid, groupJid]</code>.</p>
+      <span class="syntax">$banedit @user tipo comunidade
+$banedit @user tempo 7d</span>
+    </div>
+
+    <div class="cmd">
+      <div class="cmd-head"><code class="name">$clear</code><span class="who">admin</span></div>
+      <p class="simple-only">Apaga os comandos digitados pro bot e as respostas dele nesse grupo — deixa tudo limpo, inclusive o próprio <code>$clear</code>.</p>
+      <p class="tech-only">Rastro em memória por grupo (<code>groupMessageLog</code>), populado em <code>trackGroupMessage</code> a cada mensagem enviada/recebida. Apaga via <code>sendMessage(jid, &#123; delete: key &#125;)</code> — exige o bot ser admin do grupo pra apagar mensagem de terceiros. Não sobrevive a um restart (é intencional).</p>
+      <span class="syntax">$clear</span>
+    </div>
+
+    <div class="cmd">
+      <div class="cmd-head"><code class="name">$status</code><span class="who">admin</span></div>
+      <p class="simple-only">Mostra o número conectado e quantos banimentos existem. Útil pra confirmar que uma troca de número deu certo.</p>
+      <p class="tech-only">Lê <code>sock.user.id</code>, <code>AdminService.getAdminGroups()</code> e <code>BanService.getBans()</code>. Nenhuma dessas fontes depende do número atual da sessão.</p>
+      <span class="syntax">$status</span>
+    </div>
+  </section>
+
+  <section id="tipos">
+    <h2><span class="num">04</span> Tipos de banimento</h2>
+    <p class="simple-only">Pense nos três tipos como três "tamanhos" de banimento:</p>
+    <div class="pills">
+      <div class="pill-card">
+        <span class="pill perm">Permanente</span>
+        <p>Fica banido daquele grupo específico pra sempre.</p>
+        <span class="scope tech-only">escopo: groupJid exato · sem expiresAt</span>
+      </div>
+      <div class="pill-card">
+        <span class="pill temp">Temporário</span>
+        <p>Fica banido daquele grupo por um tempo (7 dias por padrão).</p>
+        <span class="scope tech-only">escopo: groupJid exato · expiresAt = agora + 7d</span>
+      </div>
+      <div class="pill-card">
+        <span class="pill comm">Comunidade</span>
+        <p>Fica banido de <strong>todos</strong> os grupos que o bot administra.</p>
+        <span class="scope tech-only">escopo: qualquer groupJid · getActiveBan ignora groupJid</span>
+      </div>
+    </div>
+    <p class="tech-only">"Comunidade" não é a feature nativa <em>Community</em> do WhatsApp (<code>linkedParent</code>) — é uma convenção própria do bot: qualquer grupo em que o alvo esteja e o bot administre. Ver <code>getActiveBan()</code> em <code>banService.ts</code>.</p>
+    <p class="simple-only">Se a pessoa tentar entrar de novo em qualquer lugar onde o banimento vale, o bot remove sozinho e avisa no grupo de admins. Em grupos com aprovação de admin pra novos membros, o pedido de entrada é <strong>rejeitado na hora</strong> — a pessoa nunca chega a entrar.</p>
+    <p class="tech-only">Evento <code>group.join-request</code> (não confundir com <code>group-participants.update</code>, que é pós-entrada): se <code>getActiveBan</code> encontrar banimento válido pro <code>id</code> do grupo, chama <code>groupRequestParticipantsUpdate(id, [participant], 'reject')</code> antes da pessoa virar membro.</p>
+  </section>
+
+  <section id="troca-numero">
+    <h2><span class="num">05</span> Se o número do bot for perdido ou banido</h2>
+    <p class="simple-only">Fica tranquilo — nenhum banimento ou configuração se perde. O bot só precisa de um número novo pra voltar a funcionar.</p>
+    <ol class="steps">
+      <li><span class="simple-only">Escaneie o QR code com o número novo.</span><span class="tech-only">Apague <code>SESSION_PATH</code> (padrão <code>./auth</code>) e suba o processo de novo — um QR novo aparece.</span></li>
+      <li><span class="simple-only">Adicione o número novo em cada grupo e promova ele a admin — isso é manual, o WhatsApp não deixa transferir esse cargo entre números.</span><span class="tech-only">Sem isso, <code>groupParticipantsUpdate</code> e a leitura de <code>groupMetadata</code> falham por falta de permissão.</span></li>
+      <li>Rode <code>$status</code> pra confirmar: número certo, grupos de admin registrados e contagem de banimentos batendo com o esperado.</li>
+    </ol>
+    <p class="tech-only">Nada em <code>AdminGroup</code>/<code>BannedUser</code> referencia o número do próprio bot — só JIDs de membros e grupos. É por isso que a troca não perde estado.</p>
+  </section>
+
+  <section id="arquitetura" class="tech-only">
+    <h2><span class="num">06</span> Arquitetura</h2>
+    <p>TypeScript (commonjs) sobre <a href="https://github.com/WhiskeySockets/Baileys" target="_blank" rel="noopener">Baileys</a> — protocolo WhatsApp Web, não a API oficial da Meta. Persistência via Prisma + <code>better-sqlite3</code>, arquivo único.</p>
+    <div class="file-tree">src/infra/bot/
+  handlers/messageHandler.ts &nbsp;<span class="c">// dispatch de comandos</span>
+  services/banService.ts &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="c">// CRUD de banimentos</span>
+  services/adminService.ts &nbsp;&nbsp;&nbsp;&nbsp;<span class="c">// CRUD de grupos de admin</span>
+  utils/<span class="hl">jid.ts</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="c">// resolução de identidade (LID)</span>
+  utils/delay.ts &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="c">// pausas anti-detecção de bot</span></div>
+
+    <h3 style="font-size:1.05rem;margin-bottom:8px;">Resolução de identidade (LID)</h3>
+    <p>Desde meados de 2026 o WhatsApp identifica participantes por um ID opaco (<code>@lid</code>), sem relação com o número de telefone — a mesma pessoa pode aparecer ora como <code>@lid</code>, ora como <code>@s.whatsapp.net</code>.</p>
+    <div class="code-block"><span class="c">// utils/jid.ts</span>
+findParticipant(metadata, jid)  <span class="c">// acha por id, lid ou phoneNumber</span>
+resolvePnJid(sock, jid, metadata?)
+  <span class="c">// 1. tenta pelo phoneNumber já nos metadados do grupo</span>
+  <span class="c">// 2. cai pra sock.signalRepository.lidMapping (store oficial do Baileys)</span></div>
+    <p>Todo banimento é gravado com o JID de telefone já resolvido — por isso o <code>$unban</code> funciona independente de o WhatsApp endereçar a pessoa por <code>@lid</code> ou por número naquele momento.</p>
+
+    <h3 style="font-size:1.05rem;margin:20px 0 8px;">Anti-detecção de bot</h3>
+    <p>Baileys é biblioteca não-oficial; a Meta investe em detectar padrões automatizados. Duas pausas humanizadas mitigam o padrão mais óbvio (timing robótico):</p>
+    <table>
+      <tr><th>Onde</th><th>Função</th><th>Faixa</th></tr>
+      <tr><td>antes de qualquer resposta</td><td>humanReplyDelay()</td><td>800&ndash;2000ms</td></tr>
+      <tr><td>entre remoções em massa</td><td>humanBulkActionDelay()</td><td>1500&ndash;4000ms</td></tr>
+    </table>
+    <div class="callout warn">
+      <strong>Isso reduz risco, não elimina.</strong>
+      Baileys continua sendo cliente não-oficial. Número virtual/VOIP falha direto na verificação do WhatsApp em 2026 — use sempre chip/eSIM de operadora real.
+    </div>
+  </section>
+
+  <section id="deploy" class="tech-only">
+    <h2><span class="num">07</span> Deploy</h2>
+    <p>GitHub Actions → Terraform → Cloud Function (GCP) → reinicia a VM <code>baileys-bot-server</code> → <code>git pull</code> + PM2 via startup script.</p>
+    <div class="callout warn">
+      <strong>Pendência conhecida</strong>
+      Não há arquivos <code>.tf</code> versionados neste repositório nem backend de state remoto configurado. Confirmar com quem criou a infra original onde eles vivem antes de depender desse pipeline pra deploys de verdade.
+    </div>
+    <p>Robustez já corrigida: <code>curl --fail-with-body</code> (um 500 da function não passa mais como sucesso), guarda contra <code>TRIGGER_URL</code>/<code>ID_TOKEN</code> vazios, e <code>concurrency</code> group pra impedir dois <code>terraform apply</code> simultâneos.</p>
+  </section>
+
+</main>
+
+<footer>
+  Referência completa: <a href="instalacao.html">instalação</a> ·
+  <a href="comandos.html">comandos</a> ·
+  <a href="banimentos.html">banimentos</a> ·
+  <a href="troca-de-numero.html">troca de número</a> ·
+  <a href="arquitetura.html">arquitetura</a> ·
+  <a href="deploy.html">deploy</a>.
+  Código-fonte em <a href="https://github.com/allstack-staff/bot-whatsapp" target="_blank" rel="noopener">github.com/allstack-staff/bot-whatsapp</a>.
+</footer>
+
+<script>
+  (function () {
+    var root = document.getElementById('doc');
+    var btnSimple = document.getElementById('btn-simple');
+    var btnTech = document.getElementById('btn-tech');
+    var STORAGE_KEY = 'allstack-bot-doc-audience';
+
+    function setAudience(mode) {
+      root.setAttribute('data-audience', mode);
+      btnSimple.setAttribute('aria-pressed', String(mode === 'simple'));
+      btnTech.setAttribute('aria-pressed', String(mode === 'tech'));
+      try { localStorage.setItem(STORAGE_KEY, mode); } catch (e) {}
+    }
+
+    btnSimple.addEventListener('click', function () { setAudience('simple'); });
+    btnTech.addEventListener('click', function () { setAudience('tech'); });
+
+    try {
+      var saved = localStorage.getItem(STORAGE_KEY);
+      if (saved === 'simple' || saved === 'tech') setAudience(saved);
+    } catch (e) {}
+  })();
+</script>
+</body>
+</html>

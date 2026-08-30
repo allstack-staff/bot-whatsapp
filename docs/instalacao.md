@@ -2,6 +2,9 @@
 title: Instalação e Configuração
 ---
 
+<a href="./"><img src="assets/logo.jpg" alt="All Stack" width="48" style="border-radius:8px"></a>
+
+
 # Instalação e Configuração
 
 ## Pré-requisitos

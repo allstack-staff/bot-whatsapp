@@ -2,6 +2,9 @@
 title: Comandos
 ---
 
+<a href="./"><img src="assets/logo.jpg" alt="All Stack" width="48" style="border-radius:8px"></a>
+
+
 # Comandos
 
 Prefixo padrão: `$` (configurável via `BOT_PREFIX`).

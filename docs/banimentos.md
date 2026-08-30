@@ -2,6 +2,9 @@
 title: Como o Banimento Funciona
 ---
 
+<a href="./"><img src="assets/logo.jpg" alt="All Stack" width="48" style="border-radius:8px"></a>
+
+
 # Como o Banimento Funciona
 
 ## Os três tipos

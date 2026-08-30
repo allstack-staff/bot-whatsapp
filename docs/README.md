@@ -1,7 +1,9 @@
 ---
 title: All Stack Bot
-permalink: /
 ---
+
+<a href="./"><img src="assets/logo.jpg" alt="All Stack" width="48" style="border-radius:8px"></a>
+
 
 # All Stack Bot
 

@@ -2,6 +2,9 @@
 title: Arquitetura
 ---
 
+<a href="./"><img src="assets/logo.jpg" alt="All Stack" width="48" style="border-radius:8px"></a>
+
+
 # Arquitetura
 
 Visão técnica pra quem for mexer no código.
