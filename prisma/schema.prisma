@@ -68,8 +68,9 @@ model GroupDescriptionChange {
 // Se uma proposta de mudança de descrição é rejeitada pela maioria, o grupo fica
 // travado (o bot restaura a versão anterior) por um tempo.
 model GroupDescriptionLock {
-    groupJid    String   @id
-    lockedUntil DateTime
+    groupJid          String   @id
+    lockedUntil       DateTime
+    frozenDescription String?  // descrição que o bot restaura se um admin tentar mudar durante a trava
 }
 
 // Uma linha por grupo — permite saber se chegou mensagem nova desde a última

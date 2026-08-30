@@ -6,6 +6,7 @@ import { botConfig } from '../config';
 import { BanService } from '../services/banService';
 import { AdminService } from '../services/adminService';
 import { WarningService } from '../services/warningService';
+import { DescriptionChangeService } from '../services/descriptionChangeService';
 import { logger } from '../utils/logger';
 import { findParticipant, isGroupAdmin, resolvePnJid } from '../utils/jid';
 import { humanBulkActionDelay, humanReplyDelay } from '../utils/delay';
@@ -16,6 +17,7 @@ export class MessageHandler {
     private banService: BanService;
     private adminService: AdminService;
     private warningService: WarningService;
+    private descriptionChangeService: DescriptionChangeService;
 
     // Rastro (em memória) dos comandos digitados pro bot e das respostas dele em
     // cada grupo, só pra viabilizar o $clear. Não precisa sobreviver a um restart.
@@ -23,13 +25,24 @@ export class MessageHandler {
     private static readonly MAX_TRACKED_PER_GROUP = 300;
 
     // Marca mudanças de descrição feitas pelo próprio bot, pra não confundir
-    // com edição manual de admin (que dispara votação — feature futura).
+    // com edição manual de admin (que dispara votação de aprovação).
     private recentSelfDescriptionUpdate: Map<string, number> = new Map();
+    private static readonly SELF_UPDATE_WINDOW_MS = 15_000;
+
+    // Última descrição conhecida de cada grupo, pra saber se uma mudança é de
+    // verdade (não sobrevive a um restart — reprimed via primeDescriptionCache).
+    private descriptionCache: Map<string, string | undefined> = new Map();
+
+    // Votos (por reação) de cada proposta de mudança de descrição pendente,
+    // por id da mensagem de votação. Em memória de propósito — perder isso
+    // num restart só significa recomeçar a contagem, não perder a trava/estado.
+    private descriptionVotes: Map<string, Map<string, 'approve' | 'reject'>> = new Map();
 
     constructor(private sock: WASocket) {
         this.banService = new BanService();
         this.adminService = new AdminService();
         this.warningService = new WarningService();
+        this.descriptionChangeService = new DescriptionChangeService();
     }
 
     private commands: Record<string, (msg: any, args: string[]) => Promise<void>> = {
@@ -205,6 +218,177 @@ export class MessageHandler {
                 }
             }
         }
+    }
+
+    /** Preenche o cache de descrições conhecidas — chamado ao conectar. */
+    async primeDescriptionCache(): Promise<void> {
+        try {
+            const groups = await this.sock.groupFetchAllParticipating();
+            for (const [gid, meta] of Object.entries(groups)) {
+                this.descriptionCache.set(gid, (meta as any).desc);
+            }
+        } catch (err) {
+            logger.warn({ err }, '[primeDescriptionCache] falha ao listar grupos');
+        }
+    }
+
+    /**
+     * Detecta mudança de descrição de grupo (evento `groups.update`). Três
+     * casos: (1) foi o próprio bot que mudou (ex: $regras) — só atualiza o
+     * cache; (2) o grupo está travado por rejeição anterior — restaura a
+     * versão congelada na hora; (3) edição de verdade por um admin — abre
+     * votação no grupo de admins.
+     */
+    async handleGroupsUpdate(updates: Partial<GroupMetadata>[]): Promise<void> {
+        for (const update of updates) {
+            const gid = update.id;
+            if (!gid || update.desc === undefined) continue;
+
+            const newDesc = update.desc;
+            const oldDesc = this.descriptionCache.get(gid);
+            if (newDesc === oldDesc) continue;
+
+            const selfUpdateAt = this.recentSelfDescriptionUpdate.get(gid);
+            const isSelfUpdate = selfUpdateAt !== undefined && Date.now() - selfUpdateAt < MessageHandler.SELF_UPDATE_WINDOW_MS;
+            if (isSelfUpdate) {
+                this.recentSelfDescriptionUpdate.delete(gid);
+                this.descriptionCache.set(gid, newDesc);
+                continue;
+            }
+
+            try {
+                const lock = await this.descriptionChangeService.getLock(gid);
+                if (lock) {
+                    logger.info({ groupId: gid }, '[handleGroupsUpdate] descrição alterada durante trava — restaurando');
+                    this.recentSelfDescriptionUpdate.set(gid, Date.now());
+                    await this.sock.groupUpdateDescription(gid, lock.frozenDescription ?? undefined).catch(() => {});
+                    this.descriptionCache.set(gid, lock.frozenDescription ?? undefined);
+                    await this.sendLog(
+                        `🔒 Grupo *${update.subject || gid}* está com a descrição travada (rejeitada anteriormente) — mudança revertida automaticamente. Trava até ${lock.lockedUntil.toLocaleString('pt-BR')}.`,
+                    );
+                    continue;
+                }
+
+                await this.openDescriptionVote(gid, oldDesc, newDesc, update.descOwner || update.subjectOwner);
+                this.descriptionCache.set(gid, newDesc);
+            } catch (err) {
+                logger.warn({ err, groupId: gid }, '[handleGroupsUpdate] erro processando mudança de descrição');
+            }
+        }
+    }
+
+    private async openDescriptionVote(
+        groupJid: string,
+        oldDescription: string | undefined,
+        newDescription: string | undefined,
+        proposedBy: string | undefined,
+    ): Promise<void> {
+        const adminGroupJid = await this.getLogJid();
+        if (!adminGroupJid) {
+            logger.warn({ groupId: groupJid }, '[openDescriptionVote] sem grupo de admins registrado — não dá pra votar');
+            return;
+        }
+
+        let groupName = groupJid;
+        try {
+            groupName = (await this.sock.groupMetadata(groupJid)).subject;
+        } catch { /* usa o jid mesmo se falhar */ }
+
+        const text = [
+            `📝 *Mudança de descrição detectada* — ${groupName}`,
+            proposedBy ? `Por: @${proposedBy.split('@')[0]}` : '',
+            '',
+            '*Antes:*',
+            oldDescription || '_(vazia)_',
+            '',
+            '*Depois:*',
+            newDescription || '_(vazia)_',
+            '',
+            'Reaja ✅ pra aprovar ou ❌ pra rejeitar. Se a maioria rejeitar, a versão antiga volta e o grupo fica travado por 7 dias.',
+        ].filter(Boolean).join('\n');
+
+        const sent = await this.sock.sendMessage(adminGroupJid, {
+            text,
+            mentions: proposedBy ? [proposedBy] : undefined,
+        }).catch((err) => {
+            logger.warn({ err }, '[openDescriptionVote] falha ao postar votação');
+            return undefined;
+        });
+
+        if (!sent?.key?.id) return;
+        this.trackGroupMessage(adminGroupJid, sent.key);
+
+        await this.descriptionChangeService.createPending({
+            groupJid,
+            oldDescription,
+            newDescription,
+            proposedBy: proposedBy || 'desconhecido',
+            voteMessageId: sent.key.id,
+            voteGroupJid: adminGroupJid,
+        });
+    }
+
+    /** Reações (`messages.reaction`) — só processa quando batem com uma votação de descrição pendente. */
+    async handleReaction(reactions: { key: any; reaction: any }[]): Promise<void> {
+        for (const { key, reaction } of reactions) {
+            if (!key?.id) continue;
+
+            try {
+                const change = await this.descriptionChangeService.findPendingByVoteMessageId(key.id);
+                if (!change) continue;
+
+                const emoji: string | undefined = reaction?.text;
+                const reactorRaw: string | undefined = reaction?.key?.participant || reaction?.key?.remoteJid;
+                if (!reactorRaw) continue;
+
+                const votes = this.descriptionVotes.get(key.id) ?? new Map<string, 'approve' | 'reject'>();
+                if (emoji === '✅') {
+                    votes.set(reactorRaw, 'approve');
+                } else if (emoji === '❌') {
+                    votes.set(reactorRaw, 'reject');
+                } else {
+                    votes.delete(reactorRaw); // reação removida ou trocada por outro emoji — não conta
+                }
+                this.descriptionVotes.set(key.id, votes);
+
+                await this.tallyDescriptionVote(change, votes);
+            } catch (err) {
+                logger.warn({ err }, '[handleReaction] erro processando reação de votação');
+            }
+        }
+    }
+
+    private async tallyDescriptionVote(change: any, votes: Map<string, 'approve' | 'reject'>): Promise<void> {
+        let adminCount = 0;
+        try {
+            const meta = await this.sock.groupMetadata(change.voteGroupJid);
+            adminCount = meta.participants.length;
+        } catch {
+            return; // sem saber o total, não arrisca decidir
+        }
+
+        const majority = Math.floor(adminCount / 2) + 1;
+        const approvals = [...votes.values()].filter((v) => v === 'approve').length;
+        const rejections = [...votes.values()].filter((v) => v === 'reject').length;
+
+        if (approvals >= majority) {
+            await this.descriptionChangeService.resolve(change.id, 'APPROVED');
+            this.descriptionVotes.delete(change.voteMessageId);
+            await this.sendLog(`✅ Mudança de descrição aprovada pela maioria — mantida.`);
+        } else if (rejections >= majority) {
+            await this.descriptionChangeService.resolve(change.id, 'REJECTED');
+            await this.descriptionChangeService.setLock(change.groupJid, change.oldDescription ?? undefined);
+            this.descriptionVotes.delete(change.voteMessageId);
+            this.recentSelfDescriptionUpdate.set(change.groupJid, Date.now());
+            await this.sock.groupUpdateDescription(change.groupJid, change.oldDescription ?? undefined).catch((err) => {
+                logger.warn({ err }, '[tallyDescriptionVote] falha ao restaurar descrição rejeitada');
+            });
+            this.descriptionCache.set(change.groupJid, change.oldDescription ?? undefined);
+            await this.sendLog(
+                `❌ Mudança de descrição rejeitada pela maioria — restaurada a versão anterior. Grupo travado por 7 dias.`,
+            );
+        }
+        // senão, segue pendente aguardando mais votos
     }
 
     private async handleCommand(msg: any, parts: string[]): Promise<void> {

@@ -50,6 +50,9 @@ async function startBot(): Promise<void> {
             messageHandler.checkAndApplyGroupPhotos().catch((err) => {
                 logger.warn({ err }, 'Falha na varredura inicial de fotos de grupo');
             });
+            messageHandler.primeDescriptionCache().catch((err) => {
+                logger.warn({ err }, 'Falha ao preencher cache inicial de descrições');
+            });
 
             if (hourlyTick) clearInterval(hourlyTick);
             hourlyTick = setInterval(() => {
@@ -98,6 +101,8 @@ async function startBot(): Promise<void> {
     sock.ev.on('messages.upsert', messageHandler.handleMessage.bind(messageHandler));
     sock.ev.on('group-participants.update', messageHandler.handleGroupParticipantsUpdate.bind(messageHandler));
     sock.ev.on('group.join-request', messageHandler.handleGroupJoinRequest.bind(messageHandler));
+    sock.ev.on('groups.update', messageHandler.handleGroupsUpdate.bind(messageHandler));
+    sock.ev.on('messages.reaction', messageHandler.handleReaction.bind(messageHandler));
 }
 
 startBot().catch((err) => {

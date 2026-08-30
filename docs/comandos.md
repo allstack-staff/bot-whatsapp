@@ -197,3 +197,7 @@ Exemplo:
 $regras
 ```
 → `✅ Link das regras aplicado em 6 grupo(s) (2 já tinham o link).`
+
+### Aprovação automática de mudança de descrição
+
+Isso não é um comando — é automático. Sempre que um admin edita a descrição de um grupo pelo próprio WhatsApp (fora do `$regras`), o bot detecta, posta a mudança (antes/depois) no grupo de admins e pede votação por reação: **✅ aprova, ❌ rejeita**. Se a maioria dos membros do grupo de admins rejeitar, a versão anterior volta e o grupo fica **travado por 7 dias** — qualquer tentativa de mudar a descrição nesse período é revertida automaticamente pelo bot (não tem como impedir um admin de editar pelo WhatsApp, só reverter depois).
