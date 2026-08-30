@@ -609,8 +609,23 @@ $banedit @user tempo 7d</span>
     <p class="tech-only">Nada em <code>AdminGroup</code>/<code>BannedUser</code> referencia o número do próprio bot — só JIDs de membros e grupos. É por isso que a troca não perde estado.</p>
   </section>
 
+  <section id="migracao" class="tech-only">
+    <h2><span class="num">06</span> Migração de hospedagem sem perda de dados</h2>
+    <p>Diferente da <a href="#troca-numero">troca de número</a> (que assume um número novo e QR novo), migração é mover o bot pra outro servidor <strong>mantendo o mesmo número</strong> — sem re-escanear nada.</p>
+    <ol class="steps">
+      <li>Pare o processo no servidor antigo (<code>pm2 stop bot-whatsapp</code>).</li>
+      <li>Copie a pasta inteira do projeto pro servidor novo — os dois diretórios que realmente importam são <code>auth/</code> (sessão do WhatsApp) e <code>prisma/dev.db</code> (todo o estado: banimentos, grupos de admin, advertências). Ambos ficam fora do git (<code>.gitignore</code>), então um <code>git clone</code> sozinho <strong>não</strong> traz esses dois.</li>
+      <li>No servidor novo: <code>npm install</code>, <code>npx prisma generate</code>, compile (<code>tsc</code>), suba com <code>pm2 start npm --name bot-whatsapp -- run start</code>.</li>
+      <li>Como a pasta <code>auth/</code> veio junto, o Baileys reconecta a mesma sessão automaticamente — sem QR code.</li>
+    </ol>
+    <div class="callout warn">
+      <strong>Nunca rode o bot em dois lugares ao mesmo tempo com a mesma <code>auth/</code>.</strong>
+      O WhatsApp permite só uma conexão ativa por sessão — a mais nova derruba a mais antiga (<code>connectionReplaced</code>). Desligue o antigo antes de subir o novo.
+    </div>
+  </section>
+
   <section id="arquitetura" class="tech-only">
-    <h2><span class="num">06</span> Arquitetura</h2>
+    <h2><span class="num">07</span> Arquitetura</h2>
     <p>TypeScript (commonjs) sobre <a href="https://github.com/WhiskeySockets/Baileys" target="_blank" rel="noopener">Baileys</a> — protocolo WhatsApp Web, não a API oficial da Meta. Persistência via Prisma + <code>better-sqlite3</code>, arquivo único.</p>
     <div class="file-tree">src/infra/bot/
   handlers/messageHandler.ts &nbsp;<span class="c">// dispatch de comandos</span>
@@ -642,7 +657,7 @@ resolvePnJid(sock, jid, metadata?)
   </section>
 
   <section id="deploy" class="tech-only">
-    <h2><span class="num">07</span> Deploy</h2>
+    <h2><span class="num">08</span> Deploy</h2>
     <p>GitHub Actions → Terraform → Cloud Function (GCP) → reinicia a VM <code>baileys-bot-server</code> → <code>git pull</code> + PM2 via startup script.</p>
     <div class="callout warn">
       <strong>Pendência conhecida</strong>
@@ -654,6 +669,8 @@ resolvePnJid(sock, jid, metadata?)
 </main>
 
 <footer>
+  <a href="regras.html">Regras da comunidade</a> ·
+  <a href="governanca.html">Governança</a> ·
   Referência completa: <a href="instalacao.html">instalação</a> ·
   <a href="comandos.html">comandos</a> ·
   <a href="banimentos.html">banimentos</a> ·
