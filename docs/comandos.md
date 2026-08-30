@@ -85,13 +85,13 @@ Veja o significado de cada tipo em [Como o Banimento Funciona](banimentos.md).
 
 ## `$unban`
 
-Remove **todos** os banimentos de um usuário, em qualquer grupo. Aceita **menção**, **reply** a uma mensagem antiga da pessoa (funciona mesmo se ela já tiver sido removida do grupo) ou o número de telefone completo como alternativa.
+Remove **todos** os banimentos de um usuário, em qualquer grupo, e **readiciona ela automaticamente** aos grupos de onde foi removida (reverte o efeito do ban de verdade — não é só apagar o registro). Aceita **menção**, **reply** a uma mensagem antiga da pessoa (funciona mesmo se ela já tiver sido removida do grupo) ou o número de telefone completo como alternativa.
 
 ```
 $unban @user
 ```
 
-**Comportamento:** reage ✅, responde no grupo onde rodou, e manda cópia pro grupo de admins.
+**Comportamento:** reage ✅, responde no grupo onde rodou, e manda cópia pro grupo de admins. Além disso, tenta readicionar a pessoa em cada grupo afetado (todos os da comunidade, se o ban era `comunidade`; só o grupo específico, se era `permanente`/`temporario`) — avisa ✅ no grupo de admins se conseguiu, ⚠️ com link de convite se não conseguiu (privacidade da pessoa pode impedir add direto).
 
 Exemplos:
 ```

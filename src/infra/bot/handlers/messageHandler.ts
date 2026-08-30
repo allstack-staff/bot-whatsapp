@@ -411,43 +411,51 @@ export class MessageHandler {
 
         for (const ban of expired) {
             const { userJid, groupJid } = ban;
-            const number = userJid.split('@')[0];
-
-            let metadata: GroupMetadata | undefined;
-            try {
-                metadata = await this.sock.groupMetadata(groupJid);
-            } catch {
-                // grupo não existe mais / bot saiu — só limpa o registro, nada pra readicionar
-                await this.banService.unban(userJid, groupJid).catch(() => {});
-                continue;
-            }
-
-            const alreadyIn = !!findParticipant(metadata, userJid);
             await this.banService.unban(userJid, groupJid).catch(() => {});
-            if (alreadyIn) continue;
+            await this.tryReAddToGroup(userJid, groupJid, 'o banimento temporário expirou');
+        }
+    }
 
-            try {
-                await humanBulkActionDelay();
-                const result = await this.sock.groupParticipantsUpdate(groupJid, [userJid], 'add');
-                const status = result?.[0]?.status;
+    /**
+     * Tenta readicionar alguém a um grupo — usado tanto pela expiração
+     * automática de banimento temporário quanto pelo `$unban` manual. Pula
+     * silenciosamente se o grupo não existir mais ou a pessoa já estiver
+     * nele; sempre avisa o grupo de admins no sucesso ou na falha (com link
+     * de convite de fallback, já que privacidade pode impedir add direto).
+     */
+    private async tryReAddToGroup(userJid: string, groupJid: string, contextLabel: string): Promise<void> {
+        const number = userJid.split('@')[0];
 
-                if (status === '200') {
-                    await this.sendLog(`✅ @${number} foi readicionado(a) ao grupo *${metadata.subject}* automaticamente — o banimento temporário expirou.`, [userJid]);
-                } else {
-                    let inviteLink = '';
-                    try {
-                        const code = await this.sock.groupInviteCode(groupJid);
-                        if (code) inviteLink = `\nLink de convite: https://chat.whatsapp.com/${code}`;
-                    } catch { /* segue sem link */ }
-                    await this.sendLog(
-                        `⚠️ O banimento temporário de @${number} no grupo *${metadata.subject}* expirou, mas não consegui readicionar automaticamente (provavelmente as configurações de privacidade dela não permitem). Precisa convidar manualmente.${inviteLink}`,
-                        [userJid],
-                    );
-                }
-            } catch (err) {
-                logger.error({ err, userJid, groupJid }, '[reAddExpiredBans] erro tentando readicionar');
-                await this.sendLog(`⚠️ Erro ao tentar readicionar @${number} automaticamente ao grupo *${metadata.subject}* (banimento temporário expirado). Confira manualmente.`, [userJid]).catch(() => {});
+        let metadata: GroupMetadata;
+        try {
+            metadata = await this.sock.groupMetadata(groupJid);
+        } catch {
+            return; // grupo não existe mais / bot saiu — nada pra readicionar
+        }
+
+        if (findParticipant(metadata, userJid)) return; // já está no grupo
+
+        try {
+            await humanBulkActionDelay();
+            const result = await this.sock.groupParticipantsUpdate(groupJid, [userJid], 'add');
+            const status = result?.[0]?.status;
+
+            if (status === '200') {
+                await this.sendLog(`✅ @${number} foi readicionado(a) ao grupo *${metadata.subject}* automaticamente — ${contextLabel}.`, [userJid]);
+            } else {
+                let inviteLink = '';
+                try {
+                    const code = await this.sock.groupInviteCode(groupJid);
+                    if (code) inviteLink = `\nLink de convite: https://chat.whatsapp.com/${code}`;
+                } catch { /* segue sem link */ }
+                await this.sendLog(
+                    `⚠️ @${number} — ${contextLabel}, mas não consegui readicioná-lo(a) automaticamente ao grupo *${metadata.subject}* (provavelmente as configurações de privacidade dela não permitem). Precisa convidar manualmente.${inviteLink}`,
+                    [userJid],
+                );
             }
+        } catch (err) {
+            logger.error({ err, userJid, groupJid }, '[tryReAddToGroup] erro tentando readicionar');
+            await this.sendLog(`⚠️ Erro ao tentar readicionar @${number} automaticamente ao grupo *${metadata.subject}* (${contextLabel}). Confira manualmente.`, [userJid]).catch(() => {});
         }
     }
 
@@ -1246,6 +1254,7 @@ export class MessageHandler {
         }
 
         const number = userJid.split('@')[0];
+        const priorBans = await this.banService.getUserBans(userJid);
         const count = await this.banService.unban(userJid);
 
         await this.reactSafe(jid, msg.key, '✅');
@@ -1257,6 +1266,22 @@ export class MessageHandler {
                 `✅ Membro @${number} desbanido — ${count} registro(s) removido(s).`,
                 [userJid],
             );
+
+            // Reverte o efeito do ban de verdade — readiciona nos grupos de onde
+            // ela foi removida. COMUNIDADE cobria todos os grupos da comunidade;
+            // PERMANENTE/TEMPORARIO, só o grupo específico do registro.
+            const communityGroupIds = await this.getCommunityGroupIds();
+            const groupIdsToTry = new Set<string>();
+            for (const ban of priorBans) {
+                if (ban.banType === 'COMUNIDADE') {
+                    communityGroupIds.forEach((gid) => groupIdsToTry.add(gid));
+                } else {
+                    groupIdsToTry.add(ban.groupJid);
+                }
+            }
+            for (const groupJid of groupIdsToTry) {
+                await this.tryReAddToGroup(userJid, groupJid, 'foi desbanido(a)');
+            }
         } else {
             await this.replySafe(jid, `❌ Nenhum banimento encontrado para @${number}.`);
         }
