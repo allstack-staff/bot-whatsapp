@@ -45,6 +45,14 @@ export class MessageHandler {
     // verdade (não sobrevive a um restart — reprimed via primeDescriptionCache).
     private descriptionCache: Map<string, string | undefined> = new Map();
 
+    // Ao reconectar, o WhatsApp reemite `groups.update` pra vários grupos (parte
+    // da sincronização), mesmo sem ninguém ter mudado nada de verdade. Se esses
+    // eventos chegarem antes do cache ser preenchido, toda descrição parece uma
+    // mudança "de vazia pra atual" — falso positivo real, observado em produção
+    // (proposta de votação duplicada pra "All Stack Debugging" sem edição nenhuma).
+    // Só processa handleGroupsUpdate depois que o cache inicial estiver pronto.
+    private descriptionCachePrimed = false;
+
     // Votos (por reação) de cada proposta de mudança de descrição pendente,
     // por id da mensagem de votação. Em memória de propósito — perder isso
     // num restart só significa recomeçar a contagem, não perder a trava/estado.
@@ -368,6 +376,7 @@ export class MessageHandler {
                 if (!communityGroupIds.has(gid)) continue;
                 this.descriptionCache.set(gid, (meta as any).desc);
             }
+            this.descriptionCachePrimed = true;
         } catch (err) {
             logger.warn({ err }, '[primeDescriptionCache] falha ao listar grupos');
         }
@@ -423,6 +432,8 @@ export class MessageHandler {
      * votação no grupo de admins.
      */
     async handleGroupsUpdate(updates: Partial<GroupMetadata>[]): Promise<void> {
+        if (!this.descriptionCachePrimed) return;
+
         for (const update of updates) {
             const gid = update.id;
             if (!gid || update.desc === undefined) continue;
