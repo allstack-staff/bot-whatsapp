@@ -8,6 +8,8 @@ title: Comandos
 
 Prefixo padrão: `$` (configurável via `BOT_PREFIX`).
 
+**Reação automática:** ao ver uma mensagem começando com `$`, o bot reage imediatamente — ✅ se reconheceu o comando (mesmo que depois recuse por falta de permissão) ou ❌ se digitou algo que não existe (ex: `$banir` em vez de `$ban`). Alguns comandos substituem a ✅ por uma reação mais específica assim que terminam de processar (ex: ⚠️ no `$advertir`) — isso é esperado, é só a confirmação virando o resultado final.
+
 ## `$ajuda` (ou `$help`)
 
 Mostra um resumo rápido dos comandos mais usados direto no WhatsApp, com o link pra essa documentação completa. Não exige nenhuma permissão — funciona pra qualquer pessoa, em qualquer grupo ou no privado, justamente pra quem ainda não sabe usar o bot conseguir se virar sozinho.

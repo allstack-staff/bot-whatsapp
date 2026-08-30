@@ -578,6 +578,9 @@
   <section id="comandos">
     <h2><span class="num">03</span> Comandos essenciais</h2>
 
+    <p class="simple-only">O bot reage na hora em toda mensagem com <code>$</code>: ✅ se reconheceu o comando, ❌ se não existe esse comando. Alguns comandos trocam a ✅ por uma reação mais específica ao terminar (ex: ⚠️ no <code>$advertir</code>).</p>
+    <p class="tech-only"><code>handleCommand</code> reage ✅ assim que encontra um handler no mapa de comandos (antes de rodar — é só confirmação de reconhecimento, não de sucesso) e ❌ quando não encontra. Handlers específicos podem reagir de novo depois, substituindo a reação.</p>
+
     <div class="cmd">
       <div class="cmd-head"><code class="name">$home</code><span class="who">admin</span></div>
       <p class="simple-only">Roda uma vez, dentro do grupo de administração, pra registrar ele como tal. Todo log de banimento cai ali.</p>

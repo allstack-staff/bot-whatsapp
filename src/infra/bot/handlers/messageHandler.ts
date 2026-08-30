@@ -515,10 +515,17 @@ export class MessageHandler {
     private async handleCommand(msg: any, parts: string[]): Promise<void> {
         const command = parts[0].slice(botConfig.commands.prefix.length).toLowerCase();
         const args = parts.slice(1);
+        const jid = msg.key.remoteJid!;
 
         const handler = this.commands[command];
         if (handler) {
+            // Confirma na hora que reconheceu o comando e vai processar — o
+            // handler específico pode reagir de novo depois (ex: ⚠️ no
+            // $advertir) e essa reação final substitui a ✅ automaticamente.
+            await this.reactSafe(jid, msg.key, '✅');
             await handler(msg, args);
+        } else {
+            await this.reactSafe(jid, msg.key, '❌');
         }
     }
 
