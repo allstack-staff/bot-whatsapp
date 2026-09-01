@@ -3,9 +3,15 @@ import { logger } from '../utils/logger';
 export type ModerationAction = 'advertir' | 'banir_comunidade';
 
 export interface ModerationViolation {
+    groupJid: string;
     sender: string;
     reason: string;
     action: ModerationAction;
+}
+
+export interface ModerationGroupBatch {
+    groupJid: string;
+    messages: { sender: string; text: string }[];
 }
 
 const RULES_SUMMARY = `
@@ -23,19 +29,30 @@ export class AiModerationService {
     }
 
     /**
-     * Avalia um lote de mensagens de um grupo contra as regras da comunidade.
-     * Retorna só as violações que a IA encontrar — lista vazia se nada errado.
-     * Falha "fechada": qualquer erro de rede/parse é tratado como "sem violação",
-     * nunca aplica punição por conta própria de uma resposta que não entendeu.
+     * Avalia o delta novo de VÁRIOS grupos numa única chamada à API (em vez de
+     * uma chamada por grupo) — o free tier do Gemini limita por requisições/minuto,
+     * não por volume de texto (o limite de tokens/minuto é bem folgado pra esse
+     * uso), então agrupar tudo num ciclo só é o jeito de render o limite ao
+     * máximo sem correr risco de estourar RPM com muitos grupos ativos na mesma hora.
+     * Retorna só as violações encontradas, já marcadas com o grupo de origem —
+     * lista vazia se nada errado ou se a API/parse falhar (falha "fechada":
+     * nunca aplica punição por conta própria de uma resposta que não entendeu).
      */
-    async evaluateMessages(messages: { sender: string; text: string }[]): Promise<ModerationViolation[]> {
-        if (!this.apiKey || messages.length === 0) return [];
+    async evaluateBatch(groups: ModerationGroupBatch[]): Promise<ModerationViolation[]> {
+        if (!this.apiKey || groups.length === 0) return [];
 
-        const numbered = messages
-            .map((m, i) => `${i + 1}. [${m.sender}]: ${m.text.replace(/\n/g, ' ').slice(0, 500)}`)
-            .join('\n');
+        const validGroupJids = new Set(groups.map((g) => g.groupJid));
 
-        const prompt = `Você é um moderador de uma comunidade de mentoria em programação no WhatsApp. Regras:\n${RULES_SUMMARY}\n\nMensagens recentes do grupo (formato "N. [remetente]: texto"):\n${numbered}\n\nResponda APENAS com um JSON válido, sem nenhum texto antes ou depois, no formato:\n{"violations": [{"sender": "<remetente exatamente como veio entre colchetes>", "reason": "<motivo curto em português>", "action": "advertir" ou "banir_comunidade"}]}\nSe nenhuma mensagem violar as regras, responda {"violations": []}.`;
+        const sections = groups
+            .map((g) => {
+                const numbered = g.messages
+                    .map((m, i) => `${i + 1}. [${m.sender}]: ${m.text.replace(/\n/g, ' ').slice(0, 500)}`)
+                    .join('\n');
+                return `=== Grupo ${g.groupJid} ===\n${numbered}`;
+            })
+            .join('\n\n');
+
+        const prompt = `Você é um moderador de uma comunidade de mentoria em programação no WhatsApp, responsável por vários grupos ao mesmo tempo. Regras:\n${RULES_SUMMARY}\n\nMensagens novas de cada grupo desde a última checagem, separadas por "=== Grupo <jid> ===" (formato de mensagem "N. [remetente]: texto"):\n\n${sections}\n\nResponda APENAS com um JSON válido, sem nenhum texto antes ou depois, no formato:\n{"violations": [{"group": "<jid exatamente como no cabeçalho \\"=== Grupo ... ===\\">", "sender": "<remetente exatamente como veio entre colchetes>", "reason": "<motivo curto em português>", "action": "advertir" ou "banir_comunidade"}]}\nSe nenhuma mensagem de nenhum grupo violar as regras, responda {"violations": []}.`;
 
         try {
             const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${this.apiKey}`;
@@ -60,9 +77,16 @@ export class AiModerationService {
             const parsed = JSON.parse(jsonMatch[0]);
             const violations = Array.isArray(parsed?.violations) ? parsed.violations : [];
 
-            return violations.filter(
-                (v: any) => v && typeof v.sender === 'string' && (v.action === 'advertir' || v.action === 'banir_comunidade'),
-            );
+            return violations
+                .filter(
+                    (v: any) =>
+                        v &&
+                        typeof v.group === 'string' &&
+                        validGroupJids.has(v.group) && // defesa contra a IA "inventar" um grupo que não mandamos
+                        typeof v.sender === 'string' &&
+                        (v.action === 'advertir' || v.action === 'banir_comunidade'),
+                )
+                .map((v: any) => ({ groupJid: v.group, sender: v.sender, reason: v.reason, action: v.action }));
         } catch (err) {
             logger.warn({ err }, '[AiModerationService] falha ao avaliar mensagens — nenhuma punição aplicada por precaução');
             return [];

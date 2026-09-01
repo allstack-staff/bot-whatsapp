@@ -8,7 +8,7 @@ import { AdminService } from '../services/adminService';
 import { WarningService } from '../services/warningService';
 import { DescriptionChangeService } from '../services/descriptionChangeService';
 import { AdminResponsibilityService } from '../services/adminResponsibilityService';
-import { AiModerationService } from '../services/aiModerationService';
+import { AiModerationService, ModerationViolation } from '../services/aiModerationService';
 import { CommunityGroupService } from '../services/communityGroupService';
 import { AutomatedPunishmentService } from '../services/automatedPunishmentService';
 import { logger } from '../utils/logger';
@@ -360,18 +360,41 @@ export class MessageHandler {
     async runAiModerationCycle(): Promise<void> {
         if (!this.aiModerationService.isConfigured()) return;
 
+        // Uma única chamada pro lote inteiro (todos os grupos com delta), em vez
+        // de uma chamada por grupo — o free tier do Gemini limita por
+        // requisições/minuto, não por volume de texto, então isso rende o
+        // limite ao máximo mesmo com muitos grupos ativos na mesma hora.
+        const batch: { groupJid: string; messages: { sender: string; text: string }[] }[] = [];
         for (const [groupJid, messages] of this.pendingModerationMessages.entries()) {
             if (!messages.length) continue;
+            batch.push({ groupJid, messages });
             this.pendingModerationMessages.set(groupJid, []); // consome antes de processar
+        }
+        if (!batch.length) return;
 
+        let violations: ModerationViolation[];
+        try {
+            violations = await this.aiModerationService.evaluateBatch(batch);
+        } catch (err) {
+            logger.warn({ err }, '[runAiModerationCycle] erro processando moderação em lote');
+            await this.sendLog('⚠️ Erro no ciclo de moderação por IA. Confira os logs do servidor.').catch(() => {});
+            return;
+        }
+        if (!violations.length) return;
+
+        const byGroup = new Map<string, ModerationViolation[]>();
+        for (const v of violations) {
+            const arr = byGroup.get(v.groupJid) ?? [];
+            arr.push(v);
+            byGroup.set(v.groupJid, arr);
+        }
+
+        for (const [groupJid, groupViolations] of byGroup.entries()) {
             try {
-                const violations = await this.aiModerationService.evaluateMessages(messages);
-                if (!violations.length) continue;
-
                 let metadata: GroupMetadata | undefined;
                 try { metadata = await this.sock.groupMetadata(groupJid); } catch { /* segue sem nome bonito */ }
 
-                for (const violation of violations) {
+                for (const violation of groupViolations) {
                     const resolvedJid = await resolvePnJid(this.sock, violation.sender, metadata);
                     const number = resolvedJid.split('@')[0];
 
@@ -409,7 +432,7 @@ export class MessageHandler {
                 }
             } catch (err) {
                 logger.warn({ err, groupJid }, '[runAiModerationCycle] erro processando moderação do grupo');
-                await this.sendLog(`⚠️ Erro no ciclo de moderação por IA num grupo. Confira os logs do servidor.`).catch(() => {});
+                await this.sendLog('⚠️ Erro no ciclo de moderação por IA num grupo. Confira os logs do servidor.').catch(() => {});
             }
         }
     }
