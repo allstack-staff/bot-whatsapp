@@ -198,9 +198,11 @@ export class MessageHandler {
 
                 // Se várias pessoas banidas entrarem juntas (add em lote), espaça as remoções.
                 await humanBulkActionDelay();
+                let removeError: unknown;
                 const removeFailed = await this.sock.groupParticipantsUpdate(id, [participantId], 'remove')
                     .then(() => false)
                     .catch((e: any) => {
+                        removeError = e;
                         logger.error({ err: e }, 'Failed to remove banned user on re-entry');
                         return true;
                     });
@@ -212,8 +214,17 @@ export class MessageHandler {
                     : '';
 
                 if (removeFailed) {
-                    await this.sendLog(
-                        `⚠️ @${number} reentrou com banimento ativo (${banTypeLabel}${expires} — Motivo: ${ban.reason}) mas não consegui removê-lo(a) automaticamente. Confira manualmente.`,
+                    const retryAction = () => this.runRetryable(
+                        async () => { await this.sock.groupParticipantsUpdate(id, [participantId], 'remove'); },
+                        {
+                            success: `✅ @${number} removido(a) do grupo com sucesso (retentativa).`,
+                            failure: (reason) => `⚠️ @${number} reentrou com banimento ativo (${banTypeLabel}${expires} — Motivo: ${ban.reason}) mas não foi possível removê-lo(a) automaticamente — motivo: ${reason}.`,
+                        },
+                        [resolvedJid],
+                    );
+                    await this.sendRetryableLog(
+                        `⚠️ @${number} reentrou com banimento ativo (${banTypeLabel}${expires} — Motivo: ${ban.reason}) mas não foi possível removê-lo(a) automaticamente — motivo: ${this.describeError(removeError)}.`,
+                        retryAction,
                         [resolvedJid],
                     );
                     continue;
@@ -252,16 +263,27 @@ export class MessageHandler {
                 const number = resolvedJid.split('@')[0];
                 const banTypeLabel = this.resolveBanTypeLabel(ban.banType);
 
+                let rejectError: unknown;
                 const rejectFailed = await this.sock.groupRequestParticipantsUpdate(id, [participant], 'reject')
                     .then(() => false)
                     .catch((e: any) => {
+                        rejectError = e;
                         logger.error({ err: e }, 'Failed to reject join request from banned user');
                         return true;
                     });
 
                 if (rejectFailed) {
-                    await this.sendLog(
-                        `⚠️ @${number} pediu entrada com banimento ${banTypeLabel} ativo (Motivo: ${ban.reason}) mas não consegui rejeitar automaticamente. Confira manualmente.`,
+                    const retryAction = () => this.runRetryable(
+                        async () => { await this.sock.groupRequestParticipantsUpdate(id, [participant], 'reject'); },
+                        {
+                            success: `✅ Pedido de entrada de @${number} rejeitado com sucesso (retentativa).`,
+                            failure: (reason) => `⚠️ @${number} pediu entrada com banimento ${banTypeLabel} ativo (Motivo: ${ban.reason}) mas não foi possível rejeitar automaticamente — motivo: ${reason}.`,
+                        },
+                        [resolvedJid],
+                    );
+                    await this.sendRetryableLog(
+                        `⚠️ @${number} pediu entrada com banimento ${banTypeLabel} ativo (Motivo: ${ban.reason}) mas não foi possível rejeitar automaticamente — motivo: ${this.describeError(rejectError)}.`,
+                        retryAction,
                         [resolvedJid],
                     );
                     return;
@@ -312,7 +334,13 @@ export class MessageHandler {
             groups = await this.getAllGroupsCached();
         } catch (err) {
             logger.warn({ err }, '[checkAndApplyGroupPhotos] falha ao listar grupos');
-            await this.sendLog('⚠️ Falha na varredura automática de fotos de grupo (não consegui nem listar os grupos). Confira os logs do servidor.').catch(() => {});
+            // checkAndApplyGroupPhotos nunca lança pra fora (ela mesma trata os
+            // próprios erros) — reagir 🔁 só chama a varredura de novo; se falhar
+            // outra vez, o retry seguinte é registrado aqui dentro de novo.
+            await this.sendRetryableLog(
+                `⚠️ Falha na varredura automática de fotos de grupo (não foi possível listar os grupos) — motivo: ${this.describeError(err)}.`,
+                () => this.checkAndApplyGroupPhotos(),
+            ).catch(() => {});
             return;
         }
 
@@ -343,7 +371,17 @@ export class MessageHandler {
                         logger.debug({ groupId: gid }, '[checkAndApplyGroupPhotos] bot não é admin nesse grupo, pulando por 24h');
                     } else {
                         logger.warn({ err, groupId: gid }, '[checkAndApplyGroupPhotos] falha ao aplicar logo');
-                        await this.sendLog(`⚠️ Não consegui aplicar a logo automaticamente no grupo *${(groups[gid] as GroupMetadata)?.subject || gid}*. Confira os logs do servidor.`).catch(() => {});
+                        const groupLabel = (groups[gid] as GroupMetadata)?.subject || gid;
+                        await this.sendRetryableLog(
+                            `⚠️ Não foi possível aplicar a logo automaticamente no grupo *${groupLabel}* — motivo: ${this.describeError(err)}.`,
+                            () => this.runRetryable(
+                                async () => { await this.sock.updateProfilePicture(gid, logoBuffer); },
+                                {
+                                    success: `✅ Logo aplicada com sucesso no grupo *${groupLabel}* (retentativa).`,
+                                    failure: (reason) => `⚠️ Não foi possível aplicar a logo automaticamente no grupo *${groupLabel}* — motivo: ${reason}.`,
+                                },
+                            ),
+                        ).catch(() => {});
                     }
                 }
             }
@@ -377,7 +415,7 @@ export class MessageHandler {
             violations = await this.aiModerationService.evaluateBatch(batch);
         } catch (err) {
             logger.warn({ err }, '[runAiModerationCycle] erro processando moderação em lote');
-            await this.sendLog('⚠️ Erro no ciclo de moderação por IA. Confira os logs do servidor.').catch(() => {});
+            await this.sendLog(`⚠️ Não foi possível concluir o ciclo de moderação por IA — motivo: ${this.describeError(err)}.`).catch(() => {});
             return;
         }
         if (!violations.length) return;
@@ -411,7 +449,19 @@ export class MessageHandler {
                         if (targetParticipant) {
                             await this.sock.groupParticipantsUpdate(groupJid, [targetParticipant.id], 'remove').catch(async (err: any) => {
                                 logger.error({ err, groupJid, targetJid: resolvedJid }, '[runAiModerationCycle] falha ao remover após ban da IA');
-                                await this.sendLog(`⚠️ IA baniu @${number} mas não consegui removê-lo(a) do grupo *${metadata?.subject || groupJid}* automaticamente. Confira manualmente.`, [resolvedJid]);
+                                const groupLabel = metadata?.subject || groupJid;
+                                await this.sendRetryableLog(
+                                    `⚠️ IA baniu @${number} mas não foi possível removê-lo(a) do grupo *${groupLabel}* automaticamente — motivo: ${this.describeError(err)}.`,
+                                    () => this.runRetryable(
+                                        async () => { await this.sock.groupParticipantsUpdate(groupJid, [targetParticipant.id], 'remove'); },
+                                        {
+                                            success: `✅ @${number} removido(a) do grupo *${groupLabel}* com sucesso (retentativa).`,
+                                            failure: (reason) => `⚠️ IA baniu @${number} mas não foi possível removê-lo(a) do grupo *${groupLabel}* automaticamente — motivo: ${reason}.`,
+                                        },
+                                        [resolvedJid],
+                                    ),
+                                    [resolvedJid],
+                                );
                             });
                         }
                         await this.notifyRevertiblePunishment(
@@ -432,7 +482,7 @@ export class MessageHandler {
                 }
             } catch (err) {
                 logger.warn({ err, groupJid }, '[runAiModerationCycle] erro processando moderação do grupo');
-                await this.sendLog('⚠️ Erro no ciclo de moderação por IA num grupo. Confira os logs do servidor.').catch(() => {});
+                await this.sendLog(`⚠️ Não foi possível concluir a moderação por IA no grupo *${groupJid}* — motivo: ${this.describeError(err)}.`).catch(() => {});
             }
         }
     }
@@ -491,14 +541,19 @@ export class MessageHandler {
                     const code = await this.sock.groupInviteCode(groupJid);
                     if (code) inviteLink = `\nLink de convite: https://chat.whatsapp.com/${code}`;
                 } catch { /* segue sem link */ }
-                await this.sendLog(
-                    `⚠️ @${number} — ${contextLabel}, mas não consegui readicioná-lo(a) automaticamente ao grupo *${metadata.subject}* (provavelmente as configurações de privacidade dela não permitem). Precisa convidar manualmente.${inviteLink}`,
+                await this.sendRetryableLog(
+                    `⚠️ @${number} — ${contextLabel}, mas não foi possível readicioná-lo(a) automaticamente ao grupo *${metadata.subject}* — motivo: WhatsApp retornou código ${status} (provavelmente as configurações de privacidade dela não permitem add direto). Precisa convidar manualmente.${inviteLink}`,
+                    () => this.tryReAddToGroup(userJid, groupJid, contextLabel),
                     [userJid],
                 );
             }
         } catch (err) {
             logger.error({ err, userJid, groupJid }, '[tryReAddToGroup] erro tentando readicionar');
-            await this.sendLog(`⚠️ Erro ao tentar readicionar @${number} automaticamente ao grupo *${metadata.subject}* (${contextLabel}). Confira manualmente.`, [userJid]).catch(() => {});
+            await this.sendRetryableLog(
+                `⚠️ Não foi possível readicionar @${number} automaticamente ao grupo *${metadata.subject}* (${contextLabel}) — motivo: ${this.describeError(err)}.`,
+                () => this.tryReAddToGroup(userJid, groupJid, contextLabel),
+                [userJid],
+            ).catch(() => {});
         }
     }
 
@@ -637,9 +692,11 @@ export class MessageHandler {
                 if (lock) {
                     logger.info({ groupId: gid }, '[handleGroupsUpdate] descrição alterada durante trava — restaurando');
                     this.recentSelfDescriptionUpdate.set(gid, Date.now());
+                    let revertError: unknown;
                     const revertFailed = await this.sock.groupUpdateDescription(gid, lock.frozenDescription ?? undefined)
                         .then(() => false)
                         .catch((err: any) => {
+                            revertError = err;
                             logger.error({ err, groupId: gid }, '[handleGroupsUpdate] falha ao reverter descrição travada');
                             return true;
                         });
@@ -647,8 +704,21 @@ export class MessageHandler {
                     if (revertFailed) {
                         this.recentSelfDescriptionUpdate.delete(gid);
                         this.descriptionCache.set(gid, newDesc);
-                        await this.sendLog(
-                            `⚠️ Grupo *${update.subject || gid}* está travado (rejeitado anteriormente) e a descrição foi alterada de novo, mas não consegui reverter automaticamente. Confira/reverta manualmente. Trava até ${lock.lockedUntil.toLocaleString('pt-BR')}.`,
+                        const groupLabel = update.subject || gid;
+                        const frozenDescription = lock.frozenDescription;
+                        await this.sendRetryableLog(
+                            `⚠️ Grupo *${groupLabel}* está travado (rejeitado anteriormente) e a descrição foi alterada de novo, mas não foi possível reverter automaticamente — motivo: ${this.describeError(revertError)}. Trava até ${lock.lockedUntil.toLocaleString('pt-BR')}.`,
+                            () => this.runRetryable(
+                                async () => {
+                                    this.recentSelfDescriptionUpdate.set(gid, Date.now());
+                                    await this.sock.groupUpdateDescription(gid, frozenDescription ?? undefined);
+                                    this.descriptionCache.set(gid, frozenDescription ?? undefined);
+                                },
+                                {
+                                    success: `✅ Descrição do grupo *${groupLabel}* revertida com sucesso (retentativa).`,
+                                    failure: (reason) => `⚠️ Grupo *${groupLabel}* segue travado sem conseguir reverter a descrição — motivo: ${reason}.`,
+                                },
+                            ),
                         );
                         continue;
                     }
@@ -733,6 +803,15 @@ export class MessageHandler {
                 const emoji: string | undefined = reaction?.text;
                 const reactorRaw: string | undefined = reaction?.key?.participant || reaction?.key?.remoteJid;
                 if (!reactorRaw) continue;
+
+                if (emoji === MessageHandler.RETRY_EMOJI) {
+                    const retry = this.retryableActions.get(key.id);
+                    if (retry) {
+                        this.retryableActions.delete(key.id); // evita reprocessar em cima do mesmo aviso
+                        await retry();
+                    }
+                    continue;
+                }
 
                 const punishment = await this.automatedPunishmentService.findActiveByMessageId(key.id);
                 if (punishment) {
@@ -896,6 +975,41 @@ export class MessageHandler {
         return sent?.key;
     }
 
+    // Ações automáticas que falharam mas podem ser tentadas de novo — reagir
+    // com 🔁 na mensagem de aviso (no grupo de admins) reprocessa a mesma ação
+    // sem precisar de um comando dedicado. Em memória de propósito: perder
+    // isso num restart só significa que o admin precisa resolver na mão em
+    // vez de reagir, não perde nenhum dado (o registro/estado real já está no banco).
+    private retryableActions: Map<string, () => Promise<void>> = new Map();
+    private static readonly RETRY_EMOJI = '🔁';
+
+    private async sendRetryableLog(text: string, retryAction: () => Promise<void>, mentions?: string[]): Promise<void> {
+        const key = await this.sendLog(`${text}\n\nReaja com 🔁 nesta mensagem pra tentar de novo.`, mentions);
+        if (key?.id) this.retryableActions.set(key.id, retryAction);
+    }
+
+    /**
+     * Roda uma ação que pode falhar de forma transitória (chamada ao WhatsApp);
+     * em caso de erro, manda um aviso retentável — reagir com 🔁 chama essa
+     * mesma função de novo, com a mesma ação, até dar certo ou o admin desistir.
+     */
+    private async runRetryable(
+        action: () => Promise<void>,
+        messages: { success?: string; failure: (reason: string) => string },
+        mentions?: string[],
+    ): Promise<void> {
+        try {
+            await action();
+            if (messages.success) await this.sendLog(messages.success, mentions);
+        } catch (err) {
+            await this.sendRetryableLog(
+                messages.failure(this.describeError(err)),
+                () => this.runRetryable(action, messages, mentions),
+                mentions,
+            );
+        }
+    }
+
     private resolveBanType(arg: string): string {
         switch (arg) {
             case 'permanente':
@@ -906,6 +1020,19 @@ export class MessageHandler {
             case 'temp':
             default: return 'TEMPORARIO';
         }
+    }
+
+    // Traduz erros conhecidos (confirmados em produção) pra uma frase que faz
+    // sentido pro admin lendo no WhatsApp, em vez de só "confira os logs".
+    // Erro desconhecido cai na própria mensagem (ainda mais específico que nada).
+    private describeError(err: unknown): string {
+        if (err instanceof Error) {
+            if (err.message === 'rate-overlimit') return 'o WhatsApp limitou essa ação temporariamente (rate-overlimit)';
+            if (err.message === 'not-authorized') return 'o bot não tem permissão pra isso nesse grupo (não é admin)';
+            if (err.message === 'forbidden') return 'o WhatsApp recusou a ação (forbidden)';
+            return err.message;
+        }
+        return String(err);
     }
 
     private resolveBanTypeLabel(t: string): string {
@@ -1193,9 +1320,11 @@ export class MessageHandler {
             return;
         }
 
+        let promoteError: unknown;
         const promoteFailed = await this.sock.groupParticipantsUpdate(targetGroupJid, [senderParticipant.id], 'promote')
             .then(() => false)
             .catch((err: any) => {
+                promoteError = err;
                 logger.error({ err, targetGroupJid, participantId: senderParticipant.id }, '[assumirCommand] falha ao promover');
                 return true;
             });
@@ -1203,8 +1332,21 @@ export class MessageHandler {
         const number = senderJid.split('@')[0];
 
         if (promoteFailed) {
-            await this.replySafe(currentJid, `⚠️ Não consegui te tornar admin do grupo *${metadata.subject}* automaticamente. Confira se o bot ainda é admin lá.`);
-            await this.sendLog(`⚠️ @${number} tentou virar admin do grupo *${metadata.subject}* via $assumir, mas a promoção falhou. Confira manualmente.`, [senderJid]);
+            const reason = this.describeError(promoteError);
+            const groupLabel = metadata.subject;
+            await this.replySafe(currentJid, `⚠️ Não foi possível te tornar admin do grupo *${groupLabel}* automaticamente — motivo: ${reason}. Confira se o bot ainda é admin lá.`);
+            await this.sendRetryableLog(
+                `⚠️ @${number} tentou virar admin do grupo *${groupLabel}* via $assumir, mas a promoção falhou — motivo: ${reason}.`,
+                () => this.runRetryable(
+                    async () => { await this.sock.groupParticipantsUpdate(targetGroupJid, [senderParticipant.id], 'promote'); },
+                    {
+                        success: `✅ @${number} promovido(a) a admin do grupo *${groupLabel}* com sucesso (retentativa).`,
+                        failure: (r) => `⚠️ @${number} ainda não conseguiu virar admin do grupo *${groupLabel}* via $assumir — motivo: ${r}.`,
+                    },
+                    [senderJid],
+                ),
+                [senderJid],
+            );
             return;
         }
 
@@ -1711,14 +1853,28 @@ export class MessageHandler {
         });
 
         if (targetParticipant) {
+            let removeError: unknown;
             const removeFailed = await this.sock.groupParticipantsUpdate(groupJid, [targetParticipant.id], 'remove')
                 .then(() => false)
                 .catch((err: any) => {
+                    removeError = err;
                     logger.error({ err, groupJid, targetJid }, '[applyWarningPunishment] falha ao remover');
                     return true;
                 });
             if (removeFailed) {
-                await this.sendLog(`⚠️ @${targetJid.split('@')[0]} atingiu 3 advertências no mês (banimento ${durationLabel} aplicado) mas não consegui removê-lo(a) do grupo automaticamente. Confira manualmente.`, [targetJid]);
+                const targetNumber = targetJid.split('@')[0];
+                await this.sendRetryableLog(
+                    `⚠️ @${targetNumber} atingiu 3 advertências no mês (banimento ${durationLabel} aplicado) mas não foi possível removê-lo(a) do grupo automaticamente — motivo: ${this.describeError(removeError)}.`,
+                    () => this.runRetryable(
+                        async () => { await this.sock.groupParticipantsUpdate(groupJid, [targetParticipant.id], 'remove'); },
+                        {
+                            success: `✅ @${targetNumber} removido(a) do grupo com sucesso (retentativa).`,
+                            failure: (reason) => `⚠️ @${targetNumber} segue no grupo apesar do banimento por advertências — motivo: ${reason}.`,
+                        },
+                        [targetJid],
+                    ),
+                    [targetJid],
+                );
             }
         }
 

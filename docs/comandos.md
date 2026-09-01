@@ -10,6 +10,8 @@ Prefixo padrão: `$` (configurável via `BOT_PREFIX`).
 
 **Reação automática:** ao ver uma mensagem começando com `$`, o bot reage imediatamente — ✅ se reconheceu o comando (mesmo que depois recuse por falta de permissão) ou ❌ se digitou algo que não existe (ex: `$banir` em vez de `$ban`). Alguns comandos substituem a ✅ por uma reação mais específica assim que terminam de processar (ex: ⚠️ no `$advertir`) — isso é esperado, é só a confirmação virando o resultado final.
 
+**Retentativa por reação:** quando uma ação automática do bot falha (ex: não conseguiu remover alguém, reverter uma descrição, aplicar a logo, promover via `$assumir`), o aviso no grupo de admins vem com a instrução "Reaja com 🔁 nesta mensagem pra tentar de novo" — qualquer pessoa do grupo de admins pode reagir com 🔁 nessa mensagem específica pra fazer o bot tentar a mesma ação de novo, sem precisar rodar um comando. Se falhar de novo, um novo aviso retentável é postado.
+
 ## `$ajuda` (ou `$help`)
 
 Mostra um resumo rápido dos comandos mais usados direto no WhatsApp, com o link pra essa documentação completa. Não exige nenhuma permissão — funciona pra qualquer pessoa, em qualquer grupo ou no privado, justamente pra quem ainda não sabe usar o bot conseguir se virar sozinho.

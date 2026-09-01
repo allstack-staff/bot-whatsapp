@@ -578,8 +578,8 @@
   <section id="comandos">
     <h2><span class="num">03</span> Comandos essenciais</h2>
 
-    <p class="simple-only">O bot reage na hora em toda mensagem com <code>$</code>: ✅ se reconheceu o comando, ❌ se não existe esse comando. Alguns comandos trocam a ✅ por uma reação mais específica ao terminar (ex: ⚠️ no <code>$advertir</code>).</p>
-    <p class="tech-only"><code>handleCommand</code> reage ✅ assim que encontra um handler no mapa de comandos (antes de rodar — é só confirmação de reconhecimento, não de sucesso) e ❌ quando não encontra. Handlers específicos podem reagir de novo depois, substituindo a reação.</p>
+    <p class="simple-only">O bot reage na hora em toda mensagem com <code>$</code>: ✅ se reconheceu o comando, ❌ se não existe esse comando. Alguns comandos trocam a ✅ por uma reação mais específica ao terminar (ex: ⚠️ no <code>$advertir</code>). Quando uma ação automática falha (remover alguém, reverter descrição, aplicar logo, etc.), o aviso no grupo de admins vem com "reaja com 🔁 pra tentar de novo" — reagir com 🔁 nessa mensagem específica faz o bot tentar de novo, sem precisar de comando.</p>
+    <p class="tech-only"><code>handleCommand</code> reage ✅ assim que encontra um handler no mapa de comandos (antes de rodar — é só confirmação de reconhecimento, não de sucesso) e ❌ quando não encontra. Handlers específicos podem reagir de novo depois, substituindo a reação. Ações automáticas que falham chamam <code>sendRetryableLog</code>, que registra a ação em <code>retryableActions</code> (Map em memória, chave = id da mensagem) — uma reação 🔁 em <code>handleReaction</code> dispara <code>runRetryable</code> de novo com a mesma ação.</p>
 
     <div class="cmd">
       <div class="cmd-head"><code class="name">$home</code><span class="who">admin</span></div>
