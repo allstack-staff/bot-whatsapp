@@ -309,7 +309,7 @@ export class MessageHandler {
 
         let groups: Record<string, GroupMetadata>;
         try {
-            groups = await this.sock.groupFetchAllParticipating();
+            groups = await this.getAllGroupsCached();
         } catch (err) {
             logger.warn({ err }, '[checkAndApplyGroupPhotos] falha ao listar grupos');
             await this.sendLog('⚠️ Falha na varredura automática de fotos de grupo (não consegui nem listar os grupos). Confira os logs do servidor.').catch(() => {});
@@ -482,7 +482,7 @@ export class MessageHandler {
     /** Preenche o cache de descrições conhecidas — chamado ao conectar. */
     async primeDescriptionCache(): Promise<void> {
         try {
-            const groups = await this.sock.groupFetchAllParticipating();
+            const groups = await this.getAllGroupsCached();
             const communityGroupIds = await this.getCommunityGroupIds();
             for (const [gid, meta] of Object.entries(groups)) {
                 if (!communityGroupIds.has(gid)) continue;
@@ -491,6 +491,47 @@ export class MessageHandler {
             this.descriptionCachePrimed = true;
         } catch (err) {
             logger.warn({ err }, '[primeDescriptionCache] falha ao listar grupos');
+        }
+    }
+
+    // Cache ÚNICO e compartilhado da lista completa de grupos (groupFetchAllParticipating
+    // é uma consulta pesada — o WhatsApp já rate-limitou essa chamada em produção depois
+    // de várias features diferentes baterem nela cada uma por conta própria, sem cache
+    // nenhum). Todo lugar que precisar da lista de grupos passa por aqui.
+    private allGroupsCache: { groups: Record<string, GroupMetadata>; at: number } | undefined;
+    private allGroupsNextFetchAt = 0;
+    private static readonly ALL_GROUPS_CACHE_TTL_MS = 10 * 60 * 1000;
+    // Se o WhatsApp já respondeu "rate-overlimit", esperar mais que o TTL normal antes
+    // de tentar de novo — bater na hora só prolonga o bloqueio.
+    private static readonly ALL_GROUPS_RATE_LIMIT_COOLDOWN_MS = 30 * 60 * 1000;
+
+    private async getAllGroupsCached(): Promise<Record<string, GroupMetadata>> {
+        const now = Date.now();
+        if (this.allGroupsCache && now - this.allGroupsCache.at < MessageHandler.ALL_GROUPS_CACHE_TTL_MS) {
+            return this.allGroupsCache.groups;
+        }
+        if (this.allGroupsCache && now < this.allGroupsNextFetchAt) {
+            // Ainda em cooldown depois de uma falha — reusa o último resultado
+            // válido em vez de bater de novo no WhatsApp.
+            return this.allGroupsCache.groups;
+        }
+
+        try {
+            const groups = await this.sock.groupFetchAllParticipating();
+            this.allGroupsCache = { groups, at: now };
+            this.allGroupsNextFetchAt = 0;
+            return groups;
+        } catch (err) {
+            const isRateLimited = err instanceof Error && err.message === 'rate-overlimit';
+            this.allGroupsNextFetchAt = now + (isRateLimited
+                ? MessageHandler.ALL_GROUPS_RATE_LIMIT_COOLDOWN_MS
+                : MessageHandler.ALL_GROUPS_CACHE_TTL_MS);
+
+            if (this.allGroupsCache) {
+                logger.warn({ err }, '[getAllGroupsCached] falha ao listar grupos — reusando último resultado válido');
+                return this.allGroupsCache.groups;
+            }
+            throw err; // sem cache nenhum ainda pra cair de volta — quem chamou trata o erro
         }
     }
 
@@ -516,14 +557,19 @@ export class MessageHandler {
 
         const ids = new Set<string>([communityJid]);
         try {
-            const groups = await this.sock.groupFetchAllParticipating();
+            const groups = await this.getAllGroupsCached();
             for (const [gid, meta] of Object.entries(groups)) {
                 if ((meta as GroupMetadata).linkedParent === communityJid) {
                     ids.add(gid);
                 }
             }
         } catch (err) {
-            logger.warn({ err }, '[getCommunityGroupIds] falha ao listar grupos');
+            // NÃO grava isso no cache — um resultado incompleto (só a raiz, sem
+            // nenhum grupo) travaria o bot tratando todo grupo real como "fora
+            // da comunidade" pelos próximos 10min, ignorando todas as mensagens
+            // neles. Sem cache atualizado, a próxima chamada tenta de novo na hora.
+            logger.warn({ err }, '[getCommunityGroupIds] falha ao listar grupos — mantendo estado anterior, sem gravar cache incompleto');
+            return this.communityGroupIdsCache?.ids ?? ids;
         }
 
         this.communityGroupIdsCache = { ids, at: Date.now() };
@@ -968,7 +1014,7 @@ export class MessageHandler {
 
         let groups: Record<string, any>;
         try {
-            groups = await this.sock.groupFetchAllParticipating();
+            groups = await this.getAllGroupsCached();
         } catch (err) {
             logger.warn({ err }, '[regrasCommand] falha ao listar grupos');
             await this.replySafe(jid, '❌ Erro ao listar os grupos. Tente novamente.');
@@ -1016,7 +1062,7 @@ export class MessageHandler {
         if (!communityGroupIds.size) return null;
 
         try {
-            const groups = await this.sock.groupFetchAllParticipating();
+            const groups = await this.getAllGroupsCached();
             for (const [gid, meta] of Object.entries(groups)) {
                 if ((meta as GroupMetadata).isCommunityAnnounce && communityGroupIds.has(gid)) return gid;
             }
@@ -1039,7 +1085,7 @@ export class MessageHandler {
 
         let groups: Record<string, GroupMetadata>;
         try {
-            groups = await this.sock.groupFetchAllParticipating();
+            groups = await this.getAllGroupsCached();
         } catch (err) {
             logger.warn({ err }, '[gruposCommand] falha ao listar grupos');
             await this.replySafe(jid, '❌ Erro ao listar os grupos. Tente novamente.');
@@ -1325,7 +1371,10 @@ export class MessageHandler {
         if (banType === 'COMUNIDADE') {
             // "comunidade" = todos os grupos vinculados à All Stack Community (via
             // linkedParent) — nunca outros grupos/communities onde o bot só por acaso participa.
-            const allGroups = await this.sock.groupFetchAllParticipating();
+            const allGroups = await this.getAllGroupsCached().catch((err) => {
+                logger.warn({ err }, '[banCommand] falha ao listar grupos pra remoção em massa (comunidade)');
+                return {} as Record<string, GroupMetadata>;
+            });
             const communityGroupIds = await this.getCommunityGroupIds();
             for (const [gid, meta] of Object.entries(allGroups)) {
                 if (!communityGroupIds.has(gid)) continue;
