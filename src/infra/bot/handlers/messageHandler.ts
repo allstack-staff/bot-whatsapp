@@ -11,6 +11,7 @@ import { AdminResponsibilityService } from '../services/adminResponsibilityServi
 import { AiModerationService } from '../services/aiModerationService';
 import { CommunityGroupService } from '../services/communityGroupService';
 import { AutomatedPunishmentService } from '../services/automatedPunishmentService';
+import { GroupModerationMemoryService } from '../services/groupModerationMemoryService';
 import { logger } from '../utils/logger';
 import { findParticipant, isGroupAdmin, resolvePnJid } from '../utils/jid';
 import { humanBulkActionDelay, humanReplyDelay } from '../utils/delay';
@@ -27,6 +28,7 @@ export class MessageHandler {
     private aiModerationService: AiModerationService;
     private communityGroupService: CommunityGroupService;
     private automatedPunishmentService: AutomatedPunishmentService;
+    private groupModerationMemoryService: GroupModerationMemoryService;
 
     // Mensagens de grupo desde a última checagem da IA — se estiver vazio na
     // hora do ciclo, não submete nada (nem gasta chamada de API à toa).
@@ -77,6 +79,7 @@ export class MessageHandler {
         this.aiModerationService = new AiModerationService();
         this.communityGroupService = new CommunityGroupService();
         this.automatedPunishmentService = new AutomatedPunishmentService();
+        this.groupModerationMemoryService = new GroupModerationMemoryService();
     }
 
     private commands: Record<string, (msg: any, args: string[]) => Promise<void>> = {
@@ -365,7 +368,11 @@ export class MessageHandler {
             this.pendingModerationMessages.set(groupJid, []); // consome antes de processar
 
             try {
-                const violations = await this.aiModerationService.evaluateMessages(messages);
+                const previousSummary = await this.groupModerationMemoryService.get(groupJid);
+                const { violations, summary } = await this.aiModerationService.evaluateMessages(messages, previousSummary || undefined);
+                if (summary && summary !== previousSummary) {
+                    await this.groupModerationMemoryService.set(groupJid, summary);
+                }
                 if (!violations.length) continue;
 
                 let metadata: GroupMetadata | undefined;

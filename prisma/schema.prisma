@@ -97,6 +97,16 @@ model WarningPunishmentHistory {
     @@id([userJid, groupJid])
 }
 
+// Resumo compacto (gerado pela própria IA) do que já foi observado num grupo,
+// pra dar contexto na próxima checagem sem precisar reenviar o histórico
+// inteiro de mensagens — só esse resumo pequeno + o delta novo. Cabe
+// tranquilamente no mesmo SQLite que já usamos pra tudo, sem custo nenhum.
+model GroupModerationMemory {
+    groupJid  String   @id
+    summary   String
+    updatedAt DateTime @updatedAt
+}
+
 // Toda punição automática (moderação por IA, ou acúmulo de advertências)
 // avisada no grupo de admins com opção de desfazer — por reação ❌ (sem
 // motivo) ou por reply com texto (motivo registrado). Desfazer sempre
