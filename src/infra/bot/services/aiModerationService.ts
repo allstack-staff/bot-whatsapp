@@ -54,19 +54,24 @@ export class AiModerationService {
 
         const prompt = `Você é um moderador de uma comunidade de mentoria em programação no WhatsApp, responsável por vários grupos ao mesmo tempo. Regras:\n${RULES_SUMMARY}\n\nMensagens novas de cada grupo desde a última checagem, separadas por "=== Grupo <jid> ===" (formato de mensagem "N. [remetente]: texto"):\n\n${sections}\n\nResponda APENAS com um JSON válido, sem nenhum texto antes ou depois, no formato:\n{"violations": [{"group": "<jid exatamente como no cabeçalho \\"=== Grupo ... ===\\">", "sender": "<remetente exatamente como veio entre colchetes>", "reason": "<motivo curto em português>", "action": "advertir" ou "banir_comunidade"}]}\nSe nenhuma mensagem de nenhum grupo violar as regras, responda {"violations": []}.`;
 
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${this.apiKey}`;
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+        });
+
+        if (!res.ok) {
+            // Deixa passar pra fora (não engole aqui) — o chamador (runAiModerationCycle)
+            // já reporta qualquer erro no grupo de admins via describeError(); assim o
+            // retorno de verdade da API do Gemini (motivo real, ex: billing/quota) chega
+            // lá em vez de só um "deu erro" genérico.
+            const bodyText = await res.text().catch(() => '');
+            logger.warn({ status: res.status, body: bodyText }, '[AiModerationService] Gemini respondeu com erro HTTP');
+            throw new Error(`Gemini HTTP ${res.status}: ${bodyText.slice(0, 500)}`);
+        }
+
         try {
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${this.apiKey}`;
-            const res = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
-            });
-
-            if (!res.ok) {
-                logger.warn({ status: res.status }, '[AiModerationService] Gemini respondeu com erro HTTP');
-                return [];
-            }
-
             const data: any = await res.json();
             const raw: string | undefined = data?.candidates?.[0]?.content?.parts?.[0]?.text;
             if (!raw) return [];
@@ -88,7 +93,10 @@ export class AiModerationService {
                 )
                 .map((v: any) => ({ groupJid: v.group, sender: v.sender, reason: v.reason, action: v.action }));
         } catch (err) {
-            logger.warn({ err }, '[AiModerationService] falha ao avaliar mensagens — nenhuma punição aplicada por precaução');
+            // Resposta 200 mas em formato inesperado (a IA não seguiu o JSON pedido) —
+            // isso não é um erro de API pra reportar, é só a IA "errando o formato"; segue
+            // fechado (sem punição) e sem alarme, igual antes.
+            logger.warn({ err }, '[AiModerationService] falha ao interpretar resposta do Gemini — nenhuma punição aplicada por precaução');
             return [];
         }
     }
