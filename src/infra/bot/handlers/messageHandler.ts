@@ -425,7 +425,16 @@ export class MessageHandler {
             return;
         }
 
-        await this.triggerManualModerationCycle();
+        try {
+            await this.triggerManualModerationCycle();
+        } catch {
+            // runAiModerationCycle já mandou o motivo real pro grupo de admins — aqui só
+            // garante que nada dos passos seguintes (sucesso, reagendamento) rode em cima
+            // de uma falha.
+            await this.replySafe(jid, '❌ O ciclo de moderação falhou — veja o motivo no grupo de admins. Nada foi reagendado.');
+            return;
+        }
+
         await this.replySafe(jid, '✅ Ciclo de moderação por IA concluído agora. Próximo automático em 1h a partir deste.');
         await this.sendLog('🤖 Ciclo de moderação por IA rodado manualmente via $moderar — próximo automático reagendado pra daqui 1h.');
     }
@@ -458,7 +467,7 @@ export class MessageHandler {
         } catch (err) {
             logger.warn({ err }, '[runAiModerationCycle] erro processando moderação em lote');
             await this.sendLog(`⚠️ Não foi possível concluir o ciclo de moderação por IA — motivo: ${this.describeError(err)}.`).catch(() => {});
-            return;
+            throw err; // propaga — quem chamou (ex: $moderar) precisa saber que falhou, não fingir sucesso
         }
         if (!violations.length) return;
 
