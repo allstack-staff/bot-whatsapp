@@ -21,7 +21,7 @@ O pipeline (`.github/workflows/deploy.yml`) roda a cada push na branch `main`:
 
 Além das básicas (`BOT_PREFIX`, `SESSION_PATH`, `DATABASE_URL`), tem uma que é crítica:
 
-- **`COMMUNITY_JID`** — o JID da Community "All Stack Community" no WhatsApp. O número do bot participa de dezenas de outros grupos/communities sem relação nenhuma com a All Stack, e toda ação em massa ou automática (`$regras`, foto automática, `$ban comunidade`, moderação por IA, votação de mudança de descrição) só age em grupos vinculados a esse JID. **Sem essa variável configurada, todas essas ações ficam desativadas por segurança** (silenciosamente, com um aviso no log) — em vez de arriscar agir em algum grupo de terceiros. Veja [Como o Banimento Funciona](banimentos.md).
+- **`COMMUNITY_JID`** — o JID da Community "All Stack Community" no WhatsApp. O número do bot participa de dezenas de outros grupos/communities sem relação nenhuma com a All Stack, e toda ação em massa ou automática (`$asb regras`, foto automática, `$asb ban comunidade`, moderação por IA, votação de mudança de descrição) só age em grupos vinculados a esse JID. **Sem essa variável configurada, todas essas ações ficam desativadas por segurança** (silenciosamente, com um aviso no log) — em vez de arriscar agir em algum grupo de terceiros. Veja [Como o Banimento Funciona](banimentos.md).
 
 ## Correções de robustez já aplicadas
 

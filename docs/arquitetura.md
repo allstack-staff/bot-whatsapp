@@ -42,13 +42,13 @@ Desde meados de 2026 o WhatsApp identifica participantes de grupo por um ID opac
 - `findParticipant(metadata, jid)` — acha um participante de grupo por qualquer uma das suas identidades conhecidas (`id`, `lid`, `phoneNumber`).
 - `resolvePnJid(sock, jid, metadata?)` — resolve qualquer jid pra um JID de telefone canônico: primeiro tenta pelos metadados do grupo (grátis, sem round-trip de rede); se não achar, cai pra `sock.signalRepository.lidMapping` (a store oficial do próprio Baileys, persistida no keystore do Signal).
 
-Todo banimento é gravado com o JID de telefone já resolvido — isso é o que faz o `$unban` funcionar independente de o WhatsApp endereçar a pessoa por `@lid` ou por número naquele momento.
+Todo banimento é gravado com o JID de telefone já resolvido — isso é o que faz o `$asb unban` funcionar independente de o WhatsApp endereçar a pessoa por `@lid` ou por número naquele momento.
 
 **Não reintroduza comparação de string crua entre JIDs** (tipo `id.split('@')[0] === outro.split('@')[0]`) em código novo — é exatamente esse tipo de comparação que quebrou o sistema de banimento anterior quando o WhatsApp migrou pra LID.
 
 ## Persistência (`prisma/schema.prisma`)
 
-- `AdminGroup` — grupos registrados via `$home`. Só guarda o JID do grupo.
+- `AdminGroup` — grupos registrados via `$asb home`. Só guarda o JID do grupo.
 - `BannedUser` — chave composta `[userJid, groupJid]`. `groupJid` é o grupo onde o ban foi aplicado (relevante pra bans `PERMANENTE`/`TEMPORARIO`, que só valem naquele grupo); bans `COMUNIDADE` são consultados ignorando o grupo (ver [Como o Banimento Funciona](banimentos.md)).
 
 Nenhuma tabela referencia o número do próprio bot — só JIDs de membros e grupos. Isso é o que torna a [troca de número](troca-de-numero.md) uma operação sem perda de dado.

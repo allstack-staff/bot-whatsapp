@@ -12,62 +12,73 @@ export const botConfig = {
     communityJid: process.env.COMMUNITY_JID,
     commands: {
         prefix: process.env.BOT_PREFIX || '$',
+        // Comando "pai" — todo comando é invocado como "$asb <comando> [args]",
+        // nunca "$<comando>" direto. Ex: $asb ban @user permanente motivo.
+        parent: process.env.BOT_PARENT_COMMAND || 'asb',
         list: {
             home: {
                 description: 'Registra este grupo como grupo de admins',
-                usage: '$home',
+                usage: '$asb home',
             },
             ban: {
-                description: 'Bane um membro: $ban @user [tipo] [motivo]',
-                usage: '$ban @user [permanente|temporario|comunidade] [motivo]',
+                description: 'Bane um membro: $asb ban @user [tipo] [motivo]',
+                usage: '$asb ban @user [permanente|temporario|comunidade] [motivo]',
             },
             unban: {
                 description: 'Remove o banimento de um membro',
-                usage: '$unban @user',
+                usage: '$asb unban @user',
             },
             bans: {
                 description: 'Lista todos os membros banidos',
-                usage: '$bans',
+                usage: '$asb bans',
             },
             banedit: {
                 description: 'Altera tipo/tempo de um banimento',
-                usage: '$banedit @user [tipo|tempo] [valor]',
+                usage: '$asb banedit @user [tipo|tempo] [valor]',
             },
             clear: {
                 description: 'Apaga os comandos digitados pro bot e as respostas dele neste grupo',
-                usage: '$clear',
+                usage: '$asb clear',
             },
             status: {
                 description: 'Mostra número conectado, grupos de admin e contagem de banimentos',
-                usage: '$status',
+                usage: '$asb status',
             },
             ajuda: {
                 description: 'Mostra os comandos principais e o link da documentação completa',
-                usage: '$ajuda',
+                usage: '$asb ajuda',
             },
             advertir: {
                 description: 'Dá uma advertência; 3 no mês geram banimento temporário automático',
-                usage: '$advertir @user [motivo]',
+                usage: '$asb advertir @user [motivo]',
             },
             regras: {
                 description: 'Aplica o link das regras da comunidade na descrição de todos os grupos',
-                usage: '$regras',
+                usage: '$asb regras',
             },
             grupos: {
                 description: 'Lista os grupos da comunidade com um ID curto pra referenciar em outros comandos',
-                usage: '$grupos',
+                usage: '$asb grupos',
             },
             assumir: {
-                description: 'Vira admin de um grupo (atual, ou por ID — veja $grupos) se já estiver no grupo de admins',
-                usage: '$assumir [id]',
+                description: 'Vira admin de um grupo (atual, ou por ID — veja $asb grupos) se já estiver no grupo de admins',
+                usage: '$asb assumir [id]',
             },
             responsavel: {
-                description: 'Marca um admin como responsável por um grupo (atual, ou por ID — veja $grupos)',
-                usage: '$responsavel [id] @admin',
+                description: 'Marca um admin como responsável por um grupo (atual, ou por ID — veja $asb grupos)',
+                usage: '$asb responsavel [id] @admin',
             },
             promover: {
                 description: 'Promove alguém a admin, marca como responsável e anuncia',
-                usage: '$promover @user',
+                usage: '$asb promover @user',
+            },
+            moderar: {
+                description: 'Roda a moderação por IA na hora e reagenda o próximo ciclo automático pra 1h a partir daí',
+                usage: '$asb moderar',
+            },
+            anunciar: {
+                description: 'Publica um anúncio (com formatação livre) num grupo da comunidade, marcando todo mundo de forma invisível',
+                usage: '$asb anunciar <id> <mensagem>',
             },
         },
     },

@@ -531,8 +531,8 @@
     <p class="lede tech-only">Referência técnica: comandos, regras de autorização, resolução de identidade (LID), persistência e o pipeline de deploy.</p>
 
     <div class="quicklinks simple-only">
-      <a class="quicklink" href="#ajuda">Comece por aqui<span>$ajuda, quem pode usar</span></a>
-      <a class="quicklink" href="#comandos">Comandos<span>$ban, $unban, $bans...</span></a>
+      <a class="quicklink" href="#ajuda">Comece por aqui<span>$asb ajuda, quem pode usar</span></a>
+      <a class="quicklink" href="#comandos">Comandos<span>$asb ban, $asb unban, $asb bans...</span></a>
       <a class="quicklink" href="#tipos">Tipos de banimento<span>permanente, temporário, comunidade</span></a>
       <a class="quicklink" href="regras.html">Regras da comunidade<span>o que vale em todo grupo</span></a>
       <a class="quicklink" href="governanca.html">Governança<span>como um admin é escolhido</span></a>
@@ -552,10 +552,10 @@
     <h2><span class="num">01</span> Comece por aqui</h2>
     <p>Em qualquer grupo ou no privado, mande:</p>
     <div class="cmd">
-      <div class="cmd-head"><code class="name">$ajuda</code><span class="who">qualquer pessoa</span></div>
+      <div class="cmd-head"><code class="name">$asb ajuda</code><span class="who">qualquer pessoa</span></div>
       <p class="simple-only">O bot responde na hora com os comandos mais usados e o link pra essa página. Não precisa ser admin de nada pra usar esse.</p>
       <p class="tech-only">Não passa por <code>isAuthorized()</code> de propósito — é o único comando sem checagem de permissão, já que é o ponto de entrada pra quem ainda não está no grupo de admins.</p>
-      <span class="example"><b>Exemplo:</b> <code>$ajuda</code> → o bot responde com os comandos principais e o link dessa página.</span>
+      <span class="example"><b>Exemplo:</b> <code>$asb ajuda</code> → o bot responde com os comandos principais e o link dessa página.</span>
     </div>
   </section>
 
@@ -564,7 +564,7 @@
     <p class="simple-only">Pra usar os comandos de moderação, você precisa das duas coisas ao mesmo tempo:</p>
     <ol class="simple-only">
       <li>Ser admin do grupo onde você digitou o comando.</li>
-      <li>Estar dentro do grupo de administração da comunidade (o grupo que foi registrado com <code>$home</code>).</li>
+      <li>Estar dentro do grupo de administração da comunidade (o grupo que foi registrado com <code>$asb home</code>).</li>
     </ol>
     <p class="simple-only">Faltando qualquer um dos dois, o bot recusa e explica qual dos dois tá faltando.</p>
 
@@ -578,120 +578,128 @@
   <section id="comandos">
     <h2><span class="num">03</span> Comandos essenciais</h2>
 
-    <p class="simple-only">O bot reage na hora em toda mensagem com <code>$</code>: ✅ se reconheceu o comando, ❌ se não existe esse comando. Alguns comandos trocam a ✅ por uma reação mais específica ao terminar (ex: ⚠️ no <code>$advertir</code>). Quando uma ação automática falha (remover alguém, reverter descrição, aplicar logo, etc.), o aviso no grupo de admins vem com "reaja com 🔁 pra tentar de novo" — reagir com 🔁 nessa mensagem específica faz o bot tentar de novo, sem precisar de comando.</p>
-    <p class="tech-only"><code>handleCommand</code> reage ✅ assim que encontra um handler no mapa de comandos (antes de rodar — é só confirmação de reconhecimento, não de sucesso) e ❌ quando não encontra. Handlers específicos podem reagir de novo depois, substituindo a reação. Ações automáticas que falham chamam <code>sendRetryableLog</code>, que registra a ação em <code>retryableActions</code> (Map em memória, chave = id da mensagem) — uma reação 🔁 em <code>handleReaction</code> dispara <code>runRetryable</code> de novo com a mesma ação.</p>
+    <p class="simple-only">Todo comando é digitado como <code>$asb &lt;comando&gt; [argumentos]</code> — o <code>$asb</code> na frente é fixo e obrigatório, nunca <code>$ban</code> sozinho. O bot reage na hora: ✅ se reconheceu o comando depois do <code>$asb</code>, ❌ se não existe esse comando. Alguns comandos trocam a ✅ por uma reação mais específica ao terminar (ex: ⚠️ no <code>$asb advertir</code>). Quando uma ação automática falha (remover alguém, reverter descrição, aplicar logo, etc.), o aviso no grupo de admins vem com "reaja com 🔁 pra tentar de novo" — reagir com 🔁 nessa mensagem específica faz o bot tentar de novo, sem precisar de comando.</p>
+    <p class="tech-only">Gatilho de comando é o token <code>$asb</code> (prefixo + <code>botConfig.commands.parent</code>) como <code>parts[0]</code> — <code>handleCommand</code> recebe <code>parts.slice(1)</code>, então <code>parts[0]</code> ali já é o nome do subcomando puro. Reage ✅ assim que encontra um handler no mapa (antes de rodar — é só confirmação de reconhecimento, não de sucesso) e ❌ quando não encontra. Handlers específicos podem reagir de novo depois, substituindo a reação. Ações automáticas que falham chamam <code>sendRetryableLog</code>, que registra a ação em <code>retryableActions</code> (Map em memória, chave = id da mensagem) — uma reação 🔁 em <code>handleReaction</code> dispara <code>runRetryable</code> de novo com a mesma ação.</p>
 
     <div class="cmd">
-      <div class="cmd-head"><code class="name">$home</code><span class="who">admin</span></div>
+      <div class="cmd-head"><code class="name">$asb home</code><span class="who">admin</span></div>
       <p class="simple-only">Roda uma vez, dentro do grupo de administração, pra registrar ele como tal. Todo log de banimento cai ali. Se esse grupo for de uma Community do WhatsApp, o bot detecta sozinho qual é — ações em massa ficam restritas só a ela.</p>
       <p class="tech-only">Upsert em <code>AdminService.registerGroup(jid)</code> → tabela <code>AdminGroup</code>. Se <code>metadata.linkedParent</code> existir, grava também em <code>AdminGroup.communityJid</code> — é isso que <code>getCommunityGroupIds()</code> lê primeiro (com <code>COMMUNITY_JID</code> do <code>.env</code> como fallback). Não precisa rodar de novo depois de trocar o número do bot — o registro não depende do número, mas rode de novo se trocar de grupo de admins ou de Community.</p>
-      <span class="syntax">$home</span>
-      <span class="example"><b>Exemplo:</b> <code>$home</code> → <code>✅ Grupo registrado como admin/log. 🏘️ Community detectada...</code></span>
+      <span class="syntax">$asb home</span>
+      <span class="example"><b>Exemplo:</b> <code>$asb home</code> → <code>✅ Grupo registrado como admin/log. 🏘️ Community detectada...</code></span>
     </div>
 
     <div class="cmd">
-      <div class="cmd-head"><code class="name">$ban</code><span class="who">admin</span></div>
+      <div class="cmd-head"><code class="name">$asb ban</code><span class="who">admin</span></div>
       <p class="simple-only">Marque a pessoa ou responda a mensagem dela. Diz o tipo, opcionalmente uma duração (só pra temporário) e o motivo — todos opcionais. Motivo com várias palavras não precisa de aspas.</p>
       <p class="tech-only">Resolve o alvo via <code>getTargetJid</code> (menção ou <code>contextInfo.participant</code>) → <code>resolvePnJid</code> → upsert em <code>BannedUser</code>. Bloqueia se o alvo for admin do grupo. O token logo após o tipo é testado contra <code>parseDurationMs</code> (<code>^\d+[dhms]$</code>) — se bater, vira a duração; senão, cai no motivo, que default é 7 dias. Remoção imediata: no grupo atual pra <code>PERMANENTE</code>/<code>TEMPORARIO</code>; em todos os grupos via <code>groupFetchAllParticipating()</code> pra <code>COMUNIDADE</code>, com <code>humanBulkActionDelay()</code> entre cada remoção.</p>
-      <span class="syntax">$ban @user [permanente|temporario|comunidade] [duracao] [motivo]</span>
-      <span class="example"><b>Exemplo:</b> <code>$ban @5541999999999 permanente flood</code> · <code>$ban @5541999999999 temporario 1m teste</code></span>
+      <span class="syntax">$asb ban @user [permanente|temporario|comunidade] [duracao] [motivo]</span>
+      <span class="example"><b>Exemplo:</b> <code>$asb ban @5541999999999 permanente flood</code> · <code>$asb ban @5541999999999 temporario 1m teste</code></span>
     </div>
 
     <div class="cmd">
-      <div class="cmd-head"><code class="name">$unban</code><span class="who">admin</span></div>
+      <div class="cmd-head"><code class="name">$asb unban</code><span class="who">admin</span></div>
       <p class="simple-only">Marque a pessoa, responda uma mensagem antiga dela (funciona mesmo se ela já saiu do grupo), ou digite o número completo. Também readiciona ela automaticamente aos grupos de onde foi removida. Motivo é obrigatório, exceto pra admin de comunidade.</p>
-      <p class="tech-only">Mesma resolução de alvo do <code>$ban</code>; se não vier menção/reply, cai pro fallback de número cru (<code>args[0].replace(/\D/g, '')</code>). Remove <strong>todos</strong> os registros daquele <code>userJid</code>, em qualquer grupo, independente do tipo — e chama <code>tryReAddToGroup</code> (mesmo helper do reAddExpiredBans) pra cada grupo afetado: todos os da comunidade se algum ban era COMUNIDADE, senão só o <code>groupJid</code> do registro. Sem motivo, exige <code>isAdminOfAdminGroup</code> (admin do grupo de admins, não só membro).</p>
-      <span class="syntax">$unban @user [motivo]</span>
-      <span class="example"><b>Exemplo:</b> <code>$unban 5541995850310 reavaliado, sem novas violações</code></span>
+      <p class="tech-only">Mesma resolução de alvo do <code>$asb ban</code>; se não vier menção/reply, cai pro fallback de número cru (<code>args[0].replace(/\D/g, '')</code>). Remove <strong>todos</strong> os registros daquele <code>userJid</code>, em qualquer grupo, independente do tipo — e chama <code>tryReAddToGroup</code> (mesmo helper do reAddExpiredBans) pra cada grupo afetado: todos os da comunidade se algum ban era COMUNIDADE, senão só o <code>groupJid</code> do registro. Sem motivo, exige <code>isAdminOfAdminGroup</code> (admin do grupo de admins, não só membro).</p>
+      <span class="syntax">$asb unban @user [motivo]</span>
+      <span class="example"><b>Exemplo:</b> <code>$asb unban 5541995850310 reavaliado, sem novas violações</code></span>
     </div>
 
     <div class="cmd">
-      <div class="cmd-head"><code class="name">$bans</code><span class="who">admin</span></div>
+      <div class="cmd-head"><code class="name">$asb bans</code><span class="who">admin</span></div>
       <p class="simple-only">Lista quem está banido agora, com o motivo e (quando o bot souber) o nome público da pessoa.</p>
-      <p class="tech-only"><code>BanService.getBans()</code>, ordenado por <code>createdAt desc</code>. <code>displayName</code> é capturado de <code>participant.notify</code> no momento do <code>$ban</code> — bans anteriores a essa mudança não têm retroativamente.</p>
-      <span class="syntax">$bans</span>
-      <span class="example"><b>Exemplo:</b> <code>$bans</code> → <code>📋 Usuários Banidos (2)...</code></span>
+      <p class="tech-only"><code>BanService.getBans()</code>, ordenado por <code>createdAt desc</code>. <code>displayName</code> é capturado de <code>participant.notify</code> no momento do <code>$asb ban</code> — bans anteriores a essa mudança não têm retroativamente.</p>
+      <span class="syntax">$asb bans</span>
+      <span class="example"><b>Exemplo:</b> <code>$asb bans</code> → <code>📋 Usuários Banidos (2)...</code></span>
     </div>
 
     <div class="cmd">
-      <div class="cmd-head"><code class="name">$banedit</code><span class="who">admin</span></div>
+      <div class="cmd-head"><code class="name">$asb banedit</code><span class="who">admin</span></div>
       <p class="simple-only">Muda o tipo de um banimento já existente, ou quanto tempo falta pra expirar.</p>
       <p class="tech-only"><code>updateBanType</code> / <code>updateExpiresAt</code> em <code>BanService</code>, escopados por <code>[userJid, groupJid]</code>.</p>
-      <span class="syntax">$banedit @user tipo comunidade
-$banedit @user tempo 7d</span>
-      <span class="example"><b>Exemplo:</b> <code>$banedit @5541999999999 tempo 7d</code></span>
+      <span class="syntax">$asb banedit @user tipo comunidade
+$asb banedit @user tempo 7d</span>
+      <span class="example"><b>Exemplo:</b> <code>$asb banedit @5541999999999 tempo 7d</code></span>
     </div>
 
     <div class="cmd">
-      <div class="cmd-head"><code class="name">$clear</code><span class="who">admin</span></div>
-      <p class="simple-only">Apaga os comandos digitados pro bot e as respostas dele nesse grupo — deixa tudo limpo, inclusive o próprio <code>$clear</code>.</p>
+      <div class="cmd-head"><code class="name">$asb clear</code><span class="who">admin</span></div>
+      <p class="simple-only">Apaga os comandos digitados pro bot e as respostas dele nesse grupo — deixa tudo limpo, inclusive o próprio <code>$asb clear</code>.</p>
       <p class="tech-only">Rastro em memória por grupo (<code>groupMessageLog</code>), populado em <code>trackGroupMessage</code> a cada mensagem enviada/recebida. Apaga via <code>sendMessage(jid, &#123; delete: key &#125;)</code> — exige o bot ser admin do grupo pra apagar mensagem de terceiros. Não sobrevive a um restart (é intencional).</p>
-      <span class="syntax">$clear</span>
-      <span class="example"><b>Exemplo:</b> <code>$clear</code> → apaga tudo que foi trocado com o bot nesse grupo, incluindo o próprio comando.</span>
+      <span class="syntax">$asb clear</span>
+      <span class="example"><b>Exemplo:</b> <code>$asb clear</code> → apaga tudo que foi trocado com o bot nesse grupo, incluindo o próprio comando.</span>
     </div>
 
     <div class="cmd">
-      <div class="cmd-head"><code class="name">$status</code><span class="who">admin</span></div>
+      <div class="cmd-head"><code class="name">$asb status</code><span class="who">admin</span></div>
       <p class="simple-only">Mostra o número conectado e quantos banimentos existem. Útil pra confirmar que uma troca de número deu certo.</p>
       <p class="tech-only">Lê <code>sock.user.id</code>, <code>AdminService.getAdminGroups()</code> e <code>BanService.getBans()</code>. Nenhuma dessas fontes depende do número atual da sessão.</p>
-      <span class="syntax">$status</span>
-      <span class="example"><b>Exemplo:</b> <code>$status</code> → <code>Número conectado: 555181061198...</code></span>
+      <span class="syntax">$asb status</span>
+      <span class="example"><b>Exemplo:</b> <code>$asb status</code> → <code>Número conectado: 555181061198...</code></span>
     </div>
 
     <div class="cmd">
-      <div class="cmd-head"><code class="name">$advertir</code><span class="who">admin</span></div>
+      <div class="cmd-head"><code class="name">$asb advertir</code><span class="who">admin</span></div>
       <p class="simple-only">Dá uma advertência a alguém — marque ou responda a mensagem dela. 3 ou mais no mesmo mês banem a pessoa automaticamente, escalonando por reincidência nesse grupo: 1ª vez 7 dias, 2ª vez 30 dias, 3ª vez em diante permanente (com aviso pros admins avaliarem se vira banimento de comunidade).</p>
-      <p class="tech-only"><code>WarningService.issue()</code> grava em <code>Warning</code>; <code>countThisMonth</code> conta desde o dia 1 do mês corrente. Ao atingir 3, <code>applyWarningPunishment</code> chama <code>incrementPunishmentCount</code> (tabela <code>WarningPunishmentHistory</code>) pra decidir o tier, e o mesmo <code>BanService.ban()</code> do <code>$ban</code>. A moderação por IA usa o mesmo <code>issue()</code>/<code>applyWarningPunishment</code>. Alvo resolvido via <code>getTargetJid</code> (menção ou reply), mesmo padrão do <code>$ban</code>.</p>
-      <span class="syntax">$advertir @user [motivo]</span>
-      <span class="example"><b>Exemplo:</b> <code>$advertir @5541999999999 flood</code> → <code>⚠️ advertido (2/3 esse mês).</code></span>
+      <p class="tech-only"><code>WarningService.issue()</code> grava em <code>Warning</code>; <code>countThisMonth</code> conta desde o dia 1 do mês corrente. Ao atingir 3, <code>applyWarningPunishment</code> chama <code>incrementPunishmentCount</code> (tabela <code>WarningPunishmentHistory</code>) pra decidir o tier, e o mesmo <code>BanService.ban()</code> do <code>$asb ban</code>. A moderação por IA usa o mesmo <code>issue()</code>/<code>applyWarningPunishment</code>. Alvo resolvido via <code>getTargetJid</code> (menção ou reply), mesmo padrão do <code>$asb ban</code>.</p>
+      <span class="syntax">$asb advertir @user [motivo]</span>
+      <span class="example"><b>Exemplo:</b> <code>$asb advertir @5541999999999 flood</code> → <code>⚠️ advertido (2/3 esse mês).</code></span>
     </div>
 
     <div class="cmd">
-      <div class="cmd-head"><code class="name">$regras</code><span class="who">admin</span></div>
+      <div class="cmd-head"><code class="name">$asb regras</code><span class="who">admin</span></div>
       <p class="simple-only">Aplica o link das regras da comunidade na descrição de todos os grupos que o bot administra, na próxima linha livre — pula quem já tem o link.</p>
       <p class="tech-only">Ação em massa: uma <code>groupUpdateDescription</code> por grupo, com <code>humanBulkActionDelay()</code> entre cada uma. Marca cada escrita em <code>recentSelfDescriptionUpdate</code> pra não disparar o fluxo de votação de mudança de descrição.</p>
-      <span class="syntax">$regras</span>
-      <span class="example"><b>Exemplo:</b> <code>$regras</code> → <code>✅ Link das regras aplicado em 6 grupo(s) (2 já tinham).</code></span>
+      <span class="syntax">$asb regras</span>
+      <span class="example"><b>Exemplo:</b> <code>$asb regras</code> → <code>✅ Link das regras aplicado em 6 grupo(s) (2 já tinham).</code></span>
     </div>
 
     <div class="cmd">
-      <div class="cmd-head"><code class="name">$grupos</code><span class="who">admin</span></div>
-      <p class="simple-only">Lista os grupos da comunidade com um número curto — use esse número no <code>$responsavel</code> ou <code>$assumir</code> pra não precisar entrar no grupo alvo.</p>
+      <div class="cmd-head"><code class="name">$asb grupos</code><span class="who">admin</span></div>
+      <p class="simple-only">Lista os grupos da comunidade com um número curto — use esse número no <code>$asb responsavel</code> ou <code>$asb assumir</code> pra não precisar entrar no grupo alvo.</p>
       <p class="tech-only"><code>CommunityGroupService.upsertSeen</code> atualiza o registro a cada chamada (nome/novos grupos), depois lista via <code>getAll()</code> filtrado pelos IDs de <code>getCommunityGroupIds()</code>.</p>
-      <span class="syntax">$grupos</span>
-      <span class="example"><b>Exemplo:</b> <code>$grupos</code> → <code>1. SysAdmins</code>, <code>2. DevOps</code>, ...</span>
+      <span class="syntax">$asb grupos</span>
+      <span class="example"><b>Exemplo:</b> <code>$asb grupos</code> → <code>1. SysAdmins</code>, <code>2. DevOps</code>, ...</span>
     </div>
 
     <div class="cmd">
-      <div class="cmd-head"><code class="name">$moderar</code><span class="who">admin</span></div>
-      <p class="simple-only">Roda a moderação por IA na hora, sem esperar a checagem automática de hora em hora. O relógio reinicia daí — o próximo automático só vem 1h depois desse comando.</p>
-      <p class="tech-only"><code>triggerManualModerationCycle()</code> chama <code>runAiModerationCycle()</code> e depois <code>scheduleNextModeration()</code>, que limpa e reagenda o <code>setTimeout</code> próprio da moderação (separado do tick horário de fotos).</p>
-      <span class="syntax">$moderar</span>
-      <span class="example"><b>Exemplo:</b> <code>$moderar</code> → <code>✅ Ciclo de moderação por IA concluído agora. Próximo automático em 1h a partir deste.</code></span>
+      <div class="cmd-head"><code class="name">$asb moderar</code><span class="who">admin</span></div>
+      <p class="simple-only">Roda a moderação por IA na hora, sem esperar a checagem automática de hora em hora. O relógio reinicia daí — o próximo automático só vem 1h depois desse comando. Sem ID, avalia toda a comunidade; com um ID (veja <code>$asb grupos</code>), só aquele grupo.</p>
+      <p class="tech-only"><code>triggerManualModerationCycle(onlyGroupJid?)</code> chama <code>runAiModerationCycle(onlyGroupJid?)</code> e depois <code>scheduleNextModeration()</code>. Se <code>evaluateBatch</code> falhar, o erro é relançado (não engolido) — <code>moderarCommand</code> pega no <code>catch</code> e não reporta sucesso nem reagenda.</p>
+      <span class="syntax">$asb moderar [id]</span>
+      <span class="example"><b>Exemplo:</b> <code>$asb moderar 3</code> → <code>✅ Ciclo de moderação por IA concluído agora (Nome do Grupo). Próximo automático em 1h a partir deste.</code></span>
     </div>
 
     <div class="cmd">
-      <div class="cmd-head"><code class="name">$assumir</code><span class="who">grupo de admins</span></div>
+      <div class="cmd-head"><code class="name">$asb anunciar</code><span class="who">grupo de admins</span></div>
+      <p class="simple-only">Publica um anúncio num grupo da comunidade — o bot leva a mensagem até lá, marcando todo mundo do grupo de destino de forma invisível (a notificação chega, sem @números poluindo o texto) e preservando negrito/itálico/quebra de linha exatamente como digitado. Só funciona rodado no grupo de administração.</p>
+      <p class="tech-only"><code>stripLeadingTokens(rawText, 3)</code> remove <code>$asb anunciar &lt;id&gt;</code> do texto bruto (não do array de <code>args</code> re-joinado, pra não perder quebra de linha), resolve o grupo via <code>CommunityGroupService.getJidByShortId</code>, e envia com <code>mentions: metadata.participants.map(p =&gt; p.id)</code> — marca todo mundo sem listar @números no <code>text</code>.</p>
+      <span class="syntax">$asb anunciar &lt;id&gt; &lt;mensagem&gt;</span>
+      <span class="example"><b>Exemplo:</b> <code>$asb anunciar 3 *Aviso*\nManutenção às 20h.</code> → publica no grupo 3, marcando todo mundo, e responde <code>✅ Anúncio publicado no grupo *Nome do Grupo*.</code> no grupo de admins.</span>
+    </div>
+
+    <div class="cmd">
+      <div class="cmd-head"><code class="name">$asb assumir</code><span class="who">grupo de admins</span></div>
       <p class="simple-only">Quem já está no grupo de administração pode virar admin de qualquer grupo da comunidade na hora — sem precisar que outro admin faça isso manualmente pelo WhatsApp.</p>
       <p class="tech-only">Exige só <code>isMemberOfAdminGroup</code> (não <code>isGroupAdmin</code> do grupo atual — é isso que o comando resolve). Sem <code>args[0]</code> numérico, usa o grupo atual; com número, resolve via <code>CommunityGroupService.getJidByShortId</code>. Promove via <code>groupParticipantsUpdate(..., 'promote')</code>.</p>
-      <span class="syntax">$assumir [id]</span>
-      <span class="example"><b>Exemplo:</b> <code>$assumir</code> (no grupo) ou <code>$assumir 3</code> (do grupo de admins) → <code>✅ Você agora é admin do grupo *Nome*.</code></span>
+      <span class="syntax">$asb assumir [id]</span>
+      <span class="example"><b>Exemplo:</b> <code>$asb assumir</code> (no grupo) ou <code>$asb assumir 3</code> (do grupo de admins) → <code>✅ Você agora é admin do grupo *Nome*.</code></span>
     </div>
 
     <div class="cmd">
-      <div class="cmd-head"><code class="name">$responsavel</code><span class="who">admin</span></div>
-      <p class="simple-only">Marca um admin como responsável por um grupo — o bot usa isso pra saber quem avisar quando há pendência (tipo pedido de entrada) e quem anunciar numa promoção. Sem número, usa o grupo atual; com um número (veja <code>$grupos</code>), dá pra rodar direto do grupo de admins.</p>
+      <div class="cmd-head"><code class="name">$asb responsavel</code><span class="who">admin</span></div>
+      <p class="simple-only">Marca um admin como responsável por um grupo — o bot usa isso pra saber quem avisar quando há pendência (tipo pedido de entrada) e quem anunciar numa promoção. Sem número, usa o grupo atual; com um número (veja <code>$asb grupos</code>), dá pra rodar direto do grupo de admins.</p>
       <p class="tech-only"><code>AdminResponsibilityService.assign(adminJid, groupJid)</code>. Se <code>args[0]</code> for numérico, resolve o <code>groupJid</code> via <code>CommunityGroupService.getJidByShortId</code> em vez do grupo atual. Usado por <code>handleGroupJoinRequest</code> pra rotear avisos de pedido pendente.</p>
-      <span class="syntax">$responsavel [id] @admin</span>
-      <span class="example"><b>Exemplo:</b> <code>$responsavel @5541988887777</code> (no grupo) ou <code>$responsavel 3 @5541988887777</code> (do grupo de admins) → <code>✅ agora é responsável pelo grupo *Nome*.</code></span>
+      <span class="syntax">$asb responsavel [id] @admin</span>
+      <span class="example"><b>Exemplo:</b> <code>$asb responsavel @5541988887777</code> (no grupo) ou <code>$asb responsavel 3 @5541988887777</code> (do grupo de admins) → <code>✅ agora é responsável pelo grupo *Nome*.</code></span>
     </div>
 
     <div class="cmd">
-      <div class="cmd-head"><code class="name">$promover</code><span class="who">admin</span></div>
+      <div class="cmd-head"><code class="name">$asb promover</code><span class="who">admin</span></div>
       <p class="simple-only">Promove alguém a admin do grupo, marca como responsável por ele, e anuncia a promoção — inclusive no grupo "Avisos" da Community, achado sozinho pelo bot.</p>
       <p class="tech-only"><code>groupParticipantsUpdate(..., 'promote')</code> + <code>AdminResponsibilityService.assign()</code> + anúncio via <code>findCommunityAnnounceGroupJid()</code> (procura <code>isCommunityAnnounce</code> nos metadados).</p>
-      <span class="syntax">$promover @user</span>
-      <span class="example"><b>Exemplo:</b> <code>$promover @5541988887777</code> → <code>🎉 ...promovido(a)...</code> (no grupo e no "Avisos")</span>
+      <span class="syntax">$asb promover @user</span>
+      <span class="example"><b>Exemplo:</b> <code>$asb promover @5541988887777</code> → <code>🎉 ...promovido(a)...</code> (no grupo e no "Avisos")</span>
     </div>
   </section>
 
@@ -728,8 +736,8 @@ $banedit @user tempo 7d</span>
       <p class="tech-only">Detectado via evento <code>groups.update</code>, comparado contra <code>descriptionCache</code>. Voto por <code>messages.reaction</code>, tabulado em <code>descriptionVotes</code> (memória). Rejeição grava <code>GroupDescriptionLock.frozenDescription</code> e qualquer edição durante a trava é revertida na hora.</p>
     </div>
     <div class="cmd">
-      <div class="cmd-head"><span>Moderação por IA (a cada hora, ou na hora via <code>$moderar</code>)</span></div>
-      <p class="simple-only">Se houve mensagem nova em algum grupo desde a última checagem, o bot avalia contra as regras usando o Gemini (grátis). Violação grave = banimento de comunidade direto; o resto = advertência comum. Sem chave de API configurada, isso simplesmente não roda. Rodar <code>$moderar</code> manualmente reinicia a contagem da próxima 1h.</p>
+      <div class="cmd-head"><span>Moderação por IA (a cada hora, ou na hora via <code>$asb moderar</code>)</span></div>
+      <p class="simple-only">Se houve mensagem nova em algum grupo desde a última checagem, o bot avalia contra as regras usando o Gemini (grátis). Violação grave = banimento de comunidade direto; o resto = advertência comum. Sem chave de API configurada, isso simplesmente não roda. Rodar <code>$asb moderar</code> manualmente reinicia a contagem da próxima 1h.</p>
       <p class="tech-only"><code>pendingModerationMessages</code> (buffer em memória, por grupo) — vazio, nem chama a IA. <code>AiModerationService.evaluateMessages()</code> pede JSON estrito ao Gemini; qualquer erro de rede/parse é tratado como "sem violação" (falha fechada).</p>
     </div>
     <div class="cmd">
@@ -750,7 +758,7 @@ $banedit @user tempo 7d</span>
     <ol class="steps">
       <li><span class="simple-only">Escaneie o QR code com o número novo.</span><span class="tech-only">Apague <code>SESSION_PATH</code> (padrão <code>./auth</code>) e suba o processo de novo — um QR novo aparece.</span></li>
       <li><span class="simple-only">Adicione o número novo em cada grupo e promova ele a admin — isso é manual, o WhatsApp não deixa transferir esse cargo entre números.</span><span class="tech-only">Sem isso, <code>groupParticipantsUpdate</code> e a leitura de <code>groupMetadata</code> falham por falta de permissão.</span></li>
-      <li>Rode <code>$status</code> pra confirmar: número certo, grupos de admin registrados e contagem de banimentos batendo com o esperado.</li>
+      <li>Rode <code>$asb status</code> pra confirmar: número certo, grupos de admin registrados e contagem de banimentos batendo com o esperado.</li>
     </ol>
     <p class="tech-only">Nada em <code>AdminGroup</code>/<code>BannedUser</code> referencia o número do próprio bot — só JIDs de membros e grupos. É por isso que a troca não perde estado.</p>
   </section>
@@ -787,7 +795,7 @@ findParticipant(metadata, jid)  <span class="c">// acha por id, lid ou phoneNumb
 resolvePnJid(sock, jid, metadata?)
   <span class="c">// 1. tenta pelo phoneNumber já nos metadados do grupo</span>
   <span class="c">// 2. cai pra sock.signalRepository.lidMapping (store oficial do Baileys)</span></div>
-    <p>Todo banimento é gravado com o JID de telefone já resolvido — por isso o <code>$unban</code> funciona independente de o WhatsApp endereçar a pessoa por <code>@lid</code> ou por número naquele momento.</p>
+    <p>Todo banimento é gravado com o JID de telefone já resolvido — por isso o <code>$asb unban</code> funciona independente de o WhatsApp endereçar a pessoa por <code>@lid</code> ou por número naquele momento.</p>
 
     <h3 style="font-size:1.05rem;margin:20px 0 8px;">Anti-detecção de bot</h3>
     <p>Baileys é biblioteca não-oficial; a Meta investe em detectar padrões automatizados. Duas pausas humanizadas mitigam o padrão mais óbvio (timing robótico):</p>

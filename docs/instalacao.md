@@ -33,7 +33,7 @@ title: Instalação e Configuração
    | `LOG_LEVEL` | Nível de log do pino (`info`, `debug`, etc.) | Não |
    | `DATABASE_URL` | Caminho do arquivo SQLite (ex: `file:./prisma/dev.db`) | Sim |
 
-   `ADMIN_GROUP_JID` no `.env.example` é só um comentário informativo — o grupo de admins real é registrado em runtime com o comando `$home` (fica salvo no banco, não no `.env`).
+   `ADMIN_GROUP_JID` no `.env.example` é só um comentário informativo — o grupo de admins real é registrado em runtime com o comando `$asb home` (fica salvo no banco, não no `.env`).
 
 3. Aplique o schema no banco (cria o arquivo SQLite na primeira vez):
    ```

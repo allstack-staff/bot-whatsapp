@@ -12,10 +12,10 @@ title: Como o Banimento Funciona
 | Tipo | Escopo | Expira? |
 |---|---|---|
 | `permanente` | Só o grupo onde foi aplicado o ban | Não |
-| `temporario` (padrão) | Só o grupo onde foi aplicado o ban | Sim — 7 dias por padrão, ajustável com `$banedit ... tempo` |
-| `comunidade` | **Todos** os grupos vinculados à Community "All Stack Community" no WhatsApp | Só se você definir um tempo com `$banedit ... tempo`; por padrão não expira |
+| `temporario` (padrão) | Só o grupo onde foi aplicado o ban | Sim — 7 dias por padrão, ajustável com `$asb banedit ... tempo` |
+| `comunidade` | **Todos** os grupos vinculados à Community "All Stack Community" no WhatsApp | Só se você definir um tempo com `$asb banedit ... tempo`; por padrão não expira |
 
-Importante: **"comunidade" é a feature nativa "Community" do WhatsApp** (os grupos ligados à All Stack Community por `linkedParent`). O número do bot participa de dezenas de outros grupos/communities sem relação nenhuma com a All Stack (grupos de terceiros, pessoais, etc.) — nenhuma ação de `comunidade`, `$regras` ou qualquer coisa em massa afeta esses outros grupos, só os que realmente são da All Stack Community. Isso é configurado uma vez no servidor via `COMMUNITY_JID` (veja [Deploy](deploy.md)).
+Importante: **"comunidade" é a feature nativa "Community" do WhatsApp** (os grupos ligados à All Stack Community por `linkedParent`). O número do bot participa de dezenas de outros grupos/communities sem relação nenhuma com a All Stack (grupos de terceiros, pessoais, etc.) — nenhuma ação de `comunidade`, `$asb regras` ou qualquer coisa em massa afeta esses outros grupos, só os que realmente são da All Stack Community. Isso é configurado uma vez no servidor via `COMMUNITY_JID` (veja [Deploy](deploy.md)).
 
 ## O que acontece quando alguém é banido
 
@@ -23,7 +23,7 @@ Importante: **"comunidade" é a feature nativa "Community" do WhatsApp** (os gru
 2. Remove o membro imediatamente:
    - Se for `comunidade`: de **todo** grupo da All Stack Community em que o membro está presente.
    - Se for `permanente`/`temporario`: só do grupo onde o comando foi rodado.
-3. Manda um log no grupo de admins (registrado via `$home`).
+3. Manda um log no grupo de admins (registrado via `$asb home`).
 
 ## Reentrada
 

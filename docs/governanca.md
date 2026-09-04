@@ -22,7 +22,7 @@ Um admin pode acumular "admin de comunidade" com ser "responsável" por um ou ma
 
 1. **Indicação** — qualquer admin de comunidade pode indicar um membro pra virar admin, baseado em: tempo de comunidade, participação construtiva, e ter demonstrado entendimento das regras (na prática, moderando de forma informal ou ajudando outros membros).
 2. **Aprovação** — a indicação precisa de consenso/maioria dos admins de comunidade ativos, discutido no grupo de admins. Isso ainda é uma decisão humana — o bot não vota por vocês nessa etapa (diferente da aprovação de mudança de descrição, essa sim automatizada por reação).
-3. **Promoção** — combinado, um admin roda `$promover @pessoa` no grupo que ela vai ficar responsável. O bot promove no WhatsApp, marca a responsabilidade, e publica o anúncio automaticamente no grupo "Avisos" da comunidade e nesse grupo. Veja [Comandos](comandos.md#promover).
+3. **Promoção** — combinado, um admin roda `$asb promover @pessoa` no grupo que ela vai ficar responsável. O bot promove no WhatsApp, marca a responsabilidade, e publica o anúncio automaticamente no grupo "Avisos" da comunidade e nesse grupo. Veja [Comandos](comandos.md#asb-promover).
 
 ## Quando um admin pode ser removido
 
@@ -37,10 +37,10 @@ Um grupo novo da comunidade deve:
 1. Ter um **propósito claro e específico**, que não seja já coberto por um grupo existente (evita fragmentação).
 2. Ter pelo menos **um admin responsável** definido antes ou no momento da criação.
 3. Ser vinculado à Community do WhatsApp da All Stack (pra aparecer nas ferramentas de gestão do bot).
-4. Ter a descrição configurada com o link das [regras da comunidade](regras.html) (`$regras`, uma vez que o bot for adicionado como admin).
+4. Ter a descrição configurada com o link das [regras da comunidade](regras.html) (`$asb regras`, uma vez que o bot for adicionado como admin).
 
 Grupos que ficarem sem admin responsável por muito tempo, ou sem atividade, podem ser arquivados/desvinculados a critério dos admins de comunidade.
 
 ## Pendências e responsabilidade por grupo
 
-O bot associa cada admin a um ou mais grupos via `$responsavel @admin` (pra um admin que já existe) ou `$promover @pessoa` (que já inclui isso). Usa essa associação pra rotear avisos — por exemplo, quando alguém pede pra entrar num grupo com aprovação manual, o bot marca o(s) admin(s) responsável(is) por aquele grupo no grupo de admins, em vez de avisar todo mundo genericamente. Veja [Comandos](comandos.md).
+O bot associa cada admin a um ou mais grupos via `$asb responsavel @admin` (pra um admin que já existe) ou `$asb promover @pessoa` (que já inclui isso). Usa essa associação pra rotear avisos — por exemplo, quando alguém pede pra entrar num grupo com aprovação manual, o bot marca o(s) admin(s) responsável(is) por aquele grupo no grupo de admins, em vez de avisar todo mundo genericamente. Veja [Comandos](comandos.md).

@@ -19,7 +19,7 @@ Todos os comandos usam o prefixo `$` (configurável via `BOT_PREFIX`).
 
 ## Para quem é essa documentação
 
-- **Admins da comunidade** (não precisa saber programar): manda `$ajuda` direto no WhatsApp que o bot já responde com o resumo dos comandos mais usados. Pra mais detalhes, veja [Comandos](comandos.md) e [Como o Banimento Funciona](banimentos.md).
+- **Admins da comunidade** (não precisa saber programar): manda `$asb ajuda` direto no WhatsApp que o bot já responde com o resumo dos comandos mais usados. Pra mais detalhes, veja [Comandos](comandos.md) e [Como o Banimento Funciona](banimentos.md).
 - **Regras e governança**: [Regras da Comunidade](regras.md) (o link que fica na descrição dos grupos) e [Governança](governanca.md) (como um admin é recrutado, quando um grupo pode ser criado, cargos e responsabilidades).
 - **Devs/contribuidores**: veja [Instalação](instalacao.md), [Arquitetura](arquitetura.md) e [Deploy](deploy.md).
 - Se o número do bot for perdido ou banido, veja [Troca de Número](troca-de-numero.md) antes de entrar em pânico — nenhum dado é perdido.

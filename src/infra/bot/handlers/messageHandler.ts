@@ -98,7 +98,8 @@ export class MessageHandler {
         help: (msg: any) => this.helpCommand(msg),
         regras: (msg: any) => this.regrasCommand(msg),
         grupos: (msg: any) => this.gruposCommand(msg),
-        moderar: (msg: any) => this.moderarCommand(msg),
+        moderar: (msg: any, args: string[]) => this.moderarCommand(msg, args),
+        anunciar: (msg: any, args: string[]) => this.anunciarCommand(msg, args),
         assumir: (msg: any, args: string[]) => this.assumirCommand(msg, args),
         responsavel: (msg: any, args: string[]) => this.responsavelCommand(msg, args),
         promover: (msg: any) => this.promoverCommand(msg),
@@ -153,11 +154,18 @@ export class MessageHandler {
 
                 if (!text) continue;
 
+                // Todo comando é invocado como "$asb <comando> [args]" — nunca
+                // "$<comando>" direto. parts[0] é o gatilho pai; o resto (a
+                // partir de parts[1]) é o que handleCommand recebe.
+                const parts = text.split(' ');
+                const parentTrigger = `${botConfig.commands.prefix}${botConfig.commands.parent}`;
+                const isCommandMessage = parts[0]?.toLowerCase() === parentTrigger.toLowerCase();
+
                 // Reply com texto (sem ser um comando) numa notificação de punição
                 // automática ainda ativa = desfazer com motivo (em vez de reação ❌,
                 // que desfaz sem motivo — ver handleReaction).
                 const stanzaId = msgContent.extendedTextMessage?.contextInfo?.stanzaId;
-                if (stanzaId && !text.startsWith(botConfig.commands.prefix)) {
+                if (stanzaId && !isCommandMessage) {
                     const punishment = await this.automatedPunishmentService.findActiveByMessageId(stanzaId);
                     if (punishment) {
                         const senderRaw = msg.key.participant || msg.key.remoteJid!;
@@ -171,10 +179,10 @@ export class MessageHandler {
 
                 this.bufferForModeration(msg.key.remoteJid, msg.key.participant || msg.key.remoteJid, text);
 
-                if (text.startsWith(botConfig.commands.prefix)) {
+                if (isCommandMessage) {
                     logger.debug({ text, jid: msg.key.remoteJid }, '[handleMessage] command detected');
                     this.trackGroupMessage(msg.key.remoteJid, msg.key);
-                    await this.handleCommand(msg, text.split(' '));
+                    await this.handleCommand(msg, parts.slice(1));
                 }
             } catch (err) {
                 logger.error({ err, text: msgContent.conversation?.slice(0, 50) }, '[handleMessage] command error');
@@ -411,12 +419,16 @@ export class MessageHandler {
     }
 
     /** Roda a moderação agora e reseta o relógio — o próximo ciclo automático só vem 1h a partir daqui. */
-    private async triggerManualModerationCycle(): Promise<void> {
-        await this.runAiModerationCycle();
+    private async triggerManualModerationCycle(onlyGroupJid?: string): Promise<void> {
+        await this.runAiModerationCycle(onlyGroupJid);
         this.scheduleNextModeration();
     }
 
-    private async moderarCommand(msg: any): Promise<void> {
+    /**
+     * Sem argumento, modera toda a comunidade (mesmo escopo do ciclo automático).
+     * Com um ID (veja $asb grupos), modera só aquele grupo específico.
+     */
+    private async moderarCommand(msg: any, args: string[]): Promise<void> {
         if (!(await this.isAuthorized(msg))) return;
 
         const jid = msg.key.remoteJid!;
@@ -425,8 +437,23 @@ export class MessageHandler {
             return;
         }
 
+        let targetGroupJid: string | undefined;
+        let targetLabel = 'toda a comunidade';
+        const maybeId = args[0] && /^\d+$/.test(args[0]) ? parseInt(args[0], 10) : null;
+        if (maybeId !== null) {
+            const resolved = await this.communityGroupService.getJidByShortId(maybeId);
+            if (!resolved) {
+                await this.replySafe(jid, `❌ Nenhum grupo com o ID ${maybeId}. Use $asb grupos pra ver a lista.`);
+                return;
+            }
+            targetGroupJid = resolved;
+            let metadata: GroupMetadata | undefined;
+            try { metadata = await this.sock.groupMetadata(resolved); } catch { /* segue com o jid mesmo */ }
+            targetLabel = metadata?.subject || resolved;
+        }
+
         try {
-            await this.triggerManualModerationCycle();
+            await this.triggerManualModerationCycle(targetGroupJid);
         } catch {
             // runAiModerationCycle já mandou o motivo real pro grupo de admins — aqui só
             // garante que nada dos passos seguintes (sucesso, reagendamento) rode em cima
@@ -435,18 +462,20 @@ export class MessageHandler {
             return;
         }
 
-        await this.replySafe(jid, '✅ Ciclo de moderação por IA concluído agora. Próximo automático em 1h a partir deste.');
-        await this.sendLog('🤖 Ciclo de moderação por IA rodado manualmente via $moderar — próximo automático reagendado pra daqui 1h.');
+        await this.replySafe(jid, `✅ Ciclo de moderação por IA concluído agora (${targetLabel}). Próximo automático em 1h a partir deste.`);
+        await this.sendLog(`🤖 Ciclo de moderação por IA rodado manualmente via $asb moderar (${targetLabel}) — próximo automático reagendado pra daqui 1h.`);
     }
 
     /**
      * Ciclo de moderação por IA. Só olha grupos com mensagem nova desde
      * a última vez (buffer não-vazio) — se não tiver nenhuma, nem chama a IA.
+     * Com onlyGroupJid, avalia só aquele grupo (usado por $asb moderar com ID);
+     * sem, avalia todos os grupos com delta (ciclo automático, ou $asb moderar sem args).
      * Ações: `banir_comunidade` vai direto pro BanService (regras que preveem
      * banimento imediato); qualquer outra violação vira uma advertência comum,
      * que já escalona sozinha em 3/mês via WarningService.
      */
-    async runAiModerationCycle(): Promise<void> {
+    async runAiModerationCycle(onlyGroupJid?: string): Promise<void> {
         if (!this.aiModerationService.isConfigured()) return;
 
         // Uma única chamada pro lote inteiro (todos os grupos com delta), em vez
@@ -455,6 +484,7 @@ export class MessageHandler {
         // limite ao máximo mesmo com muitos grupos ativos na mesma hora.
         const batch: { groupJid: string; messages: { sender: string; text: string }[] }[] = [];
         for (const [groupJid, messages] of this.pendingModerationMessages.entries()) {
+            if (onlyGroupJid && groupJid !== onlyGroupJid) continue;
             if (!messages.length) continue;
             batch.push({ groupJid, messages });
             this.pendingModerationMessages.set(groupJid, []); // consome antes de processar
@@ -562,7 +592,7 @@ export class MessageHandler {
 
     /**
      * Tenta readicionar alguém a um grupo — usado tanto pela expiração
-     * automática de banimento temporário quanto pelo `$unban` manual. Pula
+     * automática de banimento temporário quanto pelo `$asb unban` manual. Pula
      * silenciosamente se o grupo não existir mais ou a pessoa já estiver
      * nele; sempre avisa o grupo de admins no sucesso ou na falha (com link
      * de convite de fallback, já que privacidade pode impedir add direto).
@@ -680,7 +710,7 @@ export class MessageHandler {
         // pra quando o grupo de admins registrado não é o de uma Community.
         const communityJid = (await this.adminService.getCommunityJid()) || botConfig.communityJid;
         if (!communityJid) {
-            logger.warn('[getCommunityGroupIds] nenhuma Community detectada (rode $home de novo, ou configure COMMUNITY_JID) — nenhuma ação em massa vai rodar');
+            logger.warn('[getCommunityGroupIds] nenhuma Community detectada (rode $asb home de novo, ou configure COMMUNITY_JID) — nenhuma ação em massa vai rodar');
             return new Set();
         }
 
@@ -713,7 +743,7 @@ export class MessageHandler {
 
     /**
      * Detecta mudança de descrição de grupo (evento `groups.update`). Três
-     * casos: (1) foi o próprio bot que mudou (ex: $regras) — só atualiza o
+     * casos: (1) foi o próprio bot que mudou (ex: $asb regras) — só atualiza o
      * cache; (2) o grupo está travado por rejeição anterior — restaura a
      * versão congelada na hora; (3) edição de verdade por um admin — abre
      * votação no grupo de admins.
@@ -927,9 +957,16 @@ export class MessageHandler {
     }
 
     private async handleCommand(msg: any, parts: string[]): Promise<void> {
-        const command = parts[0].slice(botConfig.commands.prefix.length).toLowerCase();
-        const args = parts.slice(1);
         const jid = msg.key.remoteJid!;
+
+        if (!parts[0]) {
+            // "$asb" sozinho, sem comando nenhum depois
+            await this.reactSafe(jid, msg.key, '❌');
+            return;
+        }
+
+        const command = parts[0].toLowerCase();
+        const args = parts.slice(1);
 
         const handler = this.commands[command];
         if (handler) {
@@ -945,7 +982,7 @@ export class MessageHandler {
 
     /**
      * Sender must be (a) admin of the group the command was typed in, and
-     * (b) a member of a registered admin group (see $home).
+     * (b) a member of a registered admin group (see $asb home).
      */
     private async isAuthorized(msg: any): Promise<boolean> {
         const jid = msg.key.remoteJid!;
@@ -1144,7 +1181,7 @@ export class MessageHandler {
         if (communityJid) {
             await this.adminService.setCommunityJid(jid, communityJid);
             this.communityGroupIdsCache = undefined; // força recalcular já, sem esperar o cache expirar
-            await this.replySafe(jid, `✅ Grupo registrado como admin/log.\nID: \`${jid}\`\n🏘️ Community detectada — ações em massa (regras, foto, $ban comunidade, etc.) ficam restritas só aos grupos dela.`);
+            await this.replySafe(jid, `✅ Grupo registrado como admin/log.\nID: \`${jid}\`\n🏘️ Community detectada — ações em massa (regras, foto, $asb ban comunidade, etc.) ficam restritas só aos grupos dela.`);
         } else {
             await this.replySafe(jid, `✅ Grupo registrado como admin/log.\nID: \`${jid}\`\n⚠️ Esse grupo não está vinculado a nenhuma Community do WhatsApp — ações em massa só funcionam se \`COMMUNITY_JID\` estiver configurado manualmente no servidor.`);
         }
@@ -1184,7 +1221,7 @@ export class MessageHandler {
      */
     private async helpCommand(msg: any): Promise<void> {
         const jid = msg.key.remoteJid!;
-        const prefix = botConfig.commands.prefix;
+        const prefix = `${botConfig.commands.prefix}${botConfig.commands.parent} `;
 
         const text = [
             '🤖 *Comandos principais*',
@@ -1251,7 +1288,7 @@ export class MessageHandler {
 
         await this.reactSafe(jid, msg.key, '✅');
         await this.replySafe(jid, `✅ Link das regras aplicado em ${updated} grupo(s) (${skipped} já tinham o link).`);
-        await this.sendLog(`📋 $regras rodado — ${updated} grupo(s) atualizado(s), ${skipped} já tinham o link.`);
+        await this.sendLog(`📋 $asb regras rodado — ${updated} grupo(s) atualizado(s), ${skipped} já tinham o link.`);
     }
 
     /** Acha o grupo "Avisos" que o WhatsApp cria automaticamente pra toda Community. */
@@ -1275,7 +1312,7 @@ export class MessageHandler {
 
     /**
      * Lista os grupos da All Stack Community com um ID curto e estável (veja
-     * CommunityGroup no schema) — pra referenciar um grupo em $responsavel sem
+     * CommunityGroup no schema) — pra referenciar um grupo em $asb responsavel sem
      * precisar colar o JID nem estar dentro dele.
      */
     private async gruposCommand(msg: any): Promise<void> {
@@ -1309,8 +1346,72 @@ export class MessageHandler {
         await this.reactSafe(jid, msg.key, '✅');
         await this.replySafe(
             jid,
-            `📋 *Grupos da comunidade* (${entries.length})\n${list}\n\nUse o número pra referenciar o grupo, ex: $responsavel ${entries[0].shortId} @admin ou $assumir ${entries[0].shortId}`,
+            `📋 *Grupos da comunidade* (${entries.length})\n${list}\n\nUse o número pra referenciar o grupo, ex: $asb responsavel ${entries[0].shortId} @admin ou $asb assumir ${entries[0].shortId}`,
         );
+    }
+
+    /** Remove os N primeiros tokens (separados por espaço) de um texto, preservando o resto ao pé da letra (quebras de linha, formatação). */
+    private stripLeadingTokens(text: string, count: number): string {
+        let idx = 0;
+        for (let i = 0; i < count; i++) {
+            const spaceIdx = text.indexOf(' ', idx);
+            if (spaceIdx === -1) return '';
+            idx = spaceIdx + 1;
+        }
+        return text.slice(idx);
+    }
+
+    /**
+     * Publica um anúncio num grupo da comunidade (por ID, veja $asb grupos) —
+     * só pode ser rodado do grupo de admins, nunca do próprio grupo alvo (o
+     * bot é quem "leva" o anúncio até lá). Marca todo mundo do grupo alvo via
+     * `mentions`, sem precisar listar @números no texto (marcação invisível) —
+     * e preserva a mensagem exatamente como digitada (negrito/itálico/quebra
+     * de linha do WhatsApp funcionam normalmente, sem re-join por espaço).
+     */
+    private async anunciarCommand(msg: any, args: string[]): Promise<void> {
+        if (!(await this.isAuthorized(msg))) return;
+
+        const jid = msg.key.remoteJid!;
+        const logJid = await this.getLogJid();
+        if (!logJid || jid !== logJid) {
+            await this.replySafe(jid, '❌ Esse comando só pode ser usado no grupo de administração — o anúncio é publicado no grupo de destino, não onde você digita.');
+            return;
+        }
+
+        const maybeId = args[0] && /^\d+$/.test(args[0]) ? parseInt(args[0], 10) : null;
+        if (maybeId === null) {
+            await this.replySafe(jid, '❌ Use: $asb anunciar <id> <mensagem>\nVeja o ID do grupo com $asb grupos.\nEx: $asb anunciar 3 *Aviso importante*\nManutenção programada às 20h.');
+            return;
+        }
+
+        const targetGroupJid = await this.communityGroupService.getJidByShortId(maybeId);
+        if (!targetGroupJid) {
+            await this.replySafe(jid, `❌ Nenhum grupo com o ID ${maybeId}. Use $asb grupos pra ver a lista.`);
+            return;
+        }
+
+        const rawText: string = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
+        const announcement = this.stripLeadingTokens(rawText, 3).trim(); // "$asb anunciar <id> "
+        if (!announcement) {
+            await this.replySafe(jid, '❌ Faltou a mensagem do anúncio. Use: $asb anunciar <id> <mensagem>');
+            return;
+        }
+
+        let metadata: GroupMetadata;
+        try {
+            metadata = await this.sock.groupMetadata(targetGroupJid);
+        } catch (err) {
+            logger.warn({ err, targetGroupJid }, '[anunciarCommand] falha ao buscar metadados do grupo de destino');
+            await this.replySafe(jid, `❌ Não foi possível acessar o grupo de destino — motivo: ${this.describeError(err)}. Confira se o bot ainda está nele.`);
+            return;
+        }
+
+        const allParticipantJids = metadata.participants.map((p) => p.id);
+        await this.sendSafe(targetGroupJid, { text: announcement, mentions: allParticipantJids });
+
+        await this.replySafe(jid, `✅ Anúncio publicado no grupo *${metadata.subject}*.`);
+        await this.sendLog(`📣 Anúncio publicado em *${metadata.subject}* via $asb anunciar.`);
     }
 
     /**
@@ -1318,7 +1419,7 @@ export class MessageHandler {
      * grupo da comunidade sem precisar que outro admin já-admin-daquele-grupo
      * faça isso pelo WhatsApp — o bot promove direto. Roda no próprio grupo
      * alvo, ou de qualquer lugar (tipicamente o grupo de admins) referenciando
-     * um grupo pelo ID curto de $grupos.
+     * um grupo pelo ID curto de $asb grupos.
      */
     private async assumirCommand(msg: any, args: string[]): Promise<void> {
         const currentJid = msg.key.remoteJid!;
@@ -1341,7 +1442,7 @@ export class MessageHandler {
         if (maybeId !== null) {
             const resolved = await this.communityGroupService.getJidByShortId(maybeId);
             if (!resolved) {
-                await this.replySafe(currentJid, `❌ Nenhum grupo com o ID ${maybeId}. Use $grupos pra ver a lista.`);
+                await this.replySafe(currentJid, `❌ Nenhum grupo com o ID ${maybeId}. Use $asb grupos pra ver a lista.`);
                 return;
             }
             targetGroupJid = resolved;
@@ -1363,7 +1464,7 @@ export class MessageHandler {
 
         const senderParticipant = findParticipant(metadata, senderRaw) || findParticipant(metadata, senderJid);
         if (!senderParticipant) {
-            await this.replySafe(currentJid, `❌ Você não é membro do grupo *${metadata.subject}* — entre nele antes de usar $assumir.`);
+            await this.replySafe(currentJid, `❌ Você não é membro do grupo *${metadata.subject}* — entre nele antes de usar $asb assumir.`);
             return;
         }
         if (isGroupAdmin(senderParticipant)) {
@@ -1387,12 +1488,12 @@ export class MessageHandler {
             const groupLabel = metadata.subject;
             await this.replySafe(currentJid, `⚠️ Não foi possível te tornar admin do grupo *${groupLabel}* automaticamente — motivo: ${reason}. Confira se o bot ainda é admin lá.`);
             await this.sendRetryableLog(
-                `⚠️ @${number} tentou virar admin do grupo *${groupLabel}* via $assumir, mas a promoção falhou — motivo: ${reason}.`,
+                `⚠️ @${number} tentou virar admin do grupo *${groupLabel}* via $asb assumir, mas a promoção falhou — motivo: ${reason}.`,
                 () => this.runRetryable(
                     async () => { await this.sock.groupParticipantsUpdate(targetGroupJid, [senderParticipant.id], 'promote'); },
                     {
                         success: `✅ @${number} promovido(a) a admin do grupo *${groupLabel}* com sucesso (retentativa).`,
-                        failure: (r) => `⚠️ @${number} ainda não conseguiu virar admin do grupo *${groupLabel}* via $assumir — motivo: ${r}.`,
+                        failure: (r) => `⚠️ @${number} ainda não conseguiu virar admin do grupo *${groupLabel}* via $asb assumir — motivo: ${r}.`,
                     },
                     [senderJid],
                 ),
@@ -1406,14 +1507,14 @@ export class MessageHandler {
 
         const logJid = await this.getLogJid();
         if (logJid && logJid !== currentJid) {
-            await this.sendLog(`👑 @${number} virou admin do grupo *${metadata.subject}* via $assumir.`, [senderJid]);
+            await this.sendLog(`👑 @${number} virou admin do grupo *${metadata.subject}* via $asb assumir.`, [senderJid]);
         }
     }
 
     /**
      * Marca um admin como responsável por um grupo. Sem argumento numérico,
      * usa o grupo atual (comportamento original). Com um ID no início (veja
-     * $grupos), referencia outro grupo — dá pra rodar isso do grupo de admins
+     * $asb grupos), referencia outro grupo — dá pra rodar isso do grupo de admins
      * sem precisar entrar no grupo alvo.
      */
     private async responsavelCommand(msg: any, args: string[]): Promise<void> {
@@ -1426,7 +1527,7 @@ export class MessageHandler {
         if (maybeId !== null) {
             const resolved = await this.communityGroupService.getJidByShortId(maybeId);
             if (!resolved) {
-                await this.replySafe(currentJid, `❌ Nenhum grupo com o ID ${maybeId}. Use $grupos pra ver a lista.`);
+                await this.replySafe(currentJid, `❌ Nenhum grupo com o ID ${maybeId}. Use $asb grupos pra ver a lista.`);
                 return;
             }
             targetGroupJid = resolved;
@@ -1436,7 +1537,7 @@ export class MessageHandler {
         const { jid: targetRaw } = this.getTargetJid(msg);
 
         if (!targetRaw) {
-            await this.replySafe(currentJid, '❌ Marque a pessoa ou responda a mensagem dela. Ex: $responsavel @admin (ou $responsavel <id> @admin a partir do grupo de admins — veja $grupos)');
+            await this.replySafe(currentJid, '❌ Marque a pessoa ou responda a mensagem dela. Ex: $asb responsavel @admin (ou $asb responsavel <id> @admin a partir do grupo de admins — veja $asb grupos)');
             return;
         }
 
@@ -1465,7 +1566,7 @@ export class MessageHandler {
         const { jid: targetRaw } = this.getTargetJid(msg);
 
         if (!targetRaw) {
-            await this.replySafe(jid, '❌ Marque a pessoa ou responda a mensagem dela. Ex: $promover @user');
+            await this.replySafe(jid, '❌ Marque a pessoa ou responda a mensagem dela. Ex: $asb promover @user');
             return;
         }
 
@@ -1537,7 +1638,7 @@ export class MessageHandler {
         const { jid: targetRaw, fromQuoted } = this.getTargetJid(msg);
 
         if (!targetRaw) {
-            await this.replySafe(jid, '❌ Marque o usuário ou responda a mensagem dele. Ex: $ban @user permanente motivo');
+            await this.replySafe(jid, '❌ Marque o usuário ou responda a mensagem dele. Ex: $asb ban @user permanente motivo');
             return;
         }
 
@@ -1646,7 +1747,7 @@ export class MessageHandler {
             userJid = `${rawNumber}@s.whatsapp.net`;
             reasonArgs = args.slice(1);
         } else {
-            await this.replySafe(jid, '❌ Marque a pessoa, responda a mensagem dela, ou use: $unban 5541995850310');
+            await this.replySafe(jid, '❌ Marque a pessoa, responda a mensagem dela, ou use: $asb unban 5541995850310');
             return;
         }
 
@@ -1655,7 +1756,7 @@ export class MessageHandler {
         const senderJid = await resolvePnJid(this.sock, senderRaw);
 
         if (!reason && !(await this.isAdminOfAdminGroup(senderRaw, senderJid))) {
-            await this.replySafe(jid, '❌ Motivo obrigatório. Ex: $unban @user reavaliado, sem novas violações\n(admin de comunidade não precisa informar motivo)');
+            await this.replySafe(jid, '❌ Motivo obrigatório. Ex: $asb unban @user reavaliado, sem novas violações\n(admin de comunidade não precisa informar motivo)');
             return;
         }
 
@@ -1777,7 +1878,7 @@ export class MessageHandler {
         const { jid: targetRaw } = this.getTargetJid(msg);
 
         if (!targetRaw || args.length < 2) {
-            await this.replySafe(jid, '❌ Use: $banedit @user [tipo|tempo] [valor]\nOu responda a mensagem + $banedit tipo permanente\nEx: $banedit @user tipo permanente\nEx: $banedit @user tempo 7d');
+            await this.replySafe(jid, '❌ Use: $asb banedit @user [tipo|tempo] [valor]\nOu responda a mensagem + $asb banedit tipo permanente\nEx: $asb banedit @user tipo permanente\nEx: $asb banedit @user tempo 7d');
             return;
         }
 
@@ -1828,7 +1929,7 @@ export class MessageHandler {
      * Advertência manual (a IA de moderação usa o mesmo WarningService.issue por
      * baixo, sem passar por esse comando). Ao bater 3 advertências no mês
      * corrente, aplica automaticamente um banimento temporário (7 dias) naquele
-     * grupo — mesmo mecanismo do $ban, só que disparado pelo acúmulo.
+     * grupo — mesmo mecanismo do $asb ban, só que disparado pelo acúmulo.
      */
     private async advertirCommand(msg: any, args: string[]): Promise<void> {
         if (!(await this.isAuthorized(msg))) return;
@@ -1838,7 +1939,7 @@ export class MessageHandler {
         const { jid: targetRaw, fromQuoted } = this.getTargetJid(msg);
 
         if (!targetRaw) {
-            await this.replySafe(jid, '❌ Marque a pessoa ou responda a mensagem dela. Ex: $advertir @user flood no grupo');
+            await this.replySafe(jid, '❌ Marque a pessoa ou responda a mensagem dela. Ex: $asb advertir @user flood no grupo');
             return;
         }
 
@@ -1888,7 +1989,7 @@ export class MessageHandler {
         } else {
             banType = 'PERMANENTE';
             durationLabel = 'permanente';
-            tierNote = '\n⚠️ Essa é a 3ª vez (ou mais) que essa pessoa é punida por acúmulo de advertências nesse grupo — avaliem se deve virar banimento de comunidade (use $banedit @user tipo comunidade se decidirem).';
+            tierNote = '\n⚠️ Essa é a 3ª vez (ou mais) que essa pessoa é punida por acúmulo de advertências nesse grupo — avaliem se deve virar banimento de comunidade (use $asb banedit @user tipo comunidade se decidirem).';
         }
 
         const reason = `Acúmulo de 3 ou mais advertências no mês (${tier}ª punição nesse grupo)`;
