@@ -68,6 +68,12 @@ export class MessageHandler {
     private notAuthorizedPhotoGroups: Map<string, number> = new Map();
     private static readonly PHOTO_RETRY_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
+    // Timer próprio da moderação por IA (separado do tick de fotos, que
+    // continua fixo de hora em hora) — auto-reagendável, pra $moderar poder
+    // resetar a contagem em vez de esperar o ciclo automático original.
+    private moderationTimer: ReturnType<typeof setTimeout> | undefined;
+    private static readonly MODERATION_INTERVAL_MS = 60 * 60 * 1000;
+
     constructor(private sock: WASocket) {
         this.banService = new BanService();
         this.adminService = new AdminService();
@@ -92,6 +98,7 @@ export class MessageHandler {
         help: (msg: any) => this.helpCommand(msg),
         regras: (msg: any) => this.regrasCommand(msg),
         grupos: (msg: any) => this.gruposCommand(msg),
+        moderar: (msg: any) => this.moderarCommand(msg),
         assumir: (msg: any, args: string[]) => this.assumirCommand(msg, args),
         responsavel: (msg: any, args: string[]) => this.responsavelCommand(msg, args),
         promover: (msg: any) => this.promoverCommand(msg),
@@ -388,8 +395,43 @@ export class MessageHandler {
         }
     }
 
+    /** Inicia o agendamento próprio da moderação por IA — chamado ao conectar. */
+    startModerationSchedule(): void {
+        this.scheduleNextModeration();
+    }
+
+    private scheduleNextModeration(): void {
+        if (this.moderationTimer) clearTimeout(this.moderationTimer);
+        this.moderationTimer = setTimeout(async () => {
+            await this.runAiModerationCycle().catch((err) => {
+                logger.warn({ err }, '[scheduleNextModeration] falha no ciclo automático de moderação por IA');
+            });
+            this.scheduleNextModeration();
+        }, MessageHandler.MODERATION_INTERVAL_MS);
+    }
+
+    /** Roda a moderação agora e reseta o relógio — o próximo ciclo automático só vem 1h a partir daqui. */
+    private async triggerManualModerationCycle(): Promise<void> {
+        await this.runAiModerationCycle();
+        this.scheduleNextModeration();
+    }
+
+    private async moderarCommand(msg: any): Promise<void> {
+        if (!(await this.isAuthorized(msg))) return;
+
+        const jid = msg.key.remoteJid!;
+        if (!this.aiModerationService.isConfigured()) {
+            await this.replySafe(jid, '❌ Moderação por IA não está configurada (falta GEMINI_API_KEY no servidor).');
+            return;
+        }
+
+        await this.triggerManualModerationCycle();
+        await this.replySafe(jid, '✅ Ciclo de moderação por IA concluído agora. Próximo automático em 1h a partir deste.');
+        await this.sendLog('🤖 Ciclo de moderação por IA rodado manualmente via $moderar — próximo automático reagendado pra daqui 1h.');
+    }
+
     /**
-     * Ciclo horário de moderação por IA. Só olha grupos com mensagem nova desde
+     * Ciclo de moderação por IA. Só olha grupos com mensagem nova desde
      * a última vez (buffer não-vazio) — se não tiver nenhuma, nem chama a IA.
      * Ações: `banir_comunidade` vai direto pro BanService (regras que preveem
      * banimento imediato); qualquer outra violação vira uma advertência comum,

@@ -332,9 +332,25 @@ Isso não é um comando — é automático. Sempre que um admin edita a descriç
 
 **Comportamento:** nada aparece no grupo cuja descrição mudou — toda a interação (proposta + votos) acontece no grupo de admins. Se a maioria rejeitar, a versão anterior volta (o bot reverte direto no grupo original) e esse grupo fica **travado por 7 dias**: qualquer tentativa de mudar a descrição nesse período é detectada e revertida automaticamente (não tem como impedir um admin de editar pelo WhatsApp, só reverter depois).
 
+### `$moderar`
+
+Roda o ciclo de moderação por IA na hora, sem esperar a próxima checagem automática (que acontece de hora em hora — veja abaixo). Útil pra testar a moderação, ou pra não esperar depois de uma denúncia. O relógio do ciclo automático reinicia a partir desse momento — o próximo automático só vem 1h depois desse `$moderar`, não da última vez que rodou sozinho.
+
+```
+$moderar
+```
+
+**Comportamento:** reage ✅, responde no grupo onde rodou confirmando que concluiu (e que o próximo automático foi reagendado pra 1h a partir daí), e manda cópia pro grupo de admins. Se não houver `GEMINI_API_KEY` configurada, recusa com uma mensagem explicando. Sem mensagem nova em nenhum grupo desde a última checagem, roda mas não encontra nada pra avaliar (mesmo comportamento do ciclo automático).
+
+Exemplo:
+```
+$moderar
+```
+→ `✅ Ciclo de moderação por IA concluído agora. Próximo automático em 1h a partir deste.`
+
 ### Moderação automática por IA
 
-Também não é um comando. A cada hora, se houve mensagem nova em algum grupo desde a última checagem (senão nem chama a IA), o bot avalia o conteúdo contra as regras da comunidade usando o Gemini (grátis, configurado via `GEMINI_API_KEY` no `.env` — sem a chave, esse ciclo simplesmente não faz nada).
+Não é um comando (é o ciclo de hora em hora, ou o disparo manual via `$moderar` acima). Se houve mensagem nova em algum grupo desde a última checagem (senão nem chama a IA), o bot avalia o conteúdo contra as regras da comunidade usando o Gemini (grátis, configurado via `GEMINI_API_KEY` no `.env` — sem a chave, esse ciclo simplesmente não faz nada).
 
 **Comportamento:** nunca responde no grupo onde a violação aconteceu. Violação grave (discriminação, conteúdo explícito, ato ilícito) → banimento de comunidade direto, avisado no grupo de admins **e revertível** (veja abaixo). Qualquer outra violação → uma advertência comum (mesmo mecanismo do `$advertir`, mesmo limite de 3/mês, mesmo escalonamento por reincidência), também só avisada no grupo de admins.
 

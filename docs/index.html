@@ -663,6 +663,14 @@ $banedit @user tempo 7d</span>
     </div>
 
     <div class="cmd">
+      <div class="cmd-head"><code class="name">$moderar</code><span class="who">admin</span></div>
+      <p class="simple-only">Roda a moderação por IA na hora, sem esperar a checagem automática de hora em hora. O relógio reinicia daí — o próximo automático só vem 1h depois desse comando.</p>
+      <p class="tech-only"><code>triggerManualModerationCycle()</code> chama <code>runAiModerationCycle()</code> e depois <code>scheduleNextModeration()</code>, que limpa e reagenda o <code>setTimeout</code> próprio da moderação (separado do tick horário de fotos).</p>
+      <span class="syntax">$moderar</span>
+      <span class="example"><b>Exemplo:</b> <code>$moderar</code> → <code>✅ Ciclo de moderação por IA concluído agora. Próximo automático em 1h a partir deste.</code></span>
+    </div>
+
+    <div class="cmd">
       <div class="cmd-head"><code class="name">$assumir</code><span class="who">grupo de admins</span></div>
       <p class="simple-only">Quem já está no grupo de administração pode virar admin de qualquer grupo da comunidade na hora — sem precisar que outro admin faça isso manualmente pelo WhatsApp.</p>
       <p class="tech-only">Exige só <code>isMemberOfAdminGroup</code> (não <code>isGroupAdmin</code> do grupo atual — é isso que o comando resolve). Sem <code>args[0]</code> numérico, usa o grupo atual; com número, resolve via <code>CommunityGroupService.getJidByShortId</code>. Promove via <code>groupParticipantsUpdate(..., 'promote')</code>.</p>
@@ -720,8 +728,8 @@ $banedit @user tempo 7d</span>
       <p class="tech-only">Detectado via evento <code>groups.update</code>, comparado contra <code>descriptionCache</code>. Voto por <code>messages.reaction</code>, tabulado em <code>descriptionVotes</code> (memória). Rejeição grava <code>GroupDescriptionLock.frozenDescription</code> e qualquer edição durante a trava é revertida na hora.</p>
     </div>
     <div class="cmd">
-      <div class="cmd-head"><span>Moderação por IA (a cada hora)</span></div>
-      <p class="simple-only">Se houve mensagem nova em algum grupo desde a última checagem, o bot avalia contra as regras usando o Gemini (grátis). Violação grave = banimento de comunidade direto; o resto = advertência comum. Sem chave de API configurada, isso simplesmente não roda.</p>
+      <div class="cmd-head"><span>Moderação por IA (a cada hora, ou na hora via <code>$moderar</code>)</span></div>
+      <p class="simple-only">Se houve mensagem nova em algum grupo desde a última checagem, o bot avalia contra as regras usando o Gemini (grátis). Violação grave = banimento de comunidade direto; o resto = advertência comum. Sem chave de API configurada, isso simplesmente não roda. Rodar <code>$moderar</code> manualmente reinicia a contagem da próxima 1h.</p>
       <p class="tech-only"><code>pendingModerationMessages</code> (buffer em memória, por grupo) — vazio, nem chama a IA. <code>AiModerationService.evaluateMessages()</code> pede JSON estrito ao Gemini; qualquer erro de rede/parse é tratado como "sem violação" (falha fechada).</p>
     </div>
     <div class="cmd">
