@@ -12,6 +12,7 @@ import { AiModerationService, ModerationViolation } from '../services/aiModerati
 import { CommunityGroupService } from '../services/communityGroupService';
 import { AutomatedPunishmentService } from '../services/automatedPunishmentService';
 import { MemberActivityService } from '../services/memberActivityService';
+import { GroupRulesService } from '../services/groupRulesService';
 import { logger } from '../utils/logger';
 import { findParticipant, isGroupAdmin, resolvePnJid } from '../utils/jid';
 import { humanBulkActionDelay, humanReplyDelay } from '../utils/delay';
@@ -29,6 +30,7 @@ export class MessageHandler {
     private communityGroupService: CommunityGroupService;
     private automatedPunishmentService: AutomatedPunishmentService;
     private memberActivityService: MemberActivityService;
+    private groupRulesService: GroupRulesService;
 
     // Mensagens de grupo desde a última checagem da IA — se estiver vazio na
     // hora do ciclo, não submete nada (nem gasta chamada de API à toa).
@@ -86,6 +88,7 @@ export class MessageHandler {
         this.communityGroupService = new CommunityGroupService();
         this.automatedPunishmentService = new AutomatedPunishmentService();
         this.memberActivityService = new MemberActivityService();
+        this.groupRulesService = new GroupRulesService();
     }
 
     private commands: Record<string, (msg: any, args: string[]) => Promise<void>> = {
@@ -495,7 +498,11 @@ export class MessageHandler {
         // Anexa a contagem de participação de cada remetente no grupo (não é
         // "memória de IA" — é um contador nosso, no banco) pra IA conseguir
         // julgar "quase não participa e ainda divulga" (agravante nas regras).
-        const batch: { groupJid: string; messages: { sender: string; text: string; participationCount: number }[] }[] = [];
+        const batch: {
+            groupJid: string;
+            messages: { sender: string; text: string; participationCount: number }[];
+            extraRules: string[];
+        }[] = [];
         const countCache = new Map<string, number>();
         for (const [groupJid, messages] of this.pendingModerationMessages.entries()) {
             if (onlyGroupJid && groupJid !== onlyGroupJid) continue;
@@ -511,7 +518,14 @@ export class MessageHandler {
                 }
                 enriched.push({ ...m, participationCount: count });
             }
-            batch.push({ groupJid, messages: enriched });
+
+            // Regras extras desse grupo específico, aprovadas internamente e
+            // publicadas em docs/regras-grupos.md — buscadas direto de lá (não
+            // de um arquivo local), pra editar a página já valer sem deploy.
+            const shortId = await this.communityGroupService.getShortIdByJid(groupJid);
+            const extraRules = await this.groupRulesService.getRulesFor(shortId);
+
+            batch.push({ groupJid, messages: enriched, extraRules });
         }
         if (!batch.length) return;
 

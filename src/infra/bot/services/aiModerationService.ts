@@ -1,4 +1,5 @@
 import { logger } from '../utils/logger';
+import { CommunityRulesService } from './communityRulesService';
 
 export type ModerationAction = 'advertir' | 'banir_comunidade';
 
@@ -12,39 +13,13 @@ export interface ModerationViolation {
 export interface ModerationGroupBatch {
     groupJid: string;
     messages: { sender: string; text: string; participationCount: number }[];
+    extraRules?: string[];
 }
-
-// Espelha docs/regras.md (seção "Classificação de punição") — se editar uma
-// regra ali, atualize aqui também, senão a IA aplica um critério diferente
-// do que está escrito publicamente pra comunidade.
-const RULES_SUMMARY = `
-BANIMENTO IMEDIATO DE COMUNIDADE (action: banir_comunidade):
-- Conteúdo discriminatório, racista, ou explícito.
-- Ato ilícito, incluindo pirataria/cracks, exploits/malware sem autorização, ou pedir ajuda pra cometer crime.
-- Apostas ou jogos de azar.
-- Bot não autorizado pela administração.
-- Comprovadamente prejudicar outra pessoa (mesmo fora da comunidade).
-- Doxxing ou vazar dado pessoal de terceiro sem autorização.
-- Golpe financeiro, esquema de pirâmide, "investimento garantido", ou promoção de criptomoeda duvidosa.
-- Se passar por admin, por outro membro, ou pela própria comunidade (perfil falso, nome/foto copiados).
-- Desrespeito grave a um membro.
-
-AGRAVANTE — divulgação vinda de quem quase não participa do grupo (participação muito baixa, ex: 1 a 3 mensagens no total, sendo a divulgação uma delas) conta como BANIMENTO IMEDIATO em vez de advertência: o comportamento sozinho já indica que a pessoa está ali só pra divulgar, não pra contribuir. Participação alta (a pessoa já conversa normalmente no grupo) mantém divulgação isolada como advertência comum.
-
-ADVERTÊNCIA (action: advertir), a menos que seja repetido/grave (aí vira banimento):
-- Divulgação sem ajudar diretamente no assunto do grupo — SALVO o agravante de baixa participação acima.
-- Incomodar membro no privado sem autorização.
-- Flood.
-- Publicação fora de contexto do grupo (incluindo divulgação disfarçada).
-- Cobrança por resposta, pressão por retorno imediato, ou desrespeito a quem está aprendendo (viola o propósito de mentoria).
-- Proselitismo político, religioso ou correlato fora de grupo criado com esse propósito.
-- Pedir ou oferecer pra fazer o trabalho de outra pessoa por completo (prova, entrevista técnica, trabalho de faculdade) — orientar/ensinar é sempre permitido, fazer no lugar da pessoa não.
-- Desrespeito leve/pontual a um membro.
-`.trim();
 
 export class AiModerationService {
     private readonly apiKey = process.env.GEMINI_API_KEY;
     private readonly model = process.env.GEMINI_MODEL || 'gemini-3.6-flash';
+    private readonly communityRulesService = new CommunityRulesService();
 
     isConfigured(): boolean {
         return Boolean(this.apiKey);
@@ -102,11 +77,16 @@ export class AiModerationService {
                 const numbered = this.dedupeMessages(g.messages)
                     .map((m, i) => `${i + 1}. [${m.sender}] (participação: ${m.participationCount} msg(s) neste grupo): ${m.text.replace(/\n/g, ' ').slice(0, 500)}`)
                     .join('\n');
-                return `=== Grupo ${g.groupJid} ===\n${numbered}`;
+                const extraRulesBlock = g.extraRules?.length
+                    ? `Regras específicas deste grupo (além das gerais acima, aprovadas internamente):\n${g.extraRules.map((r) => `- ${r}`).join('\n')}\n\n`
+                    : '';
+                return `=== Grupo ${g.groupJid} ===\n${extraRulesBlock}${numbered}`;
             })
             .join('\n\n');
 
-        const prompt = `Você é um moderador de uma comunidade de mentoria em programação no WhatsApp, responsável por vários grupos ao mesmo tempo. Regras:\n${RULES_SUMMARY}\n\nMensagens novas de cada grupo desde a última checagem, separadas por "=== Grupo <jid> ===" (formato de mensagem "N. [remetente] (participação: X msg(s) neste grupo): texto" — participação é o total de mensagens que esse remetente já mandou nesse grupo, incluindo esta):\n\n${sections}\n\nResponda APENAS com um JSON válido, sem nenhum texto antes ou depois, no formato:\n{"violations": [{"group": "<jid exatamente como no cabeçalho \\"=== Grupo ... ===\\">", "sender": "<remetente exatamente como veio entre colchetes>", "reason": "<motivo curto em português>", "action": "advertir" ou "banir_comunidade"}]}\nSe nenhuma mensagem de nenhum grupo violar as regras, responda {"violations": []}.`;
+        const rulesSummary = await this.communityRulesService.getRules();
+
+        const prompt = `Você é um moderador de uma comunidade de mentoria em programação no WhatsApp, responsável por vários grupos ao mesmo tempo. Regras gerais da comunidade, incluindo qual punição cada uma gera — use exatamente a classificação descrita (banimento imediato de comunidade vira action "banir_comunidade"; qualquer coisa marcada como advertência vira action "advertir"; regras que não geram punição automática, ignore):\n${rulesSummary}\n\nMensagens novas de cada grupo desde a última checagem, separadas por "=== Grupo <jid> ===" — alguns grupos também trazem regras específicas próprias (além das gerais; em caso de conflito, as gerais prevalecem). Formato de mensagem: "N. [remetente] (participação: X msg(s) neste grupo): texto" — participação é o total de mensagens que esse remetente já mandou nesse grupo, incluindo esta:\n\n${sections}\n\nResponda APENAS com um JSON válido, sem nenhum texto antes ou depois, no formato:\n{"violations": [{"group": "<jid exatamente como no cabeçalho \\"=== Grupo ... ===\\">", "sender": "<remetente exatamente como veio entre colchetes>", "reason": "<motivo curto em português>", "action": "advertir" ou "banir_comunidade"}]}\nSe nenhuma mensagem de nenhum grupo violar as regras, responda {"violations": []}.`;
 
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${this.apiKey}`;
         const res = await fetch(url, {

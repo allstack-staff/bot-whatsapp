@@ -27,4 +27,9 @@ export class CommunityGroupService {
         const entry = await prisma.communityGroup.findUnique({ where: { shortId } });
         return entry?.groupJid ?? null;
     }
+
+    async getShortIdByJid(groupJid: string): Promise<number | null> {
+        const entry = await prisma.communityGroup.findUnique({ where: { groupJid } });
+        return entry?.shortId ?? null;
+    }
 }

@@ -12,7 +12,7 @@ Bem-vindo(a) à nossa comunidade multidisciplinar, open source e de mentoria. É
 
 **Novidade:** você pode fazer um teste de nivelamento em lógica de programação — é grátis e rápido, basta pedir num grupo que um admin faz com você.
 
-Essas regras valem pra **toda a comunidade**. Um grupo específico pode ter regras adicionais próprias, desde que **não contrariem nem afrouxem** as regras daqui — em caso de conflito, as regras da comunidade prevalecem.
+Essas regras valem pra **toda a comunidade**. Um grupo específico pode ter [regras adicionais próprias](regras-grupos.html), desde que **não contrariem nem afrouxem** as regras daqui — em caso de conflito, as regras da comunidade prevalecem.
 
 ## Regras gerais
 

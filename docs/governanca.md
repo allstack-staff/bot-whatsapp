@@ -37,7 +37,7 @@ Um grupo novo da comunidade deve:
 1. Ter um **propósito claro e específico**, que não seja já coberto por um grupo existente (evita fragmentação).
 2. Ter pelo menos **um admin responsável** definido antes ou no momento da criação.
 3. Ser vinculado à Community do WhatsApp da All Stack (pra aparecer nas ferramentas de gestão do bot).
-4. Ter a descrição configurada com o link das [regras da comunidade](regras.html) (`$asb regras`, uma vez que o bot for adicionado como admin).
+4. Ter a descrição configurada com o link das [regras da comunidade](regras.html) (`$asb regras`, uma vez que o bot for adicionado como admin). Se o grupo tiver regras próprias, elas precisam ser aprovadas internamente antes de entrar em [Regras por Grupo](regras-grupos.html) — é de lá que o bot lê pra aplicar na moderação por IA.
 
 Grupos que ficarem sem admin responsável por muito tempo, ou sem atividade, podem ser arquivados/desvinculados a critério dos admins de comunidade.
 
