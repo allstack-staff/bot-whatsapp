@@ -130,3 +130,22 @@ model AutomatedPunishment {
 
     @@index([messageId])
 }
+
+// Proposta de nova regra da comunidade, redigida pela IA a partir da ideia
+// crua de um admin ($asb propor) e votada só por admins de comunidade
+// (admin do próprio grupo de administração — ver isAdminOfAdminGroup).
+// Aprovada, o bot publica direto em docs/regras.md via API do GitHub.
+model RuleProposal {
+    id            String    @id @default(cuid())
+    proposedBy    String
+    rawIdea       String
+    draftedText   String
+    punishment    String    // ADVERTENCIA | BANIMENTO
+    conflictNote  String?
+    status        String    @default("PENDING") // PENDING | APPROVED | REJECTED | PUBLISH_FAILED
+    voteMessageId String?
+    createdAt     DateTime  @default(now())
+    resolvedAt    DateTime?
+
+    @@index([voteMessageId])
+}

@@ -679,6 +679,14 @@ $asb banedit @user tempo 7d</span>
     </div>
 
     <div class="cmd">
+      <div class="cmd-head"><code class="name">$asb propor</code><span class="who">grupo de admins</span></div>
+      <p class="simple-only">Propõe uma regra nova: você descreve a ideia em texto livre, a IA redige como regra de verdade (mesmo estilo das outras) e classifica a punição. Vai pra votação no grupo de admins — só admins de comunidade votam. Aprovada pela maioria, o bot publica sozinho em Regras, sem precisar de deploy.</p>
+      <p class="tech-only"><code>RuleDraftingService.draft()</code> chama o Gemini com as regras atuais (via <code>CommunityRulesService</code>) pra estilo/conflito, devolvendo <code>{draftedText, punishment, conflictNote}</code>. Voto conta só quem passa em <code>isAdminOfAdminGroup</code> (diferente da votação de descrição, que aceita qualquer membro do grupo de admins) — maioria é sobre o total de admins do grupo de administração, não todos os membros. Aprovada, <code>GithubRulesPublishService</code> busca <code>docs/regras.md</code> via API do GitHub (GET pro sha atual), acrescenta a regra numerada, e dá PUT — o push na main já dispara o rebuild normal do GitHub Pages.</p>
+      <span class="syntax">$asb propor &lt;ideia da regra&gt;</span>
+      <span class="example"><b>Exemplo:</b> <code>$asb propor proibir pedir dinheiro emprestado nos grupos</code> → posta a proposta redigida com opções de voto ✅/❌ no grupo de admins.</span>
+    </div>
+
+    <div class="cmd">
       <div class="cmd-head"><code class="name">$asb assumir</code><span class="who">grupo de admins</span></div>
       <p class="simple-only">Quem já está no grupo de administração pode virar admin de qualquer grupo da comunidade na hora — sem precisar que outro admin faça isso manualmente pelo WhatsApp.</p>
       <p class="tech-only">Exige só <code>isMemberOfAdminGroup</code> (não <code>isGroupAdmin</code> do grupo atual — é isso que o comando resolve). Sem <code>args[0]</code> numérico, usa o grupo atual; com número, resolve via <code>CommunityGroupService.getJidByShortId</code>. Promove via <code>groupParticipantsUpdate(..., 'promote')</code>.</p>

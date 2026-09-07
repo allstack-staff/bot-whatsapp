@@ -372,6 +372,32 @@ O bot ficará fora do ar hoje às 20h por cerca de 10 minutos.
 ```
 → publica essa mensagem (com negrito e quebra de linha preservados) no grupo de ID 3, marcando todo mundo dele sem poluir o texto, e responde `✅ Anúncio publicado no grupo *Nome do Grupo*.` no grupo de admins.
 
+### `$asb propor`
+
+Propõe uma regra nova pra comunidade. Você descreve a ideia em texto livre e informal; a IA redige como uma frase de regra no mesmo estilo das existentes, classifica a punição (advertência ou banimento) e avisa se conflitar com alguma regra atual. A proposta então vai pra votação no grupo de admins — só **admins de comunidade** votam (admin do próprio grupo de administração; um admin responsável só por um grupo não conta). Aprovada pela maioria, o bot publica sozinho em [Regras](regras.html), sem precisar de deploy.
+
+```
+$asb propor <ideia da regra>
+```
+
+Só funciona rodado **no grupo de administração**.
+
+**Comportamento:** reage ✅ ao comando, e posta a proposta redigida no grupo de admins com "Reaja ✅ pra aprovar e publicar, ❌ pra rejeitar" — essa é a mensagem que recebe os votos, não o comando em si. Se a maioria aprovar: publica em `docs/regras.md` (numerada automaticamente, mesmo formato das outras) e avisa no grupo de admins; se a publicação falhar (ex: token do GitHub não configurado), avisa que precisa ser feito manualmente. Se a maioria rejeitar: só avisa a rejeição, nada é publicado.
+
+Exemplo (rodado no grupo de admins):
+```
+$asb propor proibir pedir dinheiro emprestado ou doação nos grupos
+```
+→
+```
+📋 Proposta de nova regra (sugerida por @55..., redigida por IA)
+
+"Proibido pedir dinheiro emprestado ou doação de qualquer tipo nos grupos."
+Punição: Advertência
+
+Reaja ✅ pra aprovar e publicar, ❌ pra rejeitar. Só votos de admins de comunidade contam.
+```
+
 ### Moderação automática por IA
 
 Não é um comando (é o ciclo de hora em hora, ou o disparo manual via `$asb moderar` acima). Se houve mensagem nova em algum grupo desde a última checagem (senão nem chama a IA), o bot avalia o conteúdo contra as regras gerais da comunidade **e** as regras específicas daquele grupo (se houver — veja [Regras por Grupo](regras-grupos.html)), usando o Gemini (grátis, configurado via `GEMINI_API_KEY` no `.env` — sem a chave, esse ciclo simplesmente não faz nada). As regras específicas são buscadas direto da página publicada a cada ciclo — editar a página já vale, sem precisar de deploy do bot. Cada mensagem vai acompanhada de quantas mensagens aquele remetente já mandou no grupo (contador nosso, não é "memória" da IA) — isso deixa a IA aplicar o agravante das [regras](regras.html#classificação-de-punição-resumo): divulgação vinda de quem quase não participa vira banimento direto, não só advertência.

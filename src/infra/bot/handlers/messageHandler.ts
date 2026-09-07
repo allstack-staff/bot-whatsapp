@@ -13,6 +13,9 @@ import { CommunityGroupService } from '../services/communityGroupService';
 import { AutomatedPunishmentService } from '../services/automatedPunishmentService';
 import { MemberActivityService } from '../services/memberActivityService';
 import { GroupRulesService } from '../services/groupRulesService';
+import { RuleProposalService } from '../services/ruleProposalService';
+import { RuleDraftingService } from '../services/ruleDraftingService';
+import { GithubRulesPublishService } from '../services/githubRulesPublishService';
 import { logger } from '../utils/logger';
 import { findParticipant, isGroupAdmin, resolvePnJid } from '../utils/jid';
 import { humanBulkActionDelay, humanReplyDelay } from '../utils/delay';
@@ -31,6 +34,9 @@ export class MessageHandler {
     private automatedPunishmentService: AutomatedPunishmentService;
     private memberActivityService: MemberActivityService;
     private groupRulesService: GroupRulesService;
+    private ruleProposalService: RuleProposalService;
+    private ruleDraftingService: RuleDraftingService;
+    private githubRulesPublishService: GithubRulesPublishService;
 
     // Mensagens de grupo desde a última checagem da IA — se estiver vazio na
     // hora do ciclo, não submete nada (nem gasta chamada de API à toa).
@@ -63,6 +69,7 @@ export class MessageHandler {
     // por id da mensagem de votação. Em memória de propósito — perder isso
     // num restart só significa recomeçar a contagem, não perder a trava/estado.
     private descriptionVotes: Map<string, Map<string, 'approve' | 'reject'>> = new Map();
+    private ruleProposalVotes: Map<string, Map<string, 'approve' | 'reject'>> = new Map();
 
     // Grupos onde o bot não é admin (logo não pode trocar a foto), com o
     // horário da última tentativa. Evita reenviar updateProfilePicture pro
@@ -89,6 +96,9 @@ export class MessageHandler {
         this.automatedPunishmentService = new AutomatedPunishmentService();
         this.memberActivityService = new MemberActivityService();
         this.groupRulesService = new GroupRulesService();
+        this.ruleProposalService = new RuleProposalService();
+        this.ruleDraftingService = new RuleDraftingService();
+        this.githubRulesPublishService = new GithubRulesPublishService();
     }
 
     private commands: Record<string, (msg: any, args: string[]) => Promise<void>> = {
@@ -106,6 +116,7 @@ export class MessageHandler {
         grupos: (msg: any) => this.gruposCommand(msg),
         moderar: (msg: any, args: string[]) => this.moderarCommand(msg, args),
         anunciar: (msg: any, args: string[]) => this.anunciarCommand(msg, args),
+        propor: (msg: any, args: string[]) => this.proporCommand(msg, args),
         assumir: (msg: any, args: string[]) => this.assumirCommand(msg, args),
         responsavel: (msg: any, args: string[]) => this.responsavelCommand(msg, args),
         promover: (msg: any) => this.promoverCommand(msg),
@@ -950,23 +961,81 @@ export class MessageHandler {
                 }
 
                 const change = await this.descriptionChangeService.findPendingByVoteMessageId(key.id);
-                if (!change) continue;
+                if (change) {
+                    const votes = this.descriptionVotes.get(key.id) ?? new Map<string, 'approve' | 'reject'>();
+                    if (emoji === '✅') {
+                        votes.set(reactorRaw, 'approve');
+                    } else if (emoji === '❌') {
+                        votes.set(reactorRaw, 'reject');
+                    } else {
+                        votes.delete(reactorRaw); // reação removida ou trocada por outro emoji — não conta
+                    }
+                    this.descriptionVotes.set(key.id, votes);
 
-                const votes = this.descriptionVotes.get(key.id) ?? new Map<string, 'approve' | 'reject'>();
-                if (emoji === '✅') {
-                    votes.set(reactorRaw, 'approve');
-                } else if (emoji === '❌') {
-                    votes.set(reactorRaw, 'reject');
-                } else {
-                    votes.delete(reactorRaw); // reação removida ou trocada por outro emoji — não conta
+                    await this.tallyDescriptionVote(change, votes);
+                    continue;
                 }
-                this.descriptionVotes.set(key.id, votes);
 
-                await this.tallyDescriptionVote(change, votes);
+                const proposal = await this.ruleProposalService.findPendingByVoteMessageId(key.id);
+                if (proposal) {
+                    // Só admin de comunidade (admin do próprio grupo de administração)
+                    // vota em proposta de regra — diferente da votação de descrição,
+                    // que conta qualquer membro do grupo de admins.
+                    const reactorResolved = await resolvePnJid(this.sock, reactorRaw);
+                    if (!(await this.isAdminOfAdminGroup(reactorRaw, reactorResolved))) continue;
+
+                    const votes = this.ruleProposalVotes.get(key.id) ?? new Map<string, 'approve' | 'reject'>();
+                    if (emoji === '✅') {
+                        votes.set(reactorRaw, 'approve');
+                    } else if (emoji === '❌') {
+                        votes.set(reactorRaw, 'reject');
+                    } else {
+                        votes.delete(reactorRaw);
+                    }
+                    this.ruleProposalVotes.set(key.id, votes);
+
+                    await this.tallyRuleProposalVote(proposal, votes);
+                }
             } catch (err) {
                 logger.warn({ err }, '[handleReaction] erro processando reação de votação');
             }
         }
+    }
+
+    private async tallyRuleProposalVote(proposal: any, votes: Map<string, 'approve' | 'reject'>): Promise<void> {
+        const logJid = await this.getLogJid();
+        if (!logJid) return;
+
+        let communityAdminCount = 0;
+        try {
+            const meta = await this.sock.groupMetadata(logJid);
+            communityAdminCount = meta.participants.filter((p) => isGroupAdmin(p)).length;
+        } catch {
+            return; // sem saber o total, não arrisca decidir
+        }
+        if (!communityAdminCount) return;
+
+        const majority = Math.floor(communityAdminCount / 2) + 1;
+        const approvals = [...votes.values()].filter((v) => v === 'approve').length;
+        const rejections = [...votes.values()].filter((v) => v === 'reject').length;
+
+        if (approvals >= majority) {
+            this.ruleProposalVotes.delete(proposal.voteMessageId);
+            try {
+                await this.githubRulesPublishService.publishNewRule(proposal.draftedText, proposal.punishment);
+                await this.ruleProposalService.resolve(proposal.id, 'APPROVED');
+                await this.sendLog(`✅ Regra aprovada pela maioria e publicada em docs/regras.md: "${proposal.draftedText}".`);
+            } catch (err) {
+                await this.ruleProposalService.resolve(proposal.id, 'PUBLISH_FAILED');
+                logger.error({ err }, '[tallyRuleProposalVote] falha ao publicar regra aprovada');
+                await this.sendLog(`⚠️ Regra aprovada mas não foi possível publicar automaticamente — motivo: ${this.describeError(err)}. Publique manualmente: "${proposal.draftedText}" (${proposal.punishment}).`);
+            }
+        } else if (rejections >= majority) {
+            this.ruleProposalVotes.delete(proposal.voteMessageId);
+            await this.ruleProposalService.resolve(proposal.id, 'REJECTED');
+            await this.sendLog(`❌ Proposta de regra rejeitada pela maioria: "${proposal.draftedText}".`);
+        }
+        // senão, segue pendente aguardando mais votos
     }
 
     private async tallyDescriptionVote(change: any, votes: Map<string, 'approve' | 'reject'>): Promise<void> {
@@ -1458,6 +1527,70 @@ export class MessageHandler {
 
         await this.replySafe(jid, `✅ Anúncio publicado no grupo *${metadata.subject}*.`);
         await this.sendLog(`📣 Anúncio publicado em *${metadata.subject}* via $asb anunciar.`);
+    }
+
+    /**
+     * Pega a ideia crua de um admin, manda pra IA redigir como regra (mesmo
+     * estilo das existentes, já classificada advertência/banimento, com aviso
+     * de conflito se houver), e abre votação no grupo de admins — só admin de
+     * comunidade vota (ver isAdminOfAdminGroup). Aprovada, publica sozinho em
+     * docs/regras.md via API do GitHub (precisa de GITHUB_RULES_TOKEN).
+     */
+    private async proporCommand(msg: any, args: string[]): Promise<void> {
+        if (!(await this.isAuthorized(msg))) return;
+
+        const jid = msg.key.remoteJid!;
+        const logJid = await this.getLogJid();
+        if (!logJid || jid !== logJid) {
+            await this.replySafe(jid, '❌ Esse comando só pode ser usado no grupo de administração.');
+            return;
+        }
+
+        if (!this.ruleDraftingService.isConfigured()) {
+            await this.replySafe(jid, '❌ Redação de regras por IA não está configurada (falta GEMINI_API_KEY no servidor).');
+            return;
+        }
+
+        const rawText: string = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
+        const rawIdea = this.stripLeadingTokens(rawText, 2).trim(); // "$asb propor "
+        if (!rawIdea) {
+            await this.replySafe(jid, '❌ Descreva a ideia da regra. Ex: $asb propor proibir gente pedindo doação de dinheiro nos grupos');
+            return;
+        }
+
+        const senderRaw = msg.key.participant! || msg.key.remoteJid!;
+        const senderJid = await resolvePnJid(this.sock, senderRaw);
+
+        const draft = await this.ruleDraftingService.draft(rawIdea);
+        if (!draft) {
+            await this.replySafe(jid, '❌ Não consegui redigir essa proposta agora (erro na IA). Tente de novo em instantes.');
+            return;
+        }
+
+        const punishmentLabel = draft.punishment === 'BANIMENTO' ? 'Banimento da comunidade' : 'Advertência';
+        const conflictBlock = draft.conflictNote ? `\n⚠️ Possível conflito: ${draft.conflictNote}` : '';
+        const number = senderJid.split('@')[0];
+
+        const text = `📋 *Proposta de nova regra* (sugerida por @${number}, redigida por IA)\n\n"${draft.draftedText}"\nPunição: *${punishmentLabel}*${conflictBlock}\n\nReaja ✅ pra aprovar e publicar, ❌ pra rejeitar. Só votos de admins de comunidade contam.`;
+
+        if (!this.githubRulesPublishService.isConfigured()) {
+            await this.replySafe(jid, `${text}\n\n⚠️ Aviso: publicação automática não está configurada ainda (falta GITHUB_RULES_TOKEN) — mesmo aprovada, alguém vai precisar publicar manualmente.`);
+        }
+
+        const sent = await this.sendLog(text, [senderJid]);
+        if (!sent?.id) {
+            await this.replySafe(jid, '❌ Não consegui postar a proposta pra votação.');
+            return;
+        }
+
+        await this.ruleProposalService.createPending({
+            proposedBy: senderJid,
+            rawIdea,
+            draftedText: draft.draftedText,
+            punishment: draft.punishment,
+            conflictNote: draft.conflictNote,
+            voteMessageId: sent.id,
+        });
     }
 
     /**

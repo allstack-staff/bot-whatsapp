@@ -80,6 +80,10 @@ export const botConfig = {
                 description: 'Publica um anúncio (com formatação livre) num grupo da comunidade, marcando todo mundo de forma invisível',
                 usage: '$asb anunciar <id> <mensagem>',
             },
+            propor: {
+                description: 'Propõe uma regra nova (a IA redige e classifica) pra votação dos admins de comunidade; aprovada, publica sozinho',
+                usage: '$asb propor <ideia da regra>',
+            },
         },
     },
     features: {
