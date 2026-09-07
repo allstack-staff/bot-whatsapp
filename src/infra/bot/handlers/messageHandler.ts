@@ -487,7 +487,6 @@ export class MessageHandler {
             if (onlyGroupJid && groupJid !== onlyGroupJid) continue;
             if (!messages.length) continue;
             batch.push({ groupJid, messages });
-            this.pendingModerationMessages.set(groupJid, []); // consome antes de processar
         }
         if (!batch.length) return;
 
@@ -495,9 +494,17 @@ export class MessageHandler {
         try {
             violations = await this.aiModerationService.evaluateBatch(batch);
         } catch (err) {
+            // NÃO consome o buffer aqui — se a API falhar (ex: chave inválida por
+            // horas, como já aconteceu), as mensagens continuam na fila pro próximo
+            // ciclo/comando em vez de serem descartadas sem nunca terem sido avaliadas.
             logger.warn({ err }, '[runAiModerationCycle] erro processando moderação em lote');
-            await this.sendLog(`⚠️ Não foi possível concluir o ciclo de moderação por IA — motivo: ${this.describeError(err)}.`).catch(() => {});
+            await this.sendLog(`⚠️ Não foi possível concluir o ciclo de moderação por IA — motivo: ${this.describeError(err)}. As mensagens continuam na fila pro próximo ciclo.`).catch(() => {});
             throw err; // propaga — quem chamou (ex: $moderar) precisa saber que falhou, não fingir sucesso
+        }
+
+        // Só consome depois de uma resposta válida (mesmo sem violações).
+        for (const { groupJid } of batch) {
+            this.pendingModerationMessages.set(groupJid, []);
         }
         if (!violations.length) return;
 
