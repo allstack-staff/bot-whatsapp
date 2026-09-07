@@ -84,6 +84,19 @@ model GroupDescriptionLock {
     frozenDescription String?  // descrição que o bot restaura se um admin tentar mudar durante a trava
 }
 
+// Contagem simples de mensagens por pessoa por grupo — dá à moderação por IA
+// um sinal real de participação sem depender de "memória" da IA (é só um
+// contador nosso, incrementado a cada mensagem real). Baixa contagem +
+// divulgação é agravante conforme docs/regras.md (regra 0).
+model MemberActivity {
+    userJid      String
+    groupJid     String
+    messageCount Int      @default(0)
+    updatedAt    DateTime @updatedAt
+
+    @@id([userJid, groupJid])
+}
+
 // Quantas vezes essa pessoa já foi punida automaticamente por acúmulo de
 // advertências nesse grupo — usado pra escalonar: 1ª = temporário 7 dias,
 // 2ª = temporário 30 dias, 3ª+ = permanente (com aviso pros admins avaliarem

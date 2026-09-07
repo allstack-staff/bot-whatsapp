@@ -374,7 +374,7 @@ O bot ficará fora do ar hoje às 20h por cerca de 10 minutos.
 
 ### Moderação automática por IA
 
-Não é um comando (é o ciclo de hora em hora, ou o disparo manual via `$asb moderar` acima). Se houve mensagem nova em algum grupo desde a última checagem (senão nem chama a IA), o bot avalia o conteúdo contra as regras da comunidade usando o Gemini (grátis, configurado via `GEMINI_API_KEY` no `.env` — sem a chave, esse ciclo simplesmente não faz nada).
+Não é um comando (é o ciclo de hora em hora, ou o disparo manual via `$asb moderar` acima). Se houve mensagem nova em algum grupo desde a última checagem (senão nem chama a IA), o bot avalia o conteúdo contra as regras da comunidade usando o Gemini (grátis, configurado via `GEMINI_API_KEY` no `.env` — sem a chave, esse ciclo simplesmente não faz nada). Cada mensagem vai acompanhada de quantas mensagens aquele remetente já mandou no grupo (contador nosso, não é "memória" da IA) — isso deixa a IA aplicar o agravante das [regras](regras.html#classificação-de-punição-resumo): divulgação vinda de quem quase não participa vira banimento direto, não só advertência. Veja também os pesos de cada regra na [página de regras](regras.html).
 
 **Comportamento:** nunca responde no grupo onde a violação aconteceu. Violação grave (discriminação, conteúdo explícito, ato ilícito) → banimento de comunidade direto, avisado no grupo de admins **e revertível** (veja abaixo). Qualquer outra violação → uma advertência comum (mesmo mecanismo do `$asb advertir`, mesmo limite de 3/mês, mesmo escalonamento por reincidência), também só avisada no grupo de admins.
 

@@ -11,6 +11,7 @@ import { AdminResponsibilityService } from '../services/adminResponsibilityServi
 import { AiModerationService, ModerationViolation } from '../services/aiModerationService';
 import { CommunityGroupService } from '../services/communityGroupService';
 import { AutomatedPunishmentService } from '../services/automatedPunishmentService';
+import { MemberActivityService } from '../services/memberActivityService';
 import { logger } from '../utils/logger';
 import { findParticipant, isGroupAdmin, resolvePnJid } from '../utils/jid';
 import { humanBulkActionDelay, humanReplyDelay } from '../utils/delay';
@@ -27,6 +28,7 @@ export class MessageHandler {
     private aiModerationService: AiModerationService;
     private communityGroupService: CommunityGroupService;
     private automatedPunishmentService: AutomatedPunishmentService;
+    private memberActivityService: MemberActivityService;
 
     // Mensagens de grupo desde a última checagem da IA — se estiver vazio na
     // hora do ciclo, não submete nada (nem gasta chamada de API à toa).
@@ -83,6 +85,7 @@ export class MessageHandler {
         this.aiModerationService = new AiModerationService();
         this.communityGroupService = new CommunityGroupService();
         this.automatedPunishmentService = new AutomatedPunishmentService();
+        this.memberActivityService = new MemberActivityService();
     }
 
     private commands: Record<string, (msg: any, args: string[]) => Promise<void>> = {
@@ -115,7 +118,7 @@ export class MessageHandler {
         this.groupMessageLog.set(jid, keys);
     }
 
-    private bufferForModeration(jid: string | undefined, sender: string | undefined, text: string): void {
+    private async bufferForModeration(jid: string | undefined, sender: string | undefined, text: string): Promise<void> {
         if (!jid?.endsWith('@g.us') || !sender) return;
         const buffer = this.pendingModerationMessages.get(jid) ?? [];
         buffer.push({ sender, text });
@@ -123,6 +126,13 @@ export class MessageHandler {
             buffer.splice(0, buffer.length - MessageHandler.MAX_PENDING_MESSAGES_PER_GROUP);
         }
         this.pendingModerationMessages.set(jid, buffer);
+
+        // Contador simples de participação — não é "memória de IA", é só um
+        // contador nosso no banco, usado pra dar à moderação por IA um sinal
+        // de quem participa de verdade vs quem só divulga sem contribuir.
+        await this.memberActivityService.increment(sender, jid).catch((err) => {
+            logger.warn({ err, sender, jid }, '[bufferForModeration] falha ao incrementar contagem de participação');
+        });
     }
 
     async handleMessage({ messages, type }: MessageUpsert): Promise<void> {
@@ -177,7 +187,7 @@ export class MessageHandler {
                     }
                 }
 
-                this.bufferForModeration(msg.key.remoteJid, msg.key.participant || msg.key.remoteJid, text);
+                await this.bufferForModeration(msg.key.remoteJid, msg.key.participant || msg.key.remoteJid, text);
 
                 if (isCommandMessage) {
                     logger.debug({ text, jid: msg.key.remoteJid }, '[handleMessage] command detected');
@@ -482,11 +492,26 @@ export class MessageHandler {
         // de uma chamada por grupo — o free tier do Gemini limita por
         // requisições/minuto, não por volume de texto, então isso rende o
         // limite ao máximo mesmo com muitos grupos ativos na mesma hora.
-        const batch: { groupJid: string; messages: { sender: string; text: string }[] }[] = [];
+        // Anexa a contagem de participação de cada remetente no grupo (não é
+        // "memória de IA" — é um contador nosso, no banco) pra IA conseguir
+        // julgar "quase não participa e ainda divulga" (agravante nas regras).
+        const batch: { groupJid: string; messages: { sender: string; text: string; participationCount: number }[] }[] = [];
+        const countCache = new Map<string, number>();
         for (const [groupJid, messages] of this.pendingModerationMessages.entries()) {
             if (onlyGroupJid && groupJid !== onlyGroupJid) continue;
             if (!messages.length) continue;
-            batch.push({ groupJid, messages });
+
+            const enriched: { sender: string; text: string; participationCount: number }[] = [];
+            for (const m of messages) {
+                const cacheKey = `${m.sender}|${groupJid}`;
+                let count = countCache.get(cacheKey);
+                if (count === undefined) {
+                    count = await this.memberActivityService.getCount(m.sender, groupJid);
+                    countCache.set(cacheKey, count);
+                }
+                enriched.push({ ...m, participationCount: count });
+            }
+            batch.push({ groupJid, messages: enriched });
         }
         if (!batch.length) return;
 
