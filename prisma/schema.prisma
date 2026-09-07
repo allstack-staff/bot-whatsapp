@@ -149,3 +149,10 @@ model RuleProposal {
 
     @@index([voteMessageId])
 }
+
+// Linha única (id sempre 1) que guarda quando a última dica mensal foi
+// mandada pro grupo de admins — ver MonthlyTipService.
+model MonthlyTipState {
+    id         Int       @id @default(1)
+    lastSentAt DateTime?
+}

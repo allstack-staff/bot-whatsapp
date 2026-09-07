@@ -67,6 +67,9 @@ async function startBot(): Promise<void> {
                 messageHandler.checkAndApplyGroupPhotos().catch((err) => {
                     logger.warn({ err }, 'Falha na varredura horária de fotos de grupo');
                 });
+                messageHandler.checkMonthlyTip().catch((err) => {
+                    logger.warn({ err }, 'Falha ao checar/enviar dica mensal');
+                });
             }, HOURLY_TICK_MS);
 
             if (banExpiryTick) clearInterval(banExpiryTick);

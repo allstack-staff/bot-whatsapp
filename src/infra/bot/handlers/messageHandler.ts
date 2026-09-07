@@ -16,6 +16,7 @@ import { GroupRulesService } from '../services/groupRulesService';
 import { RuleProposalService } from '../services/ruleProposalService';
 import { RuleDraftingService } from '../services/ruleDraftingService';
 import { GithubRulesPublishService } from '../services/githubRulesPublishService';
+import { MonthlyTipService } from '../services/monthlyTipService';
 import { logger } from '../utils/logger';
 import { findParticipant, isGroupAdmin, resolvePnJid } from '../utils/jid';
 import { humanBulkActionDelay, humanReplyDelay } from '../utils/delay';
@@ -37,6 +38,7 @@ export class MessageHandler {
     private ruleProposalService: RuleProposalService;
     private ruleDraftingService: RuleDraftingService;
     private githubRulesPublishService: GithubRulesPublishService;
+    private monthlyTipService: MonthlyTipService;
 
     // Mensagens de grupo desde a última checagem da IA — se estiver vazio na
     // hora do ciclo, não submete nada (nem gasta chamada de API à toa).
@@ -99,6 +101,7 @@ export class MessageHandler {
         this.ruleProposalService = new RuleProposalService();
         this.ruleDraftingService = new RuleDraftingService();
         this.githubRulesPublishService = new GithubRulesPublishService();
+        this.monthlyTipService = new MonthlyTipService();
     }
 
     private commands: Record<string, (msg: any, args: string[]) => Promise<void>> = {
@@ -354,6 +357,25 @@ export class MessageHandler {
         } catch (err) {
             logger.warn({ err, participant }, '[handleGroupJoinRequest] error checking join request');
         }
+    }
+
+    /**
+     * Uma vez por mês (checado a cada ciclo horário — não é um timer próprio),
+     * manda uma dica aleatória sobre o bot pro grupo de admins, escolhida
+     * entre os comandos existentes (botConfig.commands.list) pra sempre ficar
+     * em dia sozinha conforme comandos são adicionados/removidos.
+     */
+    async checkMonthlyTip(): Promise<void> {
+        if (!(await this.monthlyTipService.shouldSendTip())) return;
+
+        const entries = Object.values(botConfig.commands.list);
+        if (!entries.length) return;
+        const info = entries[Math.floor(Math.random() * entries.length)];
+
+        await this.sendLog(
+            `💡 *Você sabia?* O comando \`${info.usage}\` — ${info.description}.\n\nVeja todos os comandos: ${botConfig.docsUrl}comandos.html`,
+        );
+        await this.monthlyTipService.markSent();
     }
 
     /**
