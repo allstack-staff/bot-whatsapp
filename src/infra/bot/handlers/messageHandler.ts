@@ -829,7 +829,7 @@ export class MessageHandler {
                 }
 
                 await this.sendRetryableLog(
-                    `⚠️ @${number} — ${contextLabel}, mas não foi possível readicioná-lo(a) automaticamente ao grupo *${metadata.subject}* — motivo: WhatsApp retornou código ${status}. Precisa convidar manualmente.${inviteLink}`,
+                    `⚠️ @${number} não pôde ser readicionado(a) ao grupo *${metadata.subject}* (${contextLabel}) — WhatsApp negou.${inviteLink}`,
                     () => this.tryReAddToGroup(userJid, groupJid, contextLabel),
                     [userJid],
                 );
@@ -1731,7 +1731,7 @@ export class MessageHandler {
 
         const draft = await this.ruleDraftingService.draft(rawIdea);
         if (!draft) {
-            await this.replySafe(jid, '❌ Não consegui redigir essa proposta agora (erro na IA). Tente de novo em instantes.');
+            await this.replySafe(jid, '❌ Não foi possível redigir a proposta agora. Tente de novo em instantes.');
             return;
         }
 
@@ -1747,7 +1747,7 @@ export class MessageHandler {
 
         const sent = await this.sendLog(text, [senderJid]);
         if (!sent?.id) {
-            await this.replySafe(jid, '❌ Não consegui postar a proposta pra votação.');
+            await this.replySafe(jid, '❌ Não foi possível postar a proposta pra votação.');
             return;
         }
 
