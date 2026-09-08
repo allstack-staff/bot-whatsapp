@@ -156,3 +156,18 @@ model MonthlyTipState {
     id         Int       @id @default(1)
     lastSentAt DateTime?
 }
+
+// Fila de mensagens ainda não avaliadas pela moderação por IA — persistida
+// (não só em memória) pra sobreviver a um restart/deploy do bot sem perder o
+// que ainda não foi checado. Só guarda 24h sempre: mensagem mais velha que
+// isso é ignorada e limpa, nunca avaliada fora de hora.
+model PendingModerationMessage {
+    id        String   @id @default(cuid())
+    groupJid  String
+    sender    String
+    text      String
+    createdAt DateTime @default(now())
+
+    @@index([groupJid])
+    @@index([createdAt])
+}

@@ -17,6 +17,7 @@ import { RuleProposalService } from '../services/ruleProposalService';
 import { RuleDraftingService } from '../services/ruleDraftingService';
 import { GithubRulesPublishService } from '../services/githubRulesPublishService';
 import { MonthlyTipService } from '../services/monthlyTipService';
+import { PendingModerationService } from '../services/pendingModerationService';
 import { logger } from '../utils/logger';
 import { findParticipant, isGroupAdmin, resolvePnJid } from '../utils/jid';
 import { humanBulkActionDelay, humanReplyDelay } from '../utils/delay';
@@ -39,11 +40,7 @@ export class MessageHandler {
     private ruleDraftingService: RuleDraftingService;
     private githubRulesPublishService: GithubRulesPublishService;
     private monthlyTipService: MonthlyTipService;
-
-    // Mensagens de grupo desde a última checagem da IA — se estiver vazio na
-    // hora do ciclo, não submete nada (nem gasta chamada de API à toa).
-    private pendingModerationMessages: Map<string, { sender: string; text: string }[]> = new Map();
-    private static readonly MAX_PENDING_MESSAGES_PER_GROUP = 300;
+    private pendingModerationService: PendingModerationService;
 
     // Rastro (em memória) dos comandos digitados pro bot e das respostas dele em
     // cada grupo, só pra viabilizar o $clear. Não precisa sobreviver a um restart.
@@ -102,6 +99,7 @@ export class MessageHandler {
         this.ruleDraftingService = new RuleDraftingService();
         this.githubRulesPublishService = new GithubRulesPublishService();
         this.monthlyTipService = new MonthlyTipService();
+        this.pendingModerationService = new PendingModerationService();
     }
 
     private commands: Record<string, (msg: any, args: string[]) => Promise<void>> = {
@@ -137,12 +135,10 @@ export class MessageHandler {
 
     private async bufferForModeration(jid: string | undefined, sender: string | undefined, text: string): Promise<void> {
         if (!jid?.endsWith('@g.us') || !sender) return;
-        const buffer = this.pendingModerationMessages.get(jid) ?? [];
-        buffer.push({ sender, text });
-        if (buffer.length > MessageHandler.MAX_PENDING_MESSAGES_PER_GROUP) {
-            buffer.splice(0, buffer.length - MessageHandler.MAX_PENDING_MESSAGES_PER_GROUP);
-        }
-        this.pendingModerationMessages.set(jid, buffer);
+
+        await this.pendingModerationService.add(jid, sender, text).catch((err) => {
+            logger.warn({ err, jid }, '[bufferForModeration] falha ao gravar mensagem na fila de moderação');
+        });
 
         // Contador simples de participação — não é "memória de IA", é só um
         // contador nosso no banco, usado pra dar à moderação por IA um sinal
@@ -412,6 +408,11 @@ export class MessageHandler {
         await this.monthlyTipService.markSent();
     }
 
+    /** Limpa da fila de moderação tudo com mais de 24h — chamado no ciclo horário. */
+    async pruneOldModerationMessages(): Promise<void> {
+        await this.pendingModerationService.pruneOld();
+    }
+
     /**
      * Varre todos os grupos que o bot participa e aplica o logo da comunidade
      * em qualquer um que não tenha foto. Chamado ao conectar e a cada ciclo
@@ -571,8 +572,8 @@ export class MessageHandler {
             extraRules: string[];
         }[] = [];
         const countCache = new Map<string, number>();
-        for (const [groupJid, messages] of this.pendingModerationMessages.entries()) {
-            if (onlyGroupJid && groupJid !== onlyGroupJid) continue;
+        const pendingByGroup = await this.pendingModerationService.getBatchByGroup(onlyGroupJid);
+        for (const [groupJid, messages] of pendingByGroup.entries()) {
             if (!messages.length) continue;
 
             const enriched: { sender: string; text: string; participationCount: number }[] = [];
@@ -610,7 +611,7 @@ export class MessageHandler {
 
         // Só consome depois de uma resposta válida (mesmo sem violações).
         for (const { groupJid } of batch) {
-            this.pendingModerationMessages.set(groupJid, []);
+            await this.pendingModerationService.clearGroup(groupJid);
         }
         if (!violations.length) return;
 
