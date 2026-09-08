@@ -755,10 +755,24 @@ export class MessageHandler {
                             messageKeys: violatingKeys,
                         });
                     } else {
+                        // Publicação fora de contexto (regra 8): além da advertência, a
+                        // própria publicação é removida — não precisa de confirmação, já
+                        // que só apaga a mensagem, não afeta a permanência da pessoa.
+                        let removedNote = '';
+                        if (violation.category === 'divulgacao_fora_contexto') {
+                            const violatingKeys = keysBySenderByGroup.get(groupJid)?.get(violation.sender) ?? [];
+                            for (const msgKey of violatingKeys) {
+                                await this.sock.sendMessage(groupJid, { delete: msgKey }).catch((err) => {
+                                    logger.warn({ err, groupJid, msgKey }, '[runAiModerationCycle] falha ao apagar publicação fora de contexto');
+                                });
+                            }
+                            if (violatingKeys.length) removedNote = ' (publicação removida)';
+                        }
+
                         await this.warningService.issue(resolvedJid, groupJid, `[IA] ${violation.reason}`, 'ia-moderacao');
                         const count = await this.warningService.countThisMonth(resolvedJid, groupJid);
                         await this.sendLog(
-                            `🤖⚠️ Uma advertência foi aplicada a @${number} em *${metadata?.subject || groupJid}* (${count}/3 esse mês).\nMotivo: ${violation.reason}`,
+                            `🤖⚠️ Uma advertência foi aplicada a @${number} em *${metadata?.subject || groupJid}*${removedNote} (${count}/3 esse mês).\nMotivo: ${violation.reason}`,
                             [resolvedJid],
                         );
                         if (count >= 3 && metadata) {
