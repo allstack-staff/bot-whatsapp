@@ -8,7 +8,7 @@ import { AdminService } from '../services/adminService';
 import { WarningService } from '../services/warningService';
 import { DescriptionChangeService } from '../services/descriptionChangeService';
 import { AdminResponsibilityService } from '../services/adminResponsibilityService';
-import { AiModerationService, ModerationViolation } from '../services/aiModerationService';
+import { AiModerationService, ModerationViolation, CONTEXT_DEPENDENT_CATEGORY } from '../services/aiModerationService';
 import { CommunityGroupService } from '../services/communityGroupService';
 import { AutomatedPunishmentService } from '../services/automatedPunishmentService';
 import { MemberActivityService } from '../services/memberActivityService';
@@ -18,6 +18,7 @@ import { RuleDraftingService } from '../services/ruleDraftingService';
 import { GithubRulesPublishService } from '../services/githubRulesPublishService';
 import { MonthlyTipService } from '../services/monthlyTipService';
 import { PendingModerationService } from '../services/pendingModerationService';
+import { PendingAiBanService } from '../services/pendingAiBanService';
 import { logger } from '../utils/logger';
 import { findParticipant, isGroupAdmin, resolvePnJid } from '../utils/jid';
 import { humanBulkActionDelay, humanReplyDelay } from '../utils/delay';
@@ -41,6 +42,7 @@ export class MessageHandler {
     private githubRulesPublishService: GithubRulesPublishService;
     private monthlyTipService: MonthlyTipService;
     private pendingModerationService: PendingModerationService;
+    private pendingAiBanService: PendingAiBanService;
 
     // Rastro (em memória) dos comandos digitados pro bot e das respostas dele em
     // cada grupo, só pra viabilizar o $clear. Não precisa sobreviver a um restart.
@@ -100,6 +102,7 @@ export class MessageHandler {
         this.githubRulesPublishService = new GithubRulesPublishService();
         this.monthlyTipService = new MonthlyTipService();
         this.pendingModerationService = new PendingModerationService();
+        this.pendingAiBanService = new PendingAiBanService();
     }
 
     private commands: Record<string, (msg: any, args: string[]) => Promise<void>> = {
@@ -548,13 +551,86 @@ export class MessageHandler {
     }
 
     /**
+     * Executa de verdade um banimento de comunidade decidido pela IA — banco,
+     * remoção (com retentativa), apagar a(s) mensagem(ns) violadora(s), aviso
+     * público no grupo, e registro revertível no grupo de admins. Chamado
+     * direto pra categorias objetivas (runAiModerationCycle) ou depois de um
+     * admin confirmar uma proposta de categoria dependente de contexto
+     * (handleReaction) — mesma execução nos dois casos, só muda quando ela acontece.
+     */
+    private async executeAiCommunityBan(params: {
+        resolvedJid: string;
+        groupJid: string;
+        reason: string;
+        metadata?: GroupMetadata;
+        displayName?: string;
+        messageKeys?: WAMessageKey[];
+    }): Promise<void> {
+        const { resolvedJid, groupJid, reason, displayName, messageKeys } = params;
+        const number = resolvedJid.split('@')[0];
+
+        let metadata = params.metadata;
+        if (!metadata) {
+            try { metadata = await this.sock.groupMetadata(groupJid); } catch { /* segue sem nome bonito */ }
+        }
+        const targetParticipant = metadata ? findParticipant(metadata, resolvedJid) : undefined;
+
+        await this.banService.ban({
+            userJid: resolvedJid,
+            displayName: displayName || targetParticipant?.notify || targetParticipant?.name || undefined,
+            groupJid,
+            banType: 'COMUNIDADE' as any,
+            reason: `[IA] ${reason}`,
+            bannedBy: 'ia-moderacao',
+        });
+
+        if (targetParticipant) {
+            await this.sock.groupParticipantsUpdate(groupJid, [targetParticipant.id], 'remove').catch(async (err: any) => {
+                logger.error({ err, groupJid, targetJid: resolvedJid }, '[executeAiCommunityBan] falha ao remover após ban da IA');
+                const groupLabel = metadata?.subject || groupJid;
+                await this.sendRetryableLog(
+                    `⚠️ IA baniu @${number} mas não foi possível removê-lo(a) do grupo *${groupLabel}* automaticamente — motivo: ${this.describeError(err)}.`,
+                    () => this.runRetryable(
+                        async () => { await this.sock.groupParticipantsUpdate(groupJid, [targetParticipant.id], 'remove'); },
+                        {
+                            success: `✅ @${number} removido(a) do grupo *${groupLabel}* com sucesso (retentativa).`,
+                            failure: (r) => `⚠️ IA baniu @${number} mas não foi possível removê-lo(a) do grupo *${groupLabel}* automaticamente — motivo: ${r}.`,
+                        },
+                        [resolvedJid],
+                    ),
+                    [resolvedJid],
+                );
+            });
+        }
+
+        // Apaga a(s) mensagem(ns) que causou(aram) a violação — a IA não aponta
+        // qual exatamente, então apaga tudo desse remetente nesse ciclo (ele
+        // está sendo banido da comunidade de qualquer forma).
+        for (const msgKey of messageKeys ?? []) {
+            await this.sock.sendMessage(groupJid, { delete: msgKey }).catch((err) => {
+                logger.warn({ err, groupJid, msgKey }, '[executeAiCommunityBan] falha ao apagar mensagem da violação');
+            });
+        }
+
+        // Aviso público e resumido no próprio grupo — quem estava lá vê que
+        // houve uma punição, sem precisar ir atrás no grupo de admins.
+        await this.replySafe(groupJid, `🚫 *Banido*\nUsuário: @${number}\nTipo: Comunidade\nMotivo: ${reason}`);
+
+        await this.notifyRevertiblePunishment(
+            { userJid: resolvedJid, groupJid, banType: 'COMUNIDADE', reason, source: 'ia' },
+            `🤖🚫 Uma violação grave de @${number} foi identificada em *${metadata?.subject || groupJid}* — banido de toda a comunidade.\nMotivo: ${reason}`,
+        );
+    }
+
+    /**
      * Ciclo de moderação por IA. Só olha grupos com mensagem nova desde
      * a última vez (buffer não-vazio) — se não tiver nenhuma, nem chama a IA.
      * Com onlyGroupJid, avalia só aquele grupo (usado por $asb moderar com ID);
      * sem, avalia todos os grupos com delta (ciclo automático, ou $asb moderar sem args).
      * Ações: `banir_comunidade` vai direto pro BanService (regras que preveem
      * banimento imediato); qualquer outra violação vira uma advertência comum,
-     * que já escalona sozinha em 3/mês via WarningService.
+     * que já escalona sozinha em 3/mês via WarningService. Categorias que dependem
+     * de julgamento de contexto não executam sozinhas — veja CONTEXT_DEPENDENT_CATEGORY.
      */
     async runAiModerationCycle(onlyGroupJid?: string): Promise<void> {
         if (!this.aiModerationService.isConfigured()) return;
@@ -643,51 +719,41 @@ export class MessageHandler {
                     const number = resolvedJid.split('@')[0];
 
                     if (violation.action === 'banir_comunidade') {
-                        const targetParticipant = metadata ? findParticipant(metadata, resolvedJid) : undefined;
-                        await this.banService.ban({
-                            userJid: resolvedJid,
-                            displayName: targetParticipant?.notify || targetParticipant?.name || undefined,
-                            groupJid,
-                            banType: 'COMUNIDADE' as any,
-                            reason: `[IA] ${violation.reason}`,
-                            bannedBy: 'ia-moderacao',
-                        });
-                        if (targetParticipant) {
-                            await this.sock.groupParticipantsUpdate(groupJid, [targetParticipant.id], 'remove').catch(async (err: any) => {
-                                logger.error({ err, groupJid, targetJid: resolvedJid }, '[runAiModerationCycle] falha ao remover após ban da IA');
-                                const groupLabel = metadata?.subject || groupJid;
-                                await this.sendRetryableLog(
-                                    `⚠️ IA baniu @${number} mas não foi possível removê-lo(a) do grupo *${groupLabel}* automaticamente — motivo: ${this.describeError(err)}.`,
-                                    () => this.runRetryable(
-                                        async () => { await this.sock.groupParticipantsUpdate(groupJid, [targetParticipant.id], 'remove'); },
-                                        {
-                                            success: `✅ @${number} removido(a) do grupo *${groupLabel}* com sucesso (retentativa).`,
-                                            failure: (reason) => `⚠️ IA baniu @${number} mas não foi possível removê-lo(a) do grupo *${groupLabel}* automaticamente — motivo: ${reason}.`,
-                                        },
-                                        [resolvedJid],
-                                    ),
-                                    [resolvedJid],
-                                );
-                            });
-                        }
-                        // Apaga a(s) mensagem(ns) que causou(aram) a violação — a IA não
-                        // aponta qual exatamente, então apaga tudo desse remetente nesse
-                        // ciclo (ele está sendo banido da comunidade de qualquer forma).
                         const violatingKeys = keysBySenderByGroup.get(groupJid)?.get(violation.sender) ?? [];
-                        for (const msgKey of violatingKeys) {
-                            await this.sock.sendMessage(groupJid, { delete: msgKey }).catch((err) => {
-                                logger.warn({ err, groupJid, msgKey }, '[runAiModerationCycle] falha ao apagar mensagem da violação');
-                            });
+
+                        if (violation.category === CONTEXT_DEPENDENT_CATEGORY) {
+                            // Julgamento de contexto (conteúdo relevante ao grupo ou não) —
+                            // foi exatamente esse tipo de decisão que errou uma vez (projeto
+                            // pessoal legítimo tratado como divulgação vazia). Não bane
+                            // sozinho: só propõe, com confirmação de um admin antes de agir.
+                            const targetParticipant = metadata ? findParticipant(metadata, resolvedJid) : undefined;
+                            const displayName = targetParticipant?.notify || targetParticipant?.name || undefined;
+                            const sent = await this.sendLog(
+                                `🤖❓ *Possível violação, precisa de confirmação* — @${number} em *${metadata?.subject || groupJid}*\nMotivo: ${violation.reason}\n\nReaja ✅ pra confirmar e banir de toda a comunidade, ou ❌ pra dispensar (a IA pode ter interpretado errado o contexto).`,
+                                [resolvedJid],
+                            );
+                            if (sent?.id) {
+                                await this.pendingAiBanService.createPending({
+                                    userJid: resolvedJid,
+                                    senderRaw: violation.sender,
+                                    groupJid,
+                                    reason: violation.reason,
+                                    category: violation.category,
+                                    displayName,
+                                    voteMessageId: sent.id,
+                                    messageKeysJson: violatingKeys.length ? JSON.stringify(violatingKeys) : undefined,
+                                });
+                            }
+                            continue;
                         }
 
-                        // Aviso público e resumido no próprio grupo — quem estava lá vê
-                        // que houve uma punição, sem precisar ir atrás no grupo de admins.
-                        await this.replySafe(groupJid, `🚫 *Banido*\nUsuário: @${number}\nTipo: Comunidade\nMotivo: ${violation.reason}`);
-
-                        await this.notifyRevertiblePunishment(
-                            { userJid: resolvedJid, groupJid, banType: 'COMUNIDADE', reason: violation.reason, source: 'ia' },
-                            `🤖🚫 Uma violação grave de @${number} foi identificada em *${metadata?.subject || groupJid}* — banido de toda a comunidade.\nMotivo: ${violation.reason}`,
-                        );
+                        await this.executeAiCommunityBan({
+                            resolvedJid,
+                            groupJid,
+                            reason: violation.reason,
+                            metadata,
+                            messageKeys: violatingKeys,
+                        });
                     } else {
                         await this.warningService.issue(resolvedJid, groupJid, `[IA] ${violation.reason}`, 'ia-moderacao');
                         const count = await this.warningService.countThisMonth(resolvedJid, groupJid);
@@ -1038,6 +1104,25 @@ export class MessageHandler {
                     if (emoji === '❌') {
                         const reactorJid = await resolvePnJid(this.sock, reactorRaw);
                         await this.revertAutomatedPunishment(punishment, reactorJid);
+                    }
+                    continue;
+                }
+
+                const pendingAiBan = await this.pendingAiBanService.findPendingByVoteMessageId(key.id);
+                if (pendingAiBan) {
+                    if (emoji === '✅') {
+                        await this.pendingAiBanService.resolve(pendingAiBan.id, 'CONFIRMED');
+                        const messageKeys = pendingAiBan.messageKeysJson ? JSON.parse(pendingAiBan.messageKeysJson) : undefined;
+                        await this.executeAiCommunityBan({
+                            resolvedJid: pendingAiBan.userJid,
+                            groupJid: pendingAiBan.groupJid,
+                            reason: pendingAiBan.reason,
+                            displayName: pendingAiBan.displayName ?? undefined,
+                            messageKeys,
+                        });
+                    } else if (emoji === '❌') {
+                        await this.pendingAiBanService.resolve(pendingAiBan.id, 'DISMISSED');
+                        await this.sendLog(`✅ Proposta de banimento por IA dispensada — @${pendingAiBan.userJid.split('@')[0]} não foi banido(a).`);
                     }
                     continue;
                 }

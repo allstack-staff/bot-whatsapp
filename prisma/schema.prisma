@@ -172,3 +172,24 @@ model PendingModerationMessage {
     @@index([groupJid])
     @@index([createdAt])
 }
+
+// Banimento de comunidade proposto pela IA numa categoria que depende de
+// julgamento de contexto (ver CONTEXT_DEPENDENT_CATEGORY em
+// aiModerationService.ts) — não executa sozinho, só propõe. Um admin do
+// grupo de admins confirma (✅ bane de verdade) ou dispensa (❌).
+model PendingAiBanConfirmation {
+    id              String    @id @default(cuid())
+    userJid         String
+    senderRaw       String
+    groupJid        String
+    reason          String
+    category        String
+    displayName     String?
+    voteMessageId   String?
+    messageKeysJson String? // WAMessageKey[] serializado — só apaga se confirmado
+    status          String    @default("PENDING") // PENDING | CONFIRMED | DISMISSED
+    createdAt       DateTime  @default(now())
+    resolvedAt      DateTime?
+
+    @@index([voteMessageId])
+}
