@@ -359,21 +359,55 @@ export class MessageHandler {
         }
     }
 
+    // Dicas sobre coisas que o bot faz sozinho (sem comando nenhum) — pra
+    // completar o sorteio mensal além dos comandos de botConfig.commands.list.
+    // Comandos novos entram automaticamente na lista; isso aqui só precisa de
+    // atualização quando um comportamento automático novo é adicionado.
+    private static readonly AUTOMATIC_BEHAVIOR_TIPS: string[] = [
+        'quando um banimento `temporario` expira, o bot readiciona a pessoa ao grupo sozinho, sem esperar ela pedir.',
+        'se um admin edita a descrição de um grupo pelo WhatsApp, o bot detecta e abre uma votação (✅/❌) no grupo de admins antes de deixar valer.',
+        'a moderação por IA roda de hora em hora sozinha, avaliando mensagens novas contra as regras da comunidade — sem precisar de nenhum comando.',
+        'qualquer grupo sem foto ganha a logo da comunidade automaticamente, sem precisar pedir.',
+        'quando um admin do grupo de administração some, ele continua registrado no banco — trocar o número do bot não perde o histórico.',
+        'toda ação automática que falha (remover alguém, reverter descrição, etc.) vem com "reaja com 🔁 pra tentar de novo" na mensagem de aviso.',
+        'você pode propor uma regra nova em linguagem simples com `$asb propor` — a IA redige, os admins de comunidade votam, e aprovada já vai pro ar sozinha.',
+    ];
+
     /**
      * Uma vez por mês (checado a cada ciclo horário — não é um timer próprio),
-     * manda uma dica aleatória sobre o bot pro grupo de admins, escolhida
-     * entre os comandos existentes (botConfig.commands.list) pra sempre ficar
-     * em dia sozinha conforme comandos são adicionados/removidos.
+     * manda uma dica aleatória sobre o bot pro grupo de admins — metade das
+     * vezes sobre um comando (sorteado de botConfig.commands.list, sempre em
+     * dia sozinho conforme comandos mudam), metade sobre algo que o bot já
+     * faz automaticamente, sem comando nenhum.
      */
     async checkMonthlyTip(): Promise<void> {
         if (!(await this.monthlyTipService.shouldSendTip())) return;
 
-        const entries = Object.values(botConfig.commands.list);
-        if (!entries.length) return;
-        const info = entries[Math.floor(Math.random() * entries.length)];
+        const commandEntries = Object.values(botConfig.commands.list);
+        const pool: string[] = [
+            ...commandEntries.map((info) => `O comando \`${info.usage}\` — ${info.description}.`),
+            ...MessageHandler.AUTOMATIC_BEHAVIOR_TIPS,
+        ];
+        if (!pool.length) return;
+        const tip = pool[Math.floor(Math.random() * pool.length)];
+
+        // Marca todo mundo do grupo de admins de forma invisível (mesmo
+        // recurso do $asb anunciar) — senão a dica passa batido pra quem não
+        // está de olho no grupo naquele momento.
+        const logJid = await this.getLogJid();
+        let mentions: string[] | undefined;
+        if (logJid) {
+            try {
+                const meta = await this.sock.groupMetadata(logJid);
+                mentions = meta.participants.map((p) => p.id);
+            } catch (err) {
+                logger.warn({ err, logJid }, '[checkMonthlyTip] falha ao buscar participantes pra marcar');
+            }
+        }
 
         await this.sendLog(
-            `💡 *Você sabia?* O comando \`${info.usage}\` — ${info.description}.\n\nVeja todos os comandos: ${botConfig.docsUrl}comandos.html`,
+            `💡 *Você sabia?* ${tip}\n\nVeja todos os comandos: ${botConfig.docsUrl}comandos.html`,
+            mentions,
         );
         await this.monthlyTipService.markSent();
     }
