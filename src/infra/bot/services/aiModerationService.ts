@@ -3,14 +3,6 @@ import { CommunityRulesService } from './communityRulesService';
 
 export type ModerationAction = 'advertir' | 'banir_comunidade';
 
-// Categorias objetivas (o conteúdo em si já é a violação, pouco espaço pra
-// erro de interpretação) vs. CONTEXT_DEPENDENT_CATEGORY, que depende da IA
-// julgar corretamente se algo é "relevante ao grupo" ou não — foi exatamente
-// esse julgamento que errou uma vez (projeto pessoal legítimo tratado como
-// divulgação vazia). Por isso essa categoria específica não executa banimento
-// sozinha — só propõe, com confirmação de um admin antes de agir de verdade.
-export const CONTEXT_DEPENDENT_CATEGORY = 'divulgacao_baixa_participacao';
-
 export type ModerationCategory =
     | 'discriminacao'
     | 'conteudo_explicito'
@@ -21,7 +13,6 @@ export type ModerationCategory =
     | 'doxxing'
     | 'golpe_financeiro'
     | 'impersonation'
-    | 'divulgacao_baixa_participacao'
     | 'divulgacao_fora_contexto'
     | 'incomodar_privado'
     | 'pressao_mentoria'
@@ -34,9 +25,22 @@ export type ModerationCategory =
 const VALID_CATEGORIES: ReadonlySet<string> = new Set<ModerationCategory>([
     'discriminacao', 'conteudo_explicito', 'ato_ilicito', 'apostas', 'bot_nao_autorizado',
     'prejudicou_pessoa', 'doxxing', 'golpe_financeiro', 'impersonation',
-    'divulgacao_baixa_participacao', 'divulgacao_fora_contexto', 'incomodar_privado',
+    'divulgacao_fora_contexto', 'incomodar_privado',
     'pressao_mentoria', 'proselitismo', 'fazer_trabalho_alheio', 'flood', 'desrespeito_grave', 'outro',
 ]);
+
+// Alias de uma categoria antiga (baixa participação já não muda a punição —
+// divulgação fora do assunto é sempre remoção + advertência) — normaliza
+// caso a IA ainda responda com o nome antigo por hábito.
+const CATEGORY_ALIASES: Record<string, ModerationCategory> = {
+    divulgacao_baixa_participacao: 'divulgacao_fora_contexto',
+};
+
+function normalizeCategory(raw: unknown): ModerationCategory {
+    if (typeof raw !== 'string') return 'outro';
+    const aliased = CATEGORY_ALIASES[raw] ?? raw;
+    return VALID_CATEGORIES.has(aliased) ? (aliased as ModerationCategory) : 'outro';
+}
 
 export interface ModerationViolation {
     groupJid: string;
@@ -122,7 +126,7 @@ export class AiModerationService {
 
         const rulesSummary = await this.communityRulesService.getRules();
 
-        const prompt = `Você é um moderador de uma comunidade de mentoria em programação no WhatsApp, responsável por vários grupos ao mesmo tempo. Regras gerais da comunidade, incluindo qual punição cada uma gera — use exatamente a classificação descrita (banimento imediato de comunidade vira action "banir_comunidade"; qualquer coisa marcada como advertência vira action "advertir"; regras que não geram punição automática, ignore):\n${rulesSummary}\n\nMensagens novas de cada grupo desde a última checagem, separadas por "=== Grupo <jid> ===" — alguns grupos também trazem regras específicas próprias (além das gerais; em caso de conflito, as gerais prevalecem). Formato de mensagem: "N. [remetente] (participação: X msg(s) neste grupo): texto" — participação é o total de mensagens que esse remetente já mandou nesse grupo, incluindo esta:\n\n${sections}\n\nPra cada violação, classifique também a "category" (uma destas, a que melhor descrever): discriminacao, conteudo_explicito, ato_ilicito, apostas, bot_nao_autorizado, prejudicou_pessoa, doxxing, golpe_financeiro, impersonation, divulgacao_baixa_participacao, divulgacao_fora_contexto, incomodar_privado, pressao_mentoria, proselitismo, fazer_trabalho_alheio, flood, desrespeito_grave, outro. IMPORTANTE sobre "divulgacao_baixa_participacao": use essa categoria SÓ quando o conteúdo é claramente promocional/alheio ao grupo E o remetente tem participação baixa — se o conteúdo é relevante ao tema do grupo (ex: projeto próprio, pedido de feedback técnico, pergunta), NÃO é violação nenhuma, participação baixa ou não, mesmo se parecer autopromoção.\n\nResponda APENAS com um JSON válido, sem nenhum texto antes ou depois, no formato:\n{"violations": [{"group": "<jid exatamente como no cabeçalho \\"=== Grupo ... ===\\">", "sender": "<remetente exatamente como veio entre colchetes>", "reason": "<motivo curto em português>", "action": "advertir" ou "banir_comunidade", "category": "<uma das categorias acima>"}]}\nSe nenhuma mensagem de nenhum grupo violar as regras, responda {"violations": []}.`;
+        const prompt = `Você é um moderador de uma comunidade de mentoria em programação no WhatsApp, responsável por vários grupos ao mesmo tempo. Regras gerais da comunidade, incluindo qual punição cada uma gera — use exatamente a classificação descrita (banimento imediato de comunidade vira action "banir_comunidade"; qualquer coisa marcada como advertência vira action "advertir"; regras que não geram punição automática, ignore):\n${rulesSummary}\n\nMensagens novas de cada grupo desde a última checagem, separadas por "=== Grupo <jid> ===" — alguns grupos também trazem regras específicas próprias (além das gerais; em caso de conflito, as gerais prevalecem). Formato de mensagem: "N. [remetente] (participação: X msg(s) neste grupo): texto" — participação é o total de mensagens que esse remetente já mandou nesse grupo, incluindo esta:\n\n${sections}\n\nPra cada violação, classifique também a "category" (uma destas, a que melhor descrever): discriminacao, conteudo_explicito, ato_ilicito, apostas, bot_nao_autorizado, prejudicou_pessoa, doxxing, golpe_financeiro, impersonation, divulgacao_fora_contexto, incomodar_privado, pressao_mentoria, proselitismo, fazer_trabalho_alheio, flood, desrespeito_grave, outro. IMPORTANTE sobre divulgação: conteúdo relevante ao tema do grupo (projeto próprio, pedido de feedback técnico, pergunta) NÃO é violação nenhuma, participação alta ou baixa — participação da pessoa nunca muda se algo é violação nem a punição, só o conteúdo em si importa.\n\nResponda APENAS com um JSON válido, sem nenhum texto antes ou depois, no formato:\n{"violations": [{"group": "<jid exatamente como no cabeçalho \\"=== Grupo ... ===\\">", "sender": "<remetente exatamente como veio entre colchetes>", "reason": "<motivo curto em português>", "action": "advertir" ou "banir_comunidade", "category": "<uma das categorias acima>"}]}\nSe nenhuma mensagem de nenhum grupo violar as regras, responda {"violations": []}.`;
 
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${this.apiKey}`;
         const res = await fetch(url, {
@@ -166,7 +170,7 @@ export class AiModerationService {
                     sender: v.sender,
                     reason: v.reason,
                     action: v.action,
-                    category: (typeof v.category === 'string' && VALID_CATEGORIES.has(v.category) ? v.category : 'outro') as ModerationCategory,
+                    category: normalizeCategory(v.category),
                 }));
         } catch (err) {
             // Resposta 200 mas em formato inesperado (a IA não seguiu o JSON pedido) —

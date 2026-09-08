@@ -821,8 +821,15 @@ export class MessageHandler {
                     const code = await this.sock.groupInviteCode(groupJid);
                     if (code) inviteLink = `\nLink de convite: https://chat.whatsapp.com/${code}`;
                 } catch { /* segue sem link */ }
+
+                // Manda o link direto pro privado da pessoa — ela consegue entrar
+                // sozinha, sem depender de um admin encaminhar manualmente.
+                if (inviteLink) {
+                    await this.sendSafe(userJid, { text: `Você foi readicionado(a) ao grupo *${metadata.subject}*, mas precisa entrar manualmente.${inviteLink}` });
+                }
+
                 await this.sendRetryableLog(
-                    `⚠️ @${number} — ${contextLabel}, mas não foi possível readicioná-lo(a) automaticamente ao grupo *${metadata.subject}* — motivo: WhatsApp retornou código ${status} (provavelmente as configurações de privacidade dela não permitem add direto). Precisa convidar manualmente.${inviteLink}`,
+                    `⚠️ @${number} — ${contextLabel}, mas não foi possível readicioná-lo(a) automaticamente ao grupo *${metadata.subject}* — motivo: WhatsApp retornou código ${status}. Precisa convidar manualmente.${inviteLink}`,
                     () => this.tryReAddToGroup(userJid, groupJid, contextLabel),
                     [userJid],
                 );

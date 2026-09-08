@@ -16,7 +16,7 @@ Essas regras valem pra **toda a comunidade**. Um grupo específico pode ter [reg
 
 ## Regras gerais
 
-0. **Divulgação é proibida**, exceto quando ajuda diretamente no assunto do grupo (ex: compartilhar um projeto, post ou repositório relevante ao tema, pedindo feedback dos outros membros) — essa exceção vale **mesmo pra quem participa pouco**, participação baixa não anula o fato de ser um conteúdo relevante. — **Advertência** pra divulgação fora do assunto do grupo. Agravante: quem **quase não participa** do grupo e divulga algo **sem relação nenhuma com o assunto do grupo** perde o benefício da dúvida — isso vira **banimento direto** em vez de advertência.
+0. **Divulgação é proibida**, exceto quando ajuda diretamente no assunto do grupo (ex: compartilhar um projeto, post ou repositório relevante ao tema, pedindo feedback dos outros membros) — essa exceção vale **mesmo pra quem participa pouco**, participação baixa não anula o fato de ser um conteúdo relevante. — **Remoção da publicação + advertência**, independente de quanto a pessoa participa do grupo. Reincidência (3 advertências no mês) escala pra banimento normalmente (regra 10) — a divulgação em si nunca gera banimento direto.
 1. **Respeite os membros.** — **Banimento da comunidade** (desrespeito leve/pontual fica a critério do admin, podendo ser só advertência).
 2. **Conteúdo multimídia é permitido** (vídeos, imagens, notícias, links, figurinhas), exceto:
    - Flood;
@@ -44,9 +44,9 @@ Essas regras valem pra **toda a comunidade**. Um grupo específico pode ter [reg
 
 | Punição | Quando se aplica |
 |---|---|
-| **Banimento imediato de comunidade** | Discriminação/racismo, conteúdo explícito, atos ilícitos (pirataria, exploits/malware, pedir ajuda pra cometer crime), apostas/jogos de azar, bots não autorizados, comprovadamente prejudicar alguém, doxxing/vazar dados de terceiros, golpe financeiro/pirâmide/cripto duvidosa, se passar por outra pessoa/admin/pela comunidade, **ou divulgação sem relação com o assunto do grupo vinda de quem quase não participa** (conteúdo relevante ao grupo nunca conta aqui, participação baixa ou não). |
-| **Advertência** (3 no mês = banimento automático escalando por reincidência) | Divulgação fora de contexto vinda de quem participa normalmente do grupo (regra 0), incomodar no privado sem autorização, pressão/cobrança na mentoria, proselitismo, pedir pra fazer o trabalho de outra pessoa por completo, desrespeito leve/pontual. |
-| **Remoção da publicação + advertência** | Publicação fora de contexto do grupo (regra 8) — a critério do admin, já que o bot não apaga mensagem de terceiros automaticamente hoje. |
+| **Banimento imediato de comunidade** | Discriminação/racismo, conteúdo explícito, atos ilícitos (pirataria, exploits/malware, pedir ajuda pra cometer crime), apostas/jogos de azar, bots não autorizados, comprovadamente prejudicar alguém, doxxing/vazar dados de terceiros, golpe financeiro/pirâmide/cripto duvidosa, se passar por outra pessoa/admin/pela comunidade. Participação baixa **não** é agravante que gera banimento — divulgação é sempre remoção + advertência (abaixo), não importa quanto a pessoa participa. |
+| **Advertência** (3 no mês = banimento automático escalando por reincidência) | Incomodar no privado sem autorização, pressão/cobrança na mentoria, proselitismo, pedir pra fazer o trabalho de outra pessoa por completo, desrespeito leve/pontual. |
+| **Remoção da publicação + advertência** | Divulgação fora do assunto do grupo (regra 0) e publicação fora de contexto do grupo (regra 8) — a mensagem é apagada automaticamente pelo bot, sempre junto com a advertência. |
 
 ## Sobre moderação automatizada
 

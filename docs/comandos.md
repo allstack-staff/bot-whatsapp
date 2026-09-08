@@ -95,7 +95,7 @@ $asb unban @user [motivo]
 
 - Motivo é **obrigatório** — salvo se quem roda o comando for admin do próprio grupo de administração ("admin de comunidade"), caso em que é opcional.
 
-**Comportamento:** reage ✅, responde no grupo onde rodou, e manda cópia pro grupo de admins. Além disso, tenta readicionar a pessoa em cada grupo afetado (todos os da comunidade, se o ban era `comunidade`; só o grupo específico, se era `permanente`/`temporario`) — avisa ✅ no grupo de admins se conseguiu, ⚠️ com link de convite se não conseguiu (privacidade da pessoa pode impedir add direto).
+**Comportamento:** reage ✅, responde no grupo onde rodou, e manda cópia pro grupo de admins. Além disso, tenta readicionar a pessoa em cada grupo afetado (todos os da comunidade, se o ban era `comunidade`; só o grupo específico, se era `permanente`/`temporario`) — avisa ✅ no grupo de admins se conseguiu, ⚠️ com link de convite se não conseguiu; nesse caso, o link também é mandado direto no privado da pessoa, pra ela conseguir entrar sozinha.
 
 Exemplos:
 ```
@@ -417,7 +417,7 @@ Também não é um comando (é uma reação a uma mensagem existente). Toda vez 
 
 Também não é um comando. A cada 5 minutos, o bot confere se algum banimento `temporario` já expirou — se sim, tenta readicionar a pessoa ao grupo automaticamente, sem esperar ela pedir pra voltar.
 
-**Comportamento:** nunca responde no grupo (a pessoa nem está lá ainda). Sempre avisa no grupo de admins: ✅ se conseguiu readicionar, ⚠️ se não conseguiu (ex: configuração de privacidade da pessoa não permite ser adicionada direto) — nesse caso, o aviso já vem com o link de convite do grupo pra um admin encaminhar na mão.
+**Comportamento:** nunca responde no grupo (a pessoa nem está lá ainda). Sempre avisa no grupo de admins: ✅ se conseguiu readicionar, ⚠️ se não conseguiu — nesse caso, o link de convite vai tanto pro grupo de admins quanto direto no privado da pessoa, sem precisar de um admin encaminhar na mão.
 
 ### Dica mensal
 
