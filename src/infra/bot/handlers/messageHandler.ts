@@ -464,6 +464,7 @@ export class MessageHandler {
                     await this.sock.updateProfilePicture(gid, logoBuffer);
                     logger.info({ groupId: gid }, '[checkAndApplyGroupPhotos] logo aplicado (grupo sem foto)');
                     this.notAuthorizedPhotoGroups.delete(gid);
+                    await this.sendLog(`🖼️ Logo da comunidade aplicada automaticamente no grupo *${(groups[gid] as GroupMetadata)?.subject || gid}* (estava sem foto).`).catch(() => {});
                 } catch (err) {
                     if (err instanceof Error && err.message === 'not-authorized') {
                         this.notAuthorizedPhotoGroups.set(gid, Date.now());
@@ -729,7 +730,7 @@ export class MessageHandler {
                             const targetParticipant = metadata ? findParticipant(metadata, resolvedJid) : undefined;
                             const displayName = targetParticipant?.notify || targetParticipant?.name || undefined;
                             const sent = await this.sendLog(
-                                `🤖❓ *Possível violação, precisa de confirmação* — @${number} em *${metadata?.subject || groupJid}*\nMotivo: ${violation.reason}\n\nReaja ✅ pra confirmar e banir de toda a comunidade, ou ❌ pra dispensar (a IA pode ter interpretado errado o contexto).`,
+                                `🤖❓ *Possível violação, precisa de confirmação* — @${number} em *${metadata?.subject || groupJid}*\nMotivo: ${violation.reason}\n\nReaja ✅ pra confirmar e banir de toda a comunidade, ou ❌ pra dispensar.`,
                                 [resolvedJid],
                             );
                             if (sent?.id) {
