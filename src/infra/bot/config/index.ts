@@ -81,7 +81,7 @@ export const botConfig = {
                 usage: '$asb anunciar <id> <mensagem>',
             },
             propor: {
-                description: 'Propõe uma regra nova (a IA redige e classifica) pra votação dos admins de comunidade; aprovada, publica sozinho',
+                description: 'Propõe uma regra nova pra votação dos admins de comunidade; aprovada, publica sozinho',
                 usage: '$asb propor <ideia da regra>',
             },
         },

@@ -661,13 +661,13 @@ export class MessageHandler {
                         }
                         await this.notifyRevertiblePunishment(
                             { userJid: resolvedJid, groupJid, banType: 'COMUNIDADE', reason: violation.reason, source: 'ia' },
-                            `🤖🚫 IA detectou violação grave de @${number} em *${metadata?.subject || groupJid}* — banido de toda a comunidade.\nMotivo: ${violation.reason}`,
+                            `🤖🚫 Uma violação grave de @${number} foi identificada em *${metadata?.subject || groupJid}* — banido de toda a comunidade.\nMotivo: ${violation.reason}`,
                         );
                     } else {
                         await this.warningService.issue(resolvedJid, groupJid, `[IA] ${violation.reason}`, 'ia-moderacao');
                         const count = await this.warningService.countThisMonth(resolvedJid, groupJid);
                         await this.sendLog(
-                            `🤖⚠️ IA advertiu @${number} em *${metadata?.subject || groupJid}* (${count}/3 esse mês).\nMotivo: ${violation.reason}`,
+                            `🤖⚠️ Uma advertência foi aplicada a @${number} em *${metadata?.subject || groupJid}* (${count}/3 esse mês).\nMotivo: ${violation.reason}`,
                             [resolvedJid],
                         );
                         if (count >= 3 && metadata) {
