@@ -133,10 +133,10 @@ export class MessageHandler {
         this.groupMessageLog.set(jid, keys);
     }
 
-    private async bufferForModeration(jid: string | undefined, sender: string | undefined, text: string): Promise<void> {
+    private async bufferForModeration(jid: string | undefined, sender: string | undefined, text: string, key: WAMessageKey | undefined): Promise<void> {
         if (!jid?.endsWith('@g.us') || !sender) return;
 
-        await this.pendingModerationService.add(jid, sender, text).catch((err) => {
+        await this.pendingModerationService.add(jid, sender, text, key).catch((err) => {
             logger.warn({ err, jid }, '[bufferForModeration] falha ao gravar mensagem na fila de moderação');
         });
 
@@ -200,7 +200,7 @@ export class MessageHandler {
                     }
                 }
 
-                await this.bufferForModeration(msg.key.remoteJid, msg.key.participant || msg.key.remoteJid, text);
+                await this.bufferForModeration(msg.key.remoteJid, msg.key.participant || msg.key.remoteJid, text, msg.key);
 
                 if (isCommandMessage) {
                     logger.debug({ text, jid: msg.key.remoteJid }, '[handleMessage] command detected');
@@ -572,11 +572,15 @@ export class MessageHandler {
             extraRules: string[];
         }[] = [];
         const countCache = new Map<string, number>();
+        // groupJid -> sender -> WAMessageKey[] das mensagens dele nesse ciclo —
+        // usado só se a violação virar banimento, pra apagar as mensagens dela.
+        const keysBySenderByGroup = new Map<string, Map<string, WAMessageKey[]>>();
         const pendingByGroup = await this.pendingModerationService.getBatchByGroup(onlyGroupJid);
         for (const [groupJid, messages] of pendingByGroup.entries()) {
             if (!messages.length) continue;
 
             const enriched: { sender: string; text: string; participationCount: number }[] = [];
+            const senderKeys = new Map<string, WAMessageKey[]>();
             for (const m of messages) {
                 const cacheKey = `${m.sender}|${groupJid}`;
                 let count = countCache.get(cacheKey);
@@ -584,8 +588,15 @@ export class MessageHandler {
                     count = await this.memberActivityService.getCount(m.sender, groupJid);
                     countCache.set(cacheKey, count);
                 }
-                enriched.push({ ...m, participationCount: count });
+                enriched.push({ sender: m.sender, text: m.text, participationCount: count });
+
+                if (m.messageKey) {
+                    const arr = senderKeys.get(m.sender) ?? [];
+                    arr.push(m.messageKey);
+                    senderKeys.set(m.sender, arr);
+                }
             }
+            keysBySenderByGroup.set(groupJid, senderKeys);
 
             // Regras extras desse grupo específico, aprovadas internamente e
             // publicadas em docs/regras-grupos.md — buscadas direto de lá (não
@@ -659,6 +670,16 @@ export class MessageHandler {
                                 );
                             });
                         }
+                        // Apaga a(s) mensagem(ns) que causou(aram) a violação — a IA não
+                        // aponta qual exatamente, então apaga tudo desse remetente nesse
+                        // ciclo (ele está sendo banido da comunidade de qualquer forma).
+                        const violatingKeys = keysBySenderByGroup.get(groupJid)?.get(violation.sender) ?? [];
+                        for (const msgKey of violatingKeys) {
+                            await this.sock.sendMessage(groupJid, { delete: msgKey }).catch((err) => {
+                                logger.warn({ err, groupJid, msgKey }, '[runAiModerationCycle] falha ao apagar mensagem da violação');
+                            });
+                        }
+
                         // Aviso público e resumido no próprio grupo — quem estava lá vê
                         // que houve uma punição, sem precisar ir atrás no grupo de admins.
                         await this.replySafe(groupJid, `🚫 *Banido*\nUsuário: @${number}\nTipo: Comunidade\nMotivo: ${violation.reason}`);

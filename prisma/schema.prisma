@@ -162,11 +162,12 @@ model MonthlyTipState {
 // que ainda não foi checado. Só guarda 24h sempre: mensagem mais velha que
 // isso é ignorada e limpa, nunca avaliada fora de hora.
 model PendingModerationMessage {
-    id        String   @id @default(cuid())
-    groupJid  String
-    sender    String
-    text      String
-    createdAt DateTime @default(now())
+    id             String   @id @default(cuid())
+    groupJid       String
+    sender         String
+    text           String
+    messageKeyJson String? // WAMessageKey serializado — permite apagar a mensagem se ela virar um banimento
+    createdAt      DateTime @default(now())
 
     @@index([groupJid])
     @@index([createdAt])
