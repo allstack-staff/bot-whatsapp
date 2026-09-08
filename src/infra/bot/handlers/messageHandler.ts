@@ -8,7 +8,7 @@ import { AdminService } from '../services/adminService';
 import { WarningService } from '../services/warningService';
 import { DescriptionChangeService } from '../services/descriptionChangeService';
 import { AdminResponsibilityService } from '../services/adminResponsibilityService';
-import { AiModerationService, ModerationViolation, CONTEXT_DEPENDENT_CATEGORY } from '../services/aiModerationService';
+import { AiModerationService, ModerationViolation } from '../services/aiModerationService';
 import { CommunityGroupService } from '../services/communityGroupService';
 import { AutomatedPunishmentService } from '../services/automatedPunishmentService';
 import { MemberActivityService } from '../services/memberActivityService';
@@ -630,8 +630,9 @@ export class MessageHandler {
      * sem, avalia todos os grupos com delta (ciclo automático, ou $asb moderar sem args).
      * Ações: `banir_comunidade` vai direto pro BanService (regras que preveem
      * banimento imediato); qualquer outra violação vira uma advertência comum,
-     * que já escalona sozinha em 3/mês via WarningService. Categorias que dependem
-     * de julgamento de contexto não executam sozinhas — veja CONTEXT_DEPENDENT_CATEGORY.
+     * que já escalona sozinha em 3/mês via WarningService. Toda decisão é
+     * executada na hora e avisada no grupo de admins — nada fica esperando
+     * confirmação; se a IA errar, um admin reverte depois (reação ❌).
      */
     async runAiModerationCycle(onlyGroupJid?: string): Promise<void> {
         if (!this.aiModerationService.isConfigured()) return;
@@ -722,32 +723,10 @@ export class MessageHandler {
                     if (violation.action === 'banir_comunidade') {
                         const violatingKeys = keysBySenderByGroup.get(groupJid)?.get(violation.sender) ?? [];
 
-                        if (violation.category === CONTEXT_DEPENDENT_CATEGORY) {
-                            // Julgamento de contexto (conteúdo relevante ao grupo ou não) —
-                            // foi exatamente esse tipo de decisão que errou uma vez (projeto
-                            // pessoal legítimo tratado como divulgação vazia). Não bane
-                            // sozinho: só propõe, com confirmação de um admin antes de agir.
-                            const targetParticipant = metadata ? findParticipant(metadata, resolvedJid) : undefined;
-                            const displayName = targetParticipant?.notify || targetParticipant?.name || undefined;
-                            const sent = await this.sendLog(
-                                `🤖❓ *Possível violação, precisa de confirmação* — @${number} em *${metadata?.subject || groupJid}*\nMotivo: ${violation.reason}\n\nReaja ✅ pra confirmar e banir de toda a comunidade, ou ❌ pra dispensar.`,
-                                [resolvedJid],
-                            );
-                            if (sent?.id) {
-                                await this.pendingAiBanService.createPending({
-                                    userJid: resolvedJid,
-                                    senderRaw: violation.sender,
-                                    groupJid,
-                                    reason: violation.reason,
-                                    category: violation.category,
-                                    displayName,
-                                    voteMessageId: sent.id,
-                                    messageKeysJson: violatingKeys.length ? JSON.stringify(violatingKeys) : undefined,
-                                });
-                            }
-                            continue;
-                        }
-
+                        // Sempre executa e avisa no grupo de admins — se a IA errou o
+                        // julgamento (categorias de contexto incluídas), um humano reverte
+                        // depois (reação ❌ na notificação). Não deixa nada pendente
+                        // esperando confirmação — decisão sempre é tomada na hora.
                         await this.executeAiCommunityBan({
                             resolvedJid,
                             groupJid,
