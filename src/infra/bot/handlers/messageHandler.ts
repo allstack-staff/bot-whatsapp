@@ -659,6 +659,10 @@ export class MessageHandler {
                                 );
                             });
                         }
+                        // Aviso público e resumido no próprio grupo — quem estava lá vê
+                        // que houve uma punição, sem precisar ir atrás no grupo de admins.
+                        await this.replySafe(groupJid, `🚫 *Banido*\nUsuário: @${number}\nTipo: Comunidade\nMotivo: ${violation.reason}`);
+
                         await this.notifyRevertiblePunishment(
                             { userJid: resolvedJid, groupJid, banType: 'COMUNIDADE', reason: violation.reason, source: 'ia' },
                             `🤖🚫 Uma violação grave de @${number} foi identificada em *${metadata?.subject || groupJid}* — banido de toda a comunidade.\nMotivo: ${violation.reason}`,
