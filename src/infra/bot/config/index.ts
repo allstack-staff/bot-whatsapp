@@ -84,6 +84,10 @@ export const botConfig = {
                 description: 'Propõe uma regra nova pra votação dos admins de comunidade; aprovada, publica sozinho',
                 usage: '$asb propor <ideia da regra>',
             },
+            convidar: {
+                description: 'Manda o link de convite de um grupo por DM pra alguém (ex-banido ou qualquer pessoa)',
+                usage: '$asb convidar <id-do-grupo> @pessoa (ou $asb convidar <id-do-grupo> <numero>)',
+            },
         },
     },
     features: {

@@ -326,6 +326,25 @@ $asb promover @5541988887777
 ```
 → no grupo atual e no "Avisos": `🎉 @5541988887777 foi promovido(a) a admin — agora é responsável pelo grupo *Nome do Grupo*.`
 
+### `$asb convidar`
+
+Manda o link de convite de um grupo direto por DM pra alguém — pra reintegrar um ex-banido já desbanido (que não consegue ser readicionado direto, por privacidade ou outro motivo) ou convidar qualquer outra pessoa, sem precisar que um admin encaminhe o link manualmente. Roda **do grupo de administração**, referenciando o grupo de destino por ID.
+
+```
+$asb convidar <id-do-grupo> @pessoa
+```
+
+- `id-do-grupo`: veja `$asb grupos`.
+- Alvo por menção, reply, ou número como fallback (mesmo padrão do `$asb unban`): `$asb convidar 3 5541988887777`.
+
+**Comportamento:** reage ✅, responde no grupo de admins confirmando o envio, e manda cópia pro grupo de admins só se o comando não tiver rodado lá mesmo. Se a pessoa já estiver no grupo, recusa e avisa. A mensagem enviada por DM é só o link — a pessoa entra sozinha, sem depender de mais nada.
+
+Exemplo (rodado no grupo de admins):
+```
+$asb convidar 3 @5541988887777
+```
+→ manda por DM pra @5541988887777: `Você foi convidado(a) pro grupo *Java Developers* da All Stack Community.\nLink de convite: https://chat.whatsapp.com/...` e responde no grupo de admins: `✅ Convite enviado por DM pra @5541988887777 — grupo *Java Developers*.`
+
 ### Aprovação automática de mudança de descrição
 
 Isso não é um comando — é automático. Sempre que um admin edita a descrição de um grupo pelo próprio WhatsApp (fora do `$asb regras`), o bot detecta e posta a mudança (antes/depois) **no grupo de admins**, pedindo votação por reação: **✅ aprova, ❌ rejeita**.
@@ -400,9 +419,9 @@ Reaja ✅ pra aprovar e publicar, ❌ pra rejeitar. Só votos de admins de comun
 
 ### Moderação automática por IA
 
-Não é um comando (é o ciclo de hora em hora, ou o disparo manual via `$asb moderar` acima). Se houve mensagem nova em algum grupo desde a última checagem (senão nem chama a IA), o bot avalia o conteúdo contra as regras gerais da comunidade **e** as regras específicas daquele grupo (se houver — veja [Regras por Grupo](regras-grupos.html)), usando o Gemini (grátis, configurado via `GEMINI_API_KEY` no `.env` — sem a chave, esse ciclo simplesmente não faz nada). As regras específicas são buscadas direto da página publicada a cada ciclo — editar a página já vale, sem precisar de deploy do bot. Cada mensagem vai acompanhada de quantas mensagens aquele remetente já mandou no grupo (contador nosso, não é "memória" da IA) — isso deixa a IA aplicar o agravante das [regras](regras.html#classificação-de-punição-resumo): divulgação vinda de quem quase não participa vira banimento direto, não só advertência.
+Não é um comando (é o ciclo de hora em hora, ou o disparo manual via `$asb moderar` acima). Se houve mensagem nova em algum grupo desde a última checagem (senão nem chama a IA), o bot avalia o conteúdo contra as regras gerais da comunidade **e** as regras específicas daquele grupo (se houver — veja [Regras por Grupo](regras-grupos.html)), usando o Gemini (grátis, configurado via `GEMINI_API_KEY` no `.env` — sem a chave, esse ciclo simplesmente não faz nada). As regras específicas são buscadas direto da página publicada a cada ciclo — editar a página já vale, sem precisar de deploy do bot. Cada mensagem vai acompanhada de quantas mensagens aquele remetente já mandou no grupo (contador nosso, não é "memória" da IA) — isso é só um dado de contexto pra IA, **não** é agravante: participação baixa nunca sozinha justifica banimento, nem torna uma divulgação relevante ao tema do grupo em violação (veja [Regras](regras.html#classificação-de-punição-resumo)).
 
-**Comportamento:** qualquer violação de banimento (discriminação, conteúdo explícito, ato ilícito, divulgação de quem quase não participa, etc. — veja [Regras](regras.html)) → banimento de comunidade **executado na hora**, **a(s) mensagem(ns) que causou(aram) a violação é(são) apagada(s)** do grupo, com um aviso resumido público **no próprio grupo** (usuário, tipo, motivo) e o registro completo, revertível, no grupo de admins (veja abaixo) — nada fica esperando confirmação, se a IA errar um admin reverte depois. Qualquer advertência → mesmo mecanismo do `$asb advertir`, mesmo limite de 3/mês, mesmo escalonamento por reincidência, só avisada no grupo de admins, sem aviso público no grupo — **exceto publicação fora de contexto** (regra 8), que além da advertência já **remove a publicação** na hora.
+**Comportamento:** qualquer violação de banimento (discriminação, conteúdo explícito, ato ilícito, apostas, etc. — veja [Regras](regras.html)) → banimento de comunidade **executado na hora**, **a(s) mensagem(ns) que causou(aram) a violação é(são) apagada(s)** do grupo, com um aviso resumido público **no próprio grupo** (usuário, tipo, motivo) e o registro completo, revertível, no grupo de admins (veja abaixo) — nada fica esperando confirmação, se a IA errar um admin reverte depois. Qualquer advertência → mesmo mecanismo do `$asb advertir`, mesmo limite de 3/mês, mesmo escalonamento por reincidência, só avisada no grupo de admins, sem aviso público no grupo — **exceto divulgação fora do assunto do grupo e publicação fora de contexto** (regras 0 e 8), que além da advertência já **removem a publicação** na hora.
 
 ### Desfazer uma punição automática
 

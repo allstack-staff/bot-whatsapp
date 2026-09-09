@@ -52,7 +52,7 @@ Se você é admin, veja também o [Código de Conduta dos Admins](conduta-admins
 
 ## Sobre moderação automatizada
 
-Parte da moderação é feita por um bot, que avalia mensagens novas contra essas regras (a cada hora, ou sob demanda via `$asb moderar`) e pode advertir ou banir automaticamente conforme a classificação acima. O bot **nunca apaga mensagens** de terceiros nem reage/responde no grupo onde a violação aconteceu — toda ação automatizada é registrada e avisada só pro grupo de admins, sempre revisável (reação ❌ desfaz).
+Parte da moderação é feita por um bot, que avalia mensagens novas contra essas regras (a cada hora, ou sob demanda via `$asb moderar`) e pode advertir ou banir automaticamente conforme a classificação acima. O bot **apaga a mensagem que causou a violação** sempre que ela se encaixa em banimento ou em remoção de publicação (regras 0 e 8) e, em caso de banimento, avisa publicamente no próprio grupo — fora disso, não reage nem responde no grupo onde a violação aconteceu. Toda ação automatizada é registrada e avisada também pro grupo de admins, sempre revisável (reação ❌ desfaz).
 
 ---
 

@@ -124,6 +124,7 @@ export class MessageHandler {
         assumir: (msg: any, args: string[]) => this.assumirCommand(msg, args),
         responsavel: (msg: any, args: string[]) => this.responsavelCommand(msg, args),
         promover: (msg: any) => this.promoverCommand(msg),
+        convidar: (msg: any, args: string[]) => this.convidarCommand(msg, args),
     };
 
     private trackGroupMessage(jid: string | undefined, key: WAMessageKey | undefined): void {
@@ -1631,6 +1632,87 @@ export class MessageHandler {
             jid,
             `📋 *Grupos da comunidade* (${entries.length})\n${list}\n\nUse o número pra referenciar o grupo, ex: $asb responsavel ${entries[0].shortId} @admin ou $asb assumir ${entries[0].shortId}`,
         );
+    }
+
+    /**
+     * Manda o link de convite de um grupo por DM pra alguém — ex-banido já
+     * desbanido que não consegue ser readicionado direto, ou qualquer outra
+     * pessoa. Roda a partir do grupo de admins, referenciando o grupo alvo
+     * por ID (veja $asb grupos). Alvo por menção/reply, ou número como
+     * fallback, mesmo padrão de $asb unban.
+     */
+    private async convidarCommand(msg: any, args: string[]): Promise<void> {
+        if (!(await this.isAuthorized(msg))) return;
+
+        const jid = msg.key.remoteJid!;
+
+        const maybeId = args[0] && /^\d+$/.test(args[0]) ? parseInt(args[0], 10) : null;
+        if (maybeId === null) {
+            await this.replySafe(jid, '❌ Informe o ID do grupo (veja $asb grupos). Ex: $asb convidar 3 @pessoa (ou $asb convidar 3 5541995850310)');
+            return;
+        }
+
+        const targetGroupJid = await this.communityGroupService.getJidByShortId(maybeId);
+        if (!targetGroupJid) {
+            await this.replySafe(jid, `❌ Nenhum grupo com o ID ${maybeId}. Use $asb grupos pra ver a lista.`);
+            return;
+        }
+
+        const { jid: targetRaw } = this.getTargetJid(msg);
+        let userJid: string;
+
+        if (targetRaw) {
+            const currentMetadata = await this.sock.groupMetadata(jid).catch(() => undefined);
+            userJid = await resolvePnJid(this.sock, targetRaw, currentMetadata);
+        } else if (args[1]) {
+            const rawNumber = args[1].replace(/\D/g, '');
+            if (rawNumber.length < 10) {
+                await this.replySafe(jid, '❌ Número inválido. Use o DDI + DDD + número. Ex: 5541995850310');
+                return;
+            }
+            userJid = `${rawNumber}@s.whatsapp.net`;
+        } else {
+            await this.replySafe(jid, '❌ Marque a pessoa, responda a mensagem dela, ou informe o número. Ex: $asb convidar 3 @pessoa');
+            return;
+        }
+
+        let metadata: GroupMetadata;
+        try {
+            metadata = await this.sock.groupMetadata(targetGroupJid);
+        } catch {
+            await this.replySafe(jid, '❌ Não foi possível acessar o grupo. Tente novamente.');
+            return;
+        }
+
+        const number = userJid.split('@')[0];
+
+        if (findParticipant(metadata, userJid)) {
+            await this.replySafe(jid, `❌ @${number} já está no grupo *${metadata.subject}*.`);
+            return;
+        }
+
+        let inviteLink = '';
+        try {
+            const code = await this.sock.groupInviteCode(targetGroupJid);
+            if (code) inviteLink = `https://chat.whatsapp.com/${code}`;
+        } catch (err) {
+            logger.warn({ err, targetGroupJid }, '[convidarCommand] falha ao gerar link de convite');
+        }
+
+        if (!inviteLink) {
+            await this.replySafe(jid, '❌ Não foi possível gerar o link de convite. Tente novamente.');
+            return;
+        }
+
+        await this.sendSafe(userJid, { text: `Você foi convidado(a) pro grupo *${metadata.subject}* da All Stack Community.\nLink de convite: ${inviteLink}` });
+
+        await this.reactSafe(jid, msg.key, '✅');
+        await this.replySafe(jid, `✅ Convite enviado por DM pra @${number} — grupo *${metadata.subject}*.`);
+
+        const logJid = await this.getLogJid();
+        if (logJid && logJid !== jid) {
+            await this.sendLog(`✉️ @${number} recebeu convite por DM pro grupo *${metadata.subject}*.`, [userJid]);
+        }
     }
 
     /** Remove os N primeiros tokens (separados por espaço) de um texto, preservando o resto ao pé da letra (quebras de linha, formatação). */
