@@ -964,6 +964,16 @@ export class MessageHandler {
             if (!(await this.isCommunityGroup(gid))) continue;
 
             const newDesc = update.desc;
+
+            // Grupo visto pela 1ª vez (bot acabou de entrar, ou virou community
+            // agora) — ainda não tem baseline no cache. Aprende a descrição atual
+            // em silêncio, sem tratar como mudança (senão toda entrada em grupo
+            // novo dispara uma "votação" pra uma edição que nunca aconteceu).
+            if (!this.descriptionCache.has(gid)) {
+                this.descriptionCache.set(gid, newDesc);
+                continue;
+            }
+
             const oldDesc = this.descriptionCache.get(gid);
             if (newDesc === oldDesc) continue;
 
