@@ -6,7 +6,7 @@ title: Governança
 
 # Governança da All Stack Community
 
-Como a comunidade se organiza — quem vira admin, quando um grupo pode existir, e quem responde pelo quê. Isso é um ponto de partida; ajuste conforme a comunidade crescer.
+Como a comunidade se organiza — quem vira admin, quando um grupo pode existir, e quem responde pelo quê. Isso é um ponto de partida; ajuste conforme a comunidade crescer. Regras de conduta específicas de admin (o que é permitido/proibido no dia a dia do cargo) estão no [Código de Conduta dos Admins](conduta-admins.html).
 
 ## Cargos e responsabilidades
 
@@ -26,9 +26,7 @@ Um admin pode acumular "admin de comunidade" com ser "responsável" por um ou ma
 
 ## Quando um admin pode ser removido
 
-- Violação das regras da comunidade por parte do próprio admin (mesmo critério de qualquer membro, aplicado com o mesmo rigor — ou maior, dado o cargo de confiança).
-- Inatividade prolongada sem aviso, a critério dos demais admins.
-- Maioria dos admins de comunidade vota pela remoção (mesmo mecanismo de aprovação por reação).
+Violação das regras da comunidade, violação do código de conduta, inatividade prolongada, ou maioria dos admins de comunidade votando pela remoção — veja o [Código de Conduta dos Admins](conduta-admins.html) pra referência completa.
 
 ## Quando um grupo pode ser criado
 

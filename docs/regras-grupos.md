@@ -6,7 +6,7 @@ title: Regras por Grupo
 
 # Regras específicas por grupo
 
-Além das [regras da comunidade](regras.html) (que valem pra todo mundo e sempre prevalecem em caso de conflito), um grupo pode ter regras próprias, específicas do assunto dele — desde que aprovadas internamente pela administração antes de entrarem aqui.
+As [regras da comunidade](regras.html) são a constituição — valem em todo grupo e sempre prevalecem em caso de conflito. As regras aqui embaixo são mais como leis locais: valem **só dentro do grupo específico** listado, nunca contrariam a constituição, e são aprovadas internamente pela administração antes de entrarem nesta página.
 
 O bot lê essas regras direto desta página pra aplicar na moderação por IA daquele grupo específico — editar aqui já vale pro próximo ciclo de moderação, sem precisar mexer no código do bot.
 

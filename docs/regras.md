@@ -12,7 +12,9 @@ Bem-vindo(a) à nossa comunidade multidisciplinar, open source e de mentoria. É
 
 **Novidade:** você pode fazer um teste de nivelamento em lógica de programação — é grátis e rápido, basta pedir num grupo que um admin faz com você.
 
-Essas regras valem pra **toda a comunidade**. Um grupo específico pode ter [regras adicionais próprias](regras-grupos.html), desde que **não contrariem nem afrouxem** as regras daqui — em caso de conflito, as regras da comunidade prevalecem.
+Estas são as **regras da comunidade** — funcionam como uma constituição: valem pra **todo mundo, em todo grupo**, e nenhuma regra de grupo específico pode contrariar o que está escrito aqui. Um grupo pode ter [regras próprias](regras-grupos.html) além destas, mas nunca no lugar delas — em caso de conflito, as regras daqui sempre prevalecem.
+
+Se você é admin, veja também o [Código de Conduta dos Admins](conduta-admins.html) — regras adicionais específicas de quem administra a comunidade.
 
 ## Regras gerais
 
