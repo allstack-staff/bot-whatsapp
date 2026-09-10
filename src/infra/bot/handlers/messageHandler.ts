@@ -168,6 +168,10 @@ export class MessageHandler {
         const adminGroups = await this.adminService.getAdminGroups();
         if (adminGroups.includes(jid)) return;
 
+        // Grupo de debugging também não tem membro comum — mesma lógica do
+        // grupo de admins.
+        if (botConfig.debugGroupJid && jid === botConfig.debugGroupJid) return;
+
         await this.pendingModerationService.add(jid, sender, text, key).catch((err) => {
             logger.warn({ err, jid }, '[bufferForModeration] falha ao gravar mensagem na fila de moderação');
         });
@@ -257,6 +261,7 @@ export class MessageHandler {
                 }
             } catch (err) {
                 logger.error({ err, text: msgContent.conversation?.slice(0, 50) }, '[handleMessage] command error');
+                await this.sendDebugLog(`[handleMessage] erro processando mensagem em ${msg.key.remoteJid}:\n${this.describeErrorDetailed(err)}`).catch(() => {});
             }
         }
     }
@@ -1116,6 +1121,7 @@ export class MessageHandler {
             // ciclo/comando em vez de serem descartadas sem nunca terem sido avaliadas.
             logger.warn({ err }, '[runAiModerationCycle] erro processando moderação em lote');
             await this.sendLog(`⚠️ Não foi possível concluir o ciclo de moderação por IA — motivo: ${this.describeError(err)}. As mensagens continuam na fila pro próximo ciclo.`).catch(() => {});
+            await this.sendDebugLog(`[runAiModerationCycle] evaluateBatch falhou:\n${this.describeErrorDetailed(err)}`).catch(() => {});
             throw err; // propaga — quem chamou (ex: $moderar) precisa saber que falhou, não fingir sucesso
         }
 
@@ -1184,6 +1190,7 @@ export class MessageHandler {
             } catch (err) {
                 logger.warn({ err, groupJid }, '[runAiModerationCycle] erro processando moderação do grupo');
                 await this.sendLog(`⚠️ Não foi possível concluir a moderação por IA no grupo *${groupJid}* — motivo: ${this.describeError(err)}.`).catch(() => {});
+                await this.sendDebugLog(`[runAiModerationCycle] falha processando grupo ${groupJid}:\n${this.describeErrorDetailed(err)}`).catch(() => {});
             }
         }
     }
@@ -1924,6 +1931,18 @@ export class MessageHandler {
         return sent?.key;
     }
 
+    /**
+     * Erro técnico com detalhe (stack, corpo de resposta HTTP, etc) pro
+     * grupo de debugging — separado do aviso conciso que já vai pro grupo de
+     * admins (esse continua "informar e orientar", sem detalhe técnico).
+     * Sem DEBUG_GROUP_JID configurado, não faz nada (funciona como sempre
+     * funcionou, só no log do servidor).
+     */
+    private async sendDebugLog(text: string): Promise<void> {
+        if (!botConfig.debugGroupJid) return;
+        await this.sendSafe(botConfig.debugGroupJid, { text: `🛠️ ${text}` });
+    }
+
     // Ações automáticas que falharam mas podem ser tentadas de novo — reagir
     // com 🔁 na mensagem de aviso (no grupo de admins) reprocessa a mesma ação
     // sem precisar de um comando dedicado. Em memória de propósito: perder
@@ -1997,6 +2016,18 @@ export class MessageHandler {
             return err.message;
         }
         return String(err);
+    }
+
+    /** Versão longa (mensagem + stack), truncada, pro grupo de debugging — ver sendDebugLog. */
+    private describeErrorDetailed(err: unknown): string {
+        if (err instanceof Error) {
+            return `${err.message}${err.stack ? `\n${err.stack}` : ''}`.slice(0, 3500);
+        }
+        try {
+            return JSON.stringify(err).slice(0, 3500);
+        } catch {
+            return String(err).slice(0, 3500);
+        }
     }
 
     private resolveBanTypeLabel(t: string): string {

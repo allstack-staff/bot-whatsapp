@@ -15,6 +15,11 @@ export const botConfig = {
     // comunidade. "Saída de emergência": pode embasar como qualquer outro
     // admin, mas se preferir, a decisão dele vale mesmo sem a IA aprovar.
     founderJid: process.env.FOUNDER_JID,
+    // Grupo técnico ("All Stack Debugging") pra erros com detalhe (stack,
+    // corpo da resposta HTTP, etc) — separado do grupo de admins, que só
+    // recebe o aviso conciso de sempre. Não tem membros comuns, então (igual
+    // ao grupo de admins) nunca entra na fila de moderação por IA.
+    debugGroupJid: process.env.DEBUG_GROUP_JID,
     commands: {
         prefix: process.env.BOT_PREFIX || '$',
         // Comando "pai" — todo comando é invocado como "$asb <comando> [args]",
