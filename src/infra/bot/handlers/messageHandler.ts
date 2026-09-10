@@ -19,6 +19,8 @@ import { GithubRulesPublishService } from '../services/githubRulesPublishService
 import { MonthlyTipService } from '../services/monthlyTipService';
 import { PendingModerationService } from '../services/pendingModerationService';
 import { PendingAiBanService } from '../services/pendingAiBanService';
+import { AdminActionService, AdminActionType } from '../services/adminActionService';
+import { GroundingService } from '../services/groundingService';
 import { logger } from '../utils/logger';
 import { findParticipant, isGroupAdmin, resolvePnJid } from '../utils/jid';
 import { humanBulkActionDelay, humanReplyDelay } from '../utils/delay';
@@ -43,6 +45,8 @@ export class MessageHandler {
     private monthlyTipService: MonthlyTipService;
     private pendingModerationService: PendingModerationService;
     private pendingAiBanService: PendingAiBanService;
+    private adminActionService: AdminActionService;
+    private groundingService: GroundingService;
 
     // Rastro (em memória) dos comandos digitados pro bot e das respostas dele em
     // cada grupo, só pra viabilizar o $clear. Não precisa sobreviver a um restart.
@@ -71,6 +75,13 @@ export class MessageHandler {
     // num restart só significa recomeçar a contagem, não perder a trava/estado.
     private descriptionVotes: Map<string, Map<string, 'approve' | 'reject'>> = new Map();
     private ruleProposalVotes: Map<string, Map<string, 'approve' | 'reject'>> = new Map();
+    // Ratificação de decisão monocrática de admin de comunidade (ver
+    // openAdminActionRatification) — mesmo padrão de voto por reação/texto
+    // das outras votações, só que o alvo é um AdminAction, não uma proposta.
+    private adminActionRatificationVotes: Map<string, Map<string, 'approve' | 'reject'>> = new Map();
+    // Aviso único de número par de admins de comunidade — evita repetir todo
+    // ciclo enquanto a situação não mudar (ver checkGovernanceCompliance).
+    private governanceOddAdminWarned = false;
 
     // Grupos onde o bot não é admin (logo não pode trocar a foto), com o
     // horário da última tentativa. Evita reenviar updateProfilePicture pro
@@ -103,6 +114,8 @@ export class MessageHandler {
         this.monthlyTipService = new MonthlyTipService();
         this.pendingModerationService = new PendingModerationService();
         this.pendingAiBanService = new PendingAiBanService();
+        this.adminActionService = new AdminActionService();
+        this.groundingService = new GroundingService();
     }
 
     private commands: Record<string, (msg: any, args: string[]) => Promise<void>> = {
@@ -218,11 +231,16 @@ export class MessageHandler {
                     const senderJid = await resolvePnJid(this.sock, senderRaw);
 
                     const punishment = await this.automatedPunishmentService.findActiveByMessageId(stanzaId);
+                    const adminAction = punishment ? null : await this.adminActionService.findActiveByNoticeMessageId(stanzaId);
+
                     if (punishment) {
                         isInteractionReply = true;
                         if (await this.isMemberOfAdminGroup(senderRaw, senderJid)) {
                             await this.revertAutomatedPunishment(punishment, senderJid, text.trim());
                         }
+                    } else if (adminAction) {
+                        isInteractionReply = true;
+                        await this.handleAdminActionReasonReply(adminAction, text.trim(), senderRaw, senderJid);
                     } else {
                         isInteractionReply = await this.handleTextVoteReply(stanzaId, text, senderRaw, senderJid);
                     }
@@ -243,11 +261,18 @@ export class MessageHandler {
         }
     }
 
-    async handleGroupParticipantsUpdate({ id, participants, action }: any): Promise<void> {
-        logger.debug({ id, participants, action }, '[handleGroupParticipantsUpdate] event received');
+    async handleGroupParticipantsUpdate({ id, participants, action, author }: any): Promise<void> {
+        logger.debug({ id, participants, action, author }, '[handleGroupParticipantsUpdate] event received');
 
-        if (action !== 'add' || !participants?.length) return;
+        if (!participants?.length) return;
         if (!(await this.isCommunityGroup(id))) return;
+
+        if (action === 'remove' || action === 'promote' || action === 'demote') {
+            if (author) await this.recordHumanAdminAction(id, participants, action, author);
+            return;
+        }
+
+        if (action !== 'add') return;
 
         for (const participant of participants) {
             try {
@@ -313,12 +338,91 @@ export class MessageHandler {
     }
 
     /**
+     * Remover/promover/rebaixar alguém direto pelo WhatsApp (não via comando
+     * do bot) é uma ação administrativa como qualquer outra — vira um
+     * AdminAction revisável. `author` vem do próprio evento do Baileys, que
+     * já identifica quem fez a ação nativa; quando é o próprio bot (ex: um
+     * $asb ban, ou a IA banindo), o author é o JID do bot e a ação é
+     * ignorada aqui — ela já foi registrada no ponto de origem.
+     */
+    private async recordHumanAdminAction(
+        groupJid: string,
+        participants: any[],
+        action: 'remove' | 'promote' | 'demote',
+        authorRaw: string,
+    ): Promise<void> {
+        const botJid = this.getBotJid();
+        if (authorRaw === botJid) return;
+
+        const authorResolved = await resolvePnJid(this.sock, authorRaw).catch(() => authorRaw);
+        if (authorResolved === botJid) return;
+
+        let metadata: GroupMetadata | undefined;
+        try { metadata = await this.sock.groupMetadata(groupJid); } catch { /* segue sem nome bonito */ }
+
+        const actionTypeMap: Record<string, AdminActionType> = { remove: 'remove', promote: 'promote', demote: 'demote' };
+        const verbMap: Record<string, string> = { remove: 'removeu', promote: 'promoveu', demote: 'rebaixou' };
+        const groupLabel = metadata?.subject || groupJid;
+        const authorNumber = authorResolved.split('@')[0];
+
+        for (const participant of participants) {
+            try {
+                const targetJid = await resolvePnJid(this.sock, participant.id, metadata);
+                if (targetJid === botJid) continue; // mexeram no próprio bot, nada a revisar
+
+                const number = targetJid.split('@')[0];
+                await this.recordAdminAction({
+                    actorJid: authorResolved,
+                    actionType: actionTypeMap[action],
+                    groupJid,
+                    targetJid,
+                    description: `@${authorNumber} ${verbMap[action]} @${number} em *${groupLabel}* (ação direta pelo WhatsApp, fora do bot)`,
+                    noticeText: `👤 @${authorNumber} ${verbMap[action]} @${number} em *${groupLabel}* — ação direta pelo WhatsApp, fora do bot.`,
+                    mentions: [authorResolved, targetJid],
+                });
+            } catch (err) {
+                logger.warn({ err, participant, action }, '[recordHumanAdminAction] falha ao registrar ação administrativa');
+            }
+        }
+    }
+
+    /**
      * Pedido de entrada em grupo com aprovação de admin ativada — rejeita na hora
      * se a pessoa tiver um banimento ativo pra esse grupo (comunidade, ou
      * permanente/temporário daquele grupo específico), sem deixar ela entrar.
+     * Rejeição manual de um admin comum (action 'rejected', não o bot) vira
+     * ação administrativa revisável, igual às outras.
      */
-    async handleGroupJoinRequest({ id, participant, participantPn, action }: any): Promise<void> {
+    async handleGroupJoinRequest({ id, author, participant, participantPn, action }: any): Promise<void> {
         logger.debug({ id, participant, action }, '[handleGroupJoinRequest] event received');
+
+        if (action === 'rejected') {
+            if (!author || !participant) return;
+            if (!(await this.isCommunityGroup(id))) return;
+            try {
+                const authorResolved = await resolvePnJid(this.sock, author);
+                if (authorResolved === this.getBotJid()) return; // rejeição automática do bot (banido), já tratada em 'created'
+
+                const targetJid = participantPn || (await resolvePnJid(this.sock, participant));
+                const metadata = await this.sock.groupMetadata(id).catch(() => undefined);
+                const groupLabel = metadata?.subject || id;
+                const authorNumber = authorResolved.split('@')[0];
+                const number = targetJid.split('@')[0];
+
+                await this.recordAdminAction({
+                    actorJid: authorResolved,
+                    actionType: 'join_reject',
+                    groupJid: id,
+                    targetJid,
+                    description: `@${authorNumber} rejeitou o pedido de entrada de @${number} em *${groupLabel}*`,
+                    noticeText: `🚪 @${authorNumber} rejeitou o pedido de entrada de @${number} em *${groupLabel}*.`,
+                    mentions: [authorResolved, targetJid],
+                });
+            } catch (err) {
+                logger.warn({ err, id, author, participant }, '[handleGroupJoinRequest] falha ao registrar rejeição manual');
+            }
+            return;
+        }
 
         if (action !== 'created') return;
         if (!(await this.isCommunityGroup(id))) return;
@@ -620,6 +724,227 @@ export class MessageHandler {
                     [targetJid],
                 );
             });
+        }
+    }
+
+    /**
+     * Desfaz um banimento e tenta readicionar — usado tanto pra reverter uma
+     * punição automática quanto uma ação administrativa de ban. Varre todos
+     * os grupos da comunidade quando o banimento era COMUNIDADE (mesma
+     * correção aplicada em $asb unban e na expiração automática), não só o
+     * grupo onde o registro vive.
+     */
+    private async undoBanAndReAdd(userJid: string, groupJid: string): Promise<void> {
+        const priorBans = await this.banService.getUserBans(userJid);
+        const wasCommunityBan = priorBans.some((b) => b.groupJid === groupJid && b.banType === 'COMUNIDADE');
+        await this.banService.unban(userJid, groupJid);
+
+        if (wasCommunityBan) {
+            const communityGroupIds = await this.getCommunityGroupIds();
+            for (const gid of communityGroupIds) {
+                await this.tryReAddToGroup(userJid, gid, 'o banimento foi revertido por um admin');
+            }
+        } else {
+            await this.tryReAddToGroup(userJid, groupJid, 'o banimento foi revertido por um admin');
+        }
+    }
+
+    /**
+     * Registra uma ação administrativa de um admin comum (ban/advertir
+     * manual, remover/promover/rebaixar/rejeitar pedido de entrada feito
+     * direto pelo WhatsApp) e posta o aviso no grupo de admins com a
+     * instrução de revisão — SEMPRE por texto (nunca reação sozinha), porque
+     * é esse texto que a IA avalia como embasado ou não nas regras antes de
+     * reverter (ver handleAdminActionReasonReply).
+     */
+    private async recordAdminAction(data: {
+        actorJid: string;
+        actionType: AdminActionType;
+        groupJid: string;
+        targetJid?: string;
+        description: string;
+        beforeState?: string;
+        noticeText: string;
+        mentions?: string[];
+    }): Promise<void> {
+        const noticeKey = await this.sendLog(
+            `${data.noticeText}\n\nAdmin de comunidade: responda esta mensagem com o motivo (embasado nas regras) pra reverter.`,
+            data.mentions,
+        );
+
+        const created = await this.adminActionService.create({
+            actorJid: data.actorJid,
+            actionType: data.actionType,
+            groupJid: data.groupJid,
+            targetJid: data.targetJid,
+            description: data.description,
+            beforeState: data.beforeState,
+        });
+
+        if (noticeKey?.id) {
+            await this.adminActionService.setNoticeMessageId(created.id, noticeKey.id);
+        }
+    }
+
+    /** Reverte de verdade uma ação administrativa já embasada/aprovada. */
+    private async applyAdminActionRevert(action: any): Promise<void> {
+        switch (action.actionType as AdminActionType) {
+            case 'ban':
+                await this.undoBanAndReAdd(action.targetJid, action.groupJid);
+                break;
+            case 'advertir':
+                await this.warningService.removeLast(action.targetJid, action.groupJid);
+                break;
+            case 'remove':
+                await this.tryReAddToGroup(action.targetJid, action.groupJid, 'a remoção foi revertida por um admin de comunidade');
+                break;
+            case 'promote':
+                await this.sock.groupParticipantsUpdate(action.groupJid, [action.targetJid], 'demote').catch(() => {});
+                break;
+            case 'demote':
+                await this.sock.groupParticipantsUpdate(action.groupJid, [action.targetJid], 'promote').catch(() => {});
+                break;
+            case 'join_reject': {
+                let inviteLink = '';
+                try {
+                    const code = await this.sock.groupInviteCode(action.groupJid);
+                    if (code) inviteLink = `\nLink de convite: https://chat.whatsapp.com/${code}`;
+                } catch { /* segue sem link */ }
+                if (action.targetJid) {
+                    await this.sendSafe(action.targetJid, { text: `Sua entrada no grupo foi reavaliada e aceita.${inviteLink}` });
+                }
+                break;
+            }
+        }
+    }
+
+    /** Desfaz a reversão — reaplica a ação administrativa original (derrubada na ratificação). */
+    private async reapplyOriginalAdminAction(action: any): Promise<void> {
+        const before = action.beforeState ? JSON.parse(action.beforeState) : null;
+
+        switch (action.actionType as AdminActionType) {
+            case 'ban': {
+                await this.banService.ban({
+                    userJid: action.targetJid,
+                    groupJid: action.groupJid,
+                    banType: (before?.banType ?? 'TEMPORARIO') as any,
+                    reason: before?.reason ?? action.description,
+                    expiresAt: before?.expiresAt ? new Date(before.expiresAt) : undefined,
+                    displayName: before?.displayName,
+                    bannedBy: 'sistema',
+                });
+                if (before?.banType === 'COMUNIDADE') {
+                    await this.sweepCommunityBan(action.targetJid);
+                } else {
+                    const meta = await this.sock.groupMetadata(action.groupJid).catch(() => undefined);
+                    const p = meta ? findParticipant(meta, action.targetJid) : undefined;
+                    if (p) await this.sock.groupParticipantsUpdate(action.groupJid, [p.id], 'remove').catch(() => {});
+                }
+                break;
+            }
+            case 'advertir':
+                await this.warningService.issue(action.targetJid, action.groupJid, before?.reason ?? action.description, 'sistema');
+                break;
+            case 'remove': {
+                const meta = await this.sock.groupMetadata(action.groupJid).catch(() => undefined);
+                const p = meta ? findParticipant(meta, action.targetJid) : undefined;
+                if (p) await this.sock.groupParticipantsUpdate(action.groupJid, [p.id], 'remove').catch(() => {});
+                break;
+            }
+            case 'promote':
+                await this.sock.groupParticipantsUpdate(action.groupJid, [action.targetJid], 'promote').catch(() => {});
+                break;
+            case 'demote':
+                await this.sock.groupParticipantsUpdate(action.groupJid, [action.targetJid], 'demote').catch(() => {});
+                break;
+            case 'join_reject':
+                break; // nada de limpo pra reaplicar — a pessoa já recebeu o convite na reversão
+        }
+    }
+
+    /**
+     * Reply com motivo numa ação administrativa ainda ativa — o núcleo do
+     * pedido: só admin de comunidade pode reverter, e só com motivo embasado
+     * nas regras (avaliado pela IA). Fundador é isento do bloqueio (mas
+     * ainda registra o parecer da IA, só não trava nele).
+     */
+    private async handleAdminActionReasonReply(action: any, reasonText: string, actorRaw: string, actorJid: string): Promise<void> {
+        if (!(await this.isAdminOfAdminGroup(actorRaw, actorJid))) return;
+
+        const number = actorJid.split('@')[0];
+        const founderActor = this.isFounder(actorJid);
+
+        const shortId = await this.communityGroupService.getShortIdByJid(action.groupJid);
+        const extraRules = await this.groupRulesService.getRulesFor(shortId);
+
+        const grounding = await this.groundingService.evaluate({
+            actionDescription: action.description,
+            reasoning: reasonText,
+            extraRules,
+        });
+
+        if (!grounding.grounded && !founderActor) {
+            await this.sendSafe(actorJid, { text: `❌ Reversão não aplicada — motivo não embasado nas regras.\n${grounding.feedback}` });
+            await this.sendLog(`🧭 Tentativa de reversão de @${number} não embasada nas regras — feedback enviado no privado.`);
+            return;
+        }
+
+        await this.applyAdminActionRevert(action);
+        await this.adminActionService.resolve(action.id, 'REVERTED', actorJid);
+
+        const groundingNote = founderActor && !grounding.grounded ? ' (decisão do fundador — aplicada sem checagem de embasamento)' : '';
+        await this.sendLog(`🔄 @${number} (admin de comunidade) reverteu: "${action.description}"${groundingNote}.\nMotivo: ${reasonText}`, [actorJid]);
+
+        if (founderActor) return; // fundador não entra em ratificação
+
+        await this.openAdminActionRatification(action, actorJid);
+    }
+
+    /** Abre a votação de ratificação entre os outros admins de comunidade — a decisão já está em vigor. */
+    private async openAdminActionRatification(action: any, decidedBy: string): Promise<void> {
+        const logJid = await this.getLogJid();
+        if (!logJid) return;
+
+        const number = decidedBy.split('@')[0];
+        const text = `⚖️ Decisão monocrática de @${number}, já em vigor: reverteu "${action.description}".\nOutros admins de comunidade: reaja ✅/❌ ou responda "sim"/"não" pra ratificar/derrubar.`;
+        const sent = await this.sock.sendMessage(logJid, { text, mentions: [decidedBy] }).catch((err: any) => {
+            logger.warn({ err }, '[openAdminActionRatification] falha ao postar votação');
+            return undefined;
+        });
+        this.trackGroupMessage(logJid, sent?.key);
+
+        if (sent?.key?.id) {
+            await this.adminActionService.setVoteMessageId(action.id, sent.key.id);
+        }
+    }
+
+    /** Conta os votos de ratificação — mesmo critério de maioria das outras votações (admin de comunidade). */
+    private async tallyAdminActionRatification(action: any, votes: Map<string, 'approve' | 'reject'>): Promise<void> {
+        const logJid = await this.getLogJid();
+        if (!logJid) return;
+
+        let communityAdminCount = 0;
+        try {
+            const meta = await this.sock.groupMetadata(logJid);
+            communityAdminCount = meta.participants.filter((p) => isGroupAdmin(p)).length;
+        } catch {
+            return;
+        }
+        if (!communityAdminCount) return;
+
+        const majority = Math.floor(communityAdminCount / 2) + 1;
+        const approvals = [...votes.values()].filter((v) => v === 'approve').length;
+        const rejections = [...votes.values()].filter((v) => v === 'reject').length;
+
+        if (approvals >= majority) {
+            this.adminActionRatificationVotes.delete(action.voteMessageId);
+            await this.adminActionService.resolve(action.id, 'RATIFIED');
+            await this.sendLog(`✅ Decisão ratificada pela maioria dos admins de comunidade: "${action.description}".`);
+        } else if (rejections >= majority) {
+            this.adminActionRatificationVotes.delete(action.voteMessageId);
+            await this.reapplyOriginalAdminAction(action);
+            await this.adminActionService.resolve(action.id, 'OVERTURNED');
+            await this.sendLog(`❌ Decisão derrubada pela maioria dos admins de comunidade — "${action.description}" volta a valer.`);
         }
     }
 
@@ -1283,6 +1608,38 @@ export class MessageHandler {
                     this.ruleProposalVotes.set(key.id, votes);
 
                     await this.tallyRuleProposalVote(proposal, votes);
+                    continue;
+                }
+
+                // Aviso de ação administrativa: reação sozinha NUNCA reverte — só
+                // texto conta, porque é o texto que a IA avalia como embasado ou
+                // não. Reagir só pede o motivo por texto.
+                const adminAction = await this.adminActionService.findActiveByNoticeMessageId(key.id);
+                if (adminAction) {
+                    const reactorResolved = await resolvePnJid(this.sock, reactorRaw);
+                    if (await this.isAdminOfAdminGroup(reactorRaw, reactorResolved)) {
+                        await this.sendLog('❌ Reação sozinha não reverte — responda esta mensagem com o motivo, embasado nas regras.');
+                    }
+                    continue;
+                }
+
+                const adminActionVote = await this.adminActionService.findPendingByVoteMessageId(key.id);
+                if (adminActionVote) {
+                    const reactorResolved = await resolvePnJid(this.sock, reactorRaw);
+                    if (reactorResolved === adminActionVote.revertedBy) continue; // não vota na própria decisão
+                    if (!(await this.isAdminOfAdminGroup(reactorRaw, reactorResolved))) continue;
+
+                    const votes = this.adminActionRatificationVotes.get(key.id) ?? new Map<string, 'approve' | 'reject'>();
+                    if (emoji === '✅') {
+                        votes.set(reactorRaw, 'approve');
+                    } else if (emoji === '❌') {
+                        votes.set(reactorRaw, 'reject');
+                    } else {
+                        votes.delete(reactorRaw);
+                    }
+                    this.adminActionRatificationVotes.set(key.id, votes);
+
+                    await this.tallyAdminActionRatification(adminActionVote, votes);
                 }
             } catch (err) {
                 logger.warn({ err }, '[handleReaction] erro processando reação de votação');
@@ -1359,6 +1716,18 @@ export class MessageHandler {
             } else if (intent === 'reject') {
                 await this.pendingAiBanService.resolve(pendingAiBan.id, 'DISMISSED');
                 await this.sendLog(`✅ Proposta de banimento por IA dispensada — @${pendingAiBan.userJid.split('@')[0]} não foi banido(a).`);
+            }
+            return true;
+        }
+
+        const adminActionVote = await this.adminActionService.findPendingByVoteMessageId(stanzaId);
+        if (adminActionVote) {
+            const intent = this.parseVoteIntent(text);
+            if (intent && senderJid !== adminActionVote.revertedBy && (await this.isAdminOfAdminGroup(senderRaw, senderJid))) {
+                const votes = this.adminActionRatificationVotes.get(stanzaId) ?? new Map<string, 'approve' | 'reject'>();
+                votes.set(senderRaw, intent);
+                this.adminActionRatificationVotes.set(stanzaId, votes);
+                await this.tallyAdminActionRatification(adminActionVote, votes);
             }
             return true;
         }
@@ -1526,6 +1895,15 @@ export class MessageHandler {
             }
         }
         return false;
+    }
+
+    /**
+     * Fundador — único admin de comunidade isento da checagem de embasamento
+     * (GroundingService) antes de reverter/decidir. Sem FOUNDER_JID
+     * configurado, ninguém tem essa isenção.
+     */
+    private isFounder(resolvedJid: string): boolean {
+        return Boolean(botConfig.founderJid) && resolvedJid === botConfig.founderJid;
     }
 
     private async getLogJid(): Promise<string | null> {
@@ -2417,11 +2795,22 @@ export class MessageHandler {
         const expiresLabel = expiresAt ? `\nExpira: ${expiresAt.toLocaleString('pt-BR')}` : '';
         await this.replySafe(jid, `🚫 *Banido*\nUsuário: @${targetJid.split('@')[0]}\nTipo: ${this.resolveBanTypeLabel(banType)}${expiresLabel}\nMotivo: ${reason}`);
 
-        // Log no grupo admin
-        await this.sendLog(
-            `🚫 Membro @${targetJid.split('@')[0]} banido — ${this.resolveBanTypeLabel(banType)}${expiresLabel} — ${escopoLabel} — Motivo: ${reason}`,
-            [targetJid],
-        );
+        // Log no grupo admin — vira o aviso revisável (ver recordAdminAction)
+        await this.recordAdminAction({
+            actorJid: bannedBy,
+            actionType: 'ban',
+            groupJid: jid,
+            targetJid,
+            description: `baniu @${targetJid.split('@')[0]} (${this.resolveBanTypeLabel(banType)}) em *${metadata.subject}* — motivo: ${reason}`,
+            beforeState: JSON.stringify({
+                banType,
+                reason,
+                expiresAt: expiresAt ? expiresAt.toISOString() : null,
+                displayName: targetParticipant?.notify || targetParticipant?.name || undefined,
+            }),
+            noticeText: `🚫 Membro @${targetJid.split('@')[0]} banido — ${this.resolveBanTypeLabel(banType)}${expiresLabel} — ${escopoLabel} — Motivo: ${reason}`,
+            mentions: [targetJid],
+        });
 
         logger.info({ targetJid, groupJid: jid, banType, reason }, 'User banned');
     }
@@ -2665,10 +3054,16 @@ export class MessageHandler {
         await this.reactSafe(jid, msg.key, '⚠️');
         await this.replySafe(jid, `⚠️ @${targetJid.split('@')[0]} advertido (${count}/3 esse mês).\nMotivo: ${reason}`);
 
-        await this.sendLog(
-            `⚠️ @${targetJid.split('@')[0]} recebeu advertência (${count}/3 esse mês) — Motivo: ${reason}`,
-            [targetJid],
-        );
+        await this.recordAdminAction({
+            actorJid: issuedBy,
+            actionType: 'advertir',
+            groupJid: jid,
+            targetJid,
+            description: `advertiu @${targetJid.split('@')[0]} em *${metadata.subject}* — motivo: ${reason}`,
+            beforeState: JSON.stringify({ reason }),
+            noticeText: `⚠️ @${targetJid.split('@')[0]} recebeu advertência (${count}/3 esse mês) — Motivo: ${reason}`,
+            mentions: [targetJid],
+        });
 
         if (count >= 3) {
             await this.applyWarningPunishment(targetJid, jid, metadata);
@@ -2773,7 +3168,7 @@ export class MessageHandler {
      */
     private async revertAutomatedPunishment(punishment: any, revertedBy: string, revertReason?: string): Promise<void> {
         await this.automatedPunishmentService.revert(punishment.id, revertedBy, revertReason);
-        await this.banService.unban(punishment.userJid, punishment.groupJid);
+        await this.undoBanAndReAdd(punishment.userJid, punishment.groupJid);
 
         const number = punishment.userJid.split('@')[0];
         const admin = revertedBy.split('@')[0];
@@ -2784,7 +3179,37 @@ export class MessageHandler {
             `🔄 ${sourceLabel} identificou um comportamento e puniu @${number}, mas o admin @${admin} revisou e reverteu a medida.${reasonLabel}`,
             [punishment.userJid],
         );
+    }
 
-        await this.tryReAddToGroup(punishment.userJid, punishment.groupJid, 'a punição automática foi revertida por um admin');
+    /**
+     * Checagem de governança determinística (sem IA) — hoje só número de
+     * admins de comunidade, mas escrita pra dar pra somar outras condições
+     * fixas de governança depois sem redesenhar nada. Avisa uma única vez
+     * por "episódio" (não repete todo ciclo enquanto o problema persistir) —
+     * volta a avisar se resolver e quebrar de novo depois.
+     */
+    async checkGovernanceCompliance(): Promise<void> {
+        const logJid = await this.getLogJid();
+        if (!logJid) return;
+
+        let communityAdminCount = 0;
+        try {
+            const meta = await this.sock.groupMetadata(logJid);
+            communityAdminCount = meta.participants.filter((p) => isGroupAdmin(p)).length;
+        } catch (err) {
+            logger.warn({ err }, '[checkGovernanceCompliance] falha ao buscar metadados do grupo de admins');
+            return;
+        }
+
+        const isOddViolation = communityAdminCount > 0 && communityAdminCount % 2 === 0;
+
+        if (isOddViolation && !this.governanceOddAdminWarned) {
+            this.governanceOddAdminWarned = true;
+            await this.sendLog(
+                `⚠️ Número de admins de comunidade está par (${communityAdminCount}) — a governança pede número ímpar, pra sempre ter critério de desempate em votação. Ajustem promovendo ou removendo um admin de comunidade.`,
+            );
+        } else if (!isOddViolation) {
+            this.governanceOddAdminWarned = false;
+        }
     }
 }

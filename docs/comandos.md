@@ -448,6 +448,15 @@ Também não é um comando (é uma reação a uma mensagem existente). Toda vez 
 
 **Comportamento:** qualquer uma das duas ações remove o banimento, tenta readicionar a pessoa ao grupo (mesmo mecanismo do `$asb unban`) e posta uma confirmação no grupo de admins deixando claro que foi revisão humana que reverteu — algo como *"A moderação automática identificou um comportamento e baniu @pessoa, mas o admin @fulano revisou e reverteu a medida"* (+ motivo, se veio um). Só funciona enquanto a punição ainda estiver ativa (não desfeita antes) — quem pode reagir/responder é qualquer pessoa do grupo de administração.
 
+### Revisão de ação administrativa
+
+Também não é um comando. Toda ação administrativa gera um aviso revisável no grupo de admins: `$asb ban` e `$asb advertir` manuais, remover/promover/rebaixar alguém direto pelo WhatsApp (fora do bot), e rejeitar um pedido de entrada. Diferente do desfazer de punição automática (acima), aqui **reação sozinha não funciona** — reagir só faz o bot pedir o motivo por texto.
+
+- **Responda o aviso com o motivo** (embasado nas regras) — só admin de comunidade conta.
+- A IA avalia se o motivo se sustenta numa regra real antes de aplicar.
+
+**Comportamento:** motivo embasado → reverte na hora e abre uma segunda votação (✅/❌ ou "sim"/"não") entre os *outros* admins de comunidade, pra ratificar ou derrubar essa decisão — enquanto não bate maioria de nenhum dos dois lados, a reversão continua valendo; maioria ❌ desfaz a reversão (a ação original volta a valer). Motivo não embasado → nada é revertido, e quem tentou recebe a explicação da IA no privado. O fundador (`FOUNDER_JID`) é a única exceção: a decisão dele vale mesmo sem embasamento aprovado, e não entra em votação de ratificação.
+
 ### Readição automática ao expirar um banimento temporário
 
 Também não é um comando. A cada 5 minutos, o bot confere se algum banimento com prazo (`temporario`, ou `comunidade` com tempo definido via `$asb banedit tempo`) já expirou — se sim, tenta readicionar a pessoa automaticamente, sem esperar ela pedir pra voltar. Pra `temporario`, só no grupo onde o banimento foi aplicado; pra `comunidade`, em todos os grupos da comunidade.

@@ -26,6 +26,12 @@ export class WarningService {
         return prisma.warning.findMany({ where: { userJid, groupJid }, orderBy: { createdAt: 'desc' } });
     }
 
+    /** Remove a advertência mais recente desse usuário nesse grupo — usado ao reverter um $asb advertir. */
+    async removeLast(userJid: string, groupJid: string): Promise<void> {
+        const last = await prisma.warning.findFirst({ where: { userJid, groupJid }, orderBy: { createdAt: 'desc' } });
+        if (last) await prisma.warning.delete({ where: { id: last.id } });
+    }
+
     /** true se essa advertência (já registrada) atingiu o limite do mês e deve gerar punição. */
     async shouldPunish(userJid: string, groupJid: string): Promise<boolean> {
         const count = await this.countThisMonth(userJid, groupJid);

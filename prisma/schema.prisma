@@ -173,6 +173,36 @@ model PendingModerationMessage {
     @@index([createdAt])
 }
 
+// Ação administrativa de um admin comum (ban/advertir manual, remover,
+// promover, rebaixar, rejeitar pedido de entrada) — avisada no grupo de
+// admins pra um admin de comunidade revisar. Reverter/decidir aqui SEMPRE
+// exige motivo em texto (não aceita reação sozinha, diferente de
+// AutomatedPunishment), porque é esse texto que a IA avalia como embasado
+// ou não nas regras (ver GroundingService) antes de aplicar de verdade.
+// status: ACTIVE (em vigor, sem revisão ainda) | REVERTED (admin de
+// comunidade reverteu, embasado) | RATIFIED (decisão do admin de comunidade
+// confirmada pela maioria dos outros) | OVERTURNED (maioria derrubou a
+// decisão do admin de comunidade — volta ao estado anterior).
+model AdminAction {
+    id            String    @id @default(cuid())
+    actorJid      String // quem fez a ação original (admin comum, ou o sistema pra eventos nativos)
+    actionType    String // ban | advertir | remove | promote | demote | join_reject
+    groupJid      String
+    targetJid     String?
+    description   String // texto pronto pra mostrar no aviso, ex: "baniu @X (temporario)"
+    beforeState   String? // JSON — estado anterior, quando dá pra restaurar (ex: era admin antes)
+    status        String    @default("ACTIVE")
+    revertedBy    String? // admin de comunidade que reverteu (decisão monocrática) — excluído da própria ratificação
+    noticeMessageId String? // aviso original no grupo de admins — reply com motivo aqui = tentativa de reverter
+    voteMessageId String? // mensagem de ratificação da decisão do admin de comunidade, quando houver
+    createdAt     DateTime  @default(now())
+    resolvedAt    DateTime?
+
+    @@index([noticeMessageId])
+    @@index([voteMessageId])
+    @@index([groupJid])
+}
+
 // Banimento de comunidade proposto pela IA numa categoria que depende de
 // julgamento de contexto (ver CONTEXT_DEPENDENT_CATEGORY em
 // aiModerationService.ts) — não executa sozinho, só propõe. Um admin do

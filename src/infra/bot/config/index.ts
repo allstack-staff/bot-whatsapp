@@ -10,6 +10,11 @@ export const botConfig = {
     // ação em massa ou automática do bot deve ficar restrita a grupos vinculados aqui
     // (meta.linkedParent === communityJid). Descoberto uma vez via debugLogCommunityMetadata.
     communityJid: process.env.COMMUNITY_JID,
+    // JID do fundador — único admin isento da checagem de embasamento nas
+    // regras (GroundingService) antes de reverter/decidir algo como admin de
+    // comunidade. "Saída de emergência": pode embasar como qualquer outro
+    // admin, mas se preferir, a decisão dele vale mesmo sem a IA aprovar.
+    founderJid: process.env.FOUNDER_JID,
     commands: {
         prefix: process.env.BOT_PREFIX || '$',
         // Comando "pai" — todo comando é invocado como "$asb <comando> [args]",

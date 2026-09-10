@@ -73,6 +73,9 @@ async function startBot(): Promise<void> {
                 messageHandler.pruneOldModerationMessages().catch((err) => {
                     logger.warn({ err }, 'Falha ao limpar fila de moderação antiga');
                 });
+                messageHandler.checkGovernanceCompliance().catch((err) => {
+                    logger.warn({ err }, 'Falha na checagem de governança');
+                });
             }, HOURLY_TICK_MS);
 
             if (banExpiryTick) clearInterval(banExpiryTick);
