@@ -120,6 +120,7 @@ export class MessageHandler {
         grupos: (msg: any) => this.gruposCommand(msg),
         moderar: (msg: any, args: string[]) => this.moderarCommand(msg, args),
         anunciar: (msg: any, args: string[]) => this.anunciarCommand(msg, args),
+        avisar: (msg: any, args: string[]) => this.avisarCommand(msg, args),
         propor: (msg: any, args: string[]) => this.proporCommand(msg, args),
         assumir: (msg: any, args: string[]) => this.assumirCommand(msg, args),
         responsavel: (msg: any, args: string[]) => this.responsavelCommand(msg, args),
@@ -185,6 +186,10 @@ export class MessageHandler {
                 // for um grupo vinculado à All Stack Community. Privado (DM) segue liberado.
                 const remoteJid = msg.key.remoteJid;
                 if (remoteJid?.endsWith('@g.us') && !(await this.isCommunityGroup(remoteJid))) {
+                    continue;
+                }
+
+                if (remoteJid && !msg.key.fromMe && (await this.enforceAnnounceGroupLock(remoteJid, msg))) {
                     continue;
                 }
 
@@ -1241,6 +1246,10 @@ export class MessageHandler {
 
                 const change = await this.descriptionChangeService.findPendingByVoteMessageId(key.id);
                 if (change) {
+                    // Só admin de comunidade vota — mesma trava da proposta de regra.
+                    const reactorResolved = await resolvePnJid(this.sock, reactorRaw);
+                    if (!(await this.isAdminOfAdminGroup(reactorRaw, reactorResolved))) continue;
+
                     const votes = this.descriptionVotes.get(key.id) ?? new Map<string, 'approve' | 'reject'>();
                     if (emoji === '✅') {
                         votes.set(reactorRaw, 'approve');
@@ -1313,7 +1322,7 @@ export class MessageHandler {
         const change = await this.descriptionChangeService.findPendingByVoteMessageId(stanzaId);
         if (change) {
             const intent = this.parseVoteIntent(text);
-            if (intent) {
+            if (intent && (await this.isAdminOfAdminGroup(senderRaw, senderJid))) {
                 const votes = this.descriptionVotes.get(stanzaId) ?? new Map<string, 'approve' | 'reject'>();
                 votes.set(senderRaw, intent);
                 this.descriptionVotes.set(stanzaId, votes);
@@ -1394,15 +1403,19 @@ export class MessageHandler {
     }
 
     private async tallyDescriptionVote(change: any, votes: Map<string, 'approve' | 'reject'>): Promise<void> {
-        let adminCount = 0;
+        // Eleitorado é só admin de comunidade (admin do próprio grupo de
+        // administração) — mesmo critério da votação de proposta de regra,
+        // não todo mundo que está no grupo de admins.
+        let communityAdminCount = 0;
         try {
             const meta = await this.sock.groupMetadata(change.voteGroupJid);
-            adminCount = meta.participants.length;
+            communityAdminCount = meta.participants.filter((p) => isGroupAdmin(p)).length;
         } catch {
             return; // sem saber o total, não arrisca decidir
         }
+        if (!communityAdminCount) return;
 
-        const majority = Math.floor(adminCount / 2) + 1;
+        const majority = Math.floor(communityAdminCount / 2) + 1;
         const approvals = [...votes.values()].filter((v) => v === 'approve').length;
         const rejections = [...votes.values()].filter((v) => v === 'reject').length;
 
@@ -1796,6 +1809,32 @@ export class MessageHandler {
     }
 
     /**
+     * Grupo de Avisos só recebe publicação do bot ($asb avisar, ou anúncio de
+     * promoção) — qualquer mensagem manual de outra pessoa é apagada na hora
+     * e a pessoa é avisada, sem poluir o grupo. Limitação conhecida: o bot
+     * roda no número de um admin de verdade, então uma mensagem que esse
+     * mesmo admin mandar manualmente do próprio WhatsApp chega como `fromMe`
+     * igual a uma automática — não dá pra distinguir as duas, então só fica
+     * de fora dessa trava (não tem como bloquear a própria conta do bot de
+     * si mesma). Retorna true se apagou (pra quem chamou pular o resto do
+     * processamento dessa mensagem).
+     */
+    private async enforceAnnounceGroupLock(remoteJid: string, msg: any): Promise<boolean> {
+        const avisosJid = await this.findCommunityAnnounceGroupJid();
+        if (!avisosJid || remoteJid !== avisosJid) return false;
+
+        await this.sock.sendMessage(avisosJid, { delete: msg.key }).catch((err) => {
+            logger.warn({ err, avisosJid }, '[enforceAnnounceGroupLock] falha ao apagar mensagem manual');
+        });
+
+        const senderRaw = msg.key.participant || msg.key.remoteJid!;
+        const number = senderRaw.split('@')[0];
+        await this.sendSafe(senderRaw, { text: 'O grupo de Avisos só recebe publicação automática do bot. Sua mensagem foi removida — peça pra alguém rodar $asb avisar no grupo de administração.' });
+        await this.sendLog(`🔒 Mensagem manual de @${number} apagada no grupo de Avisos — só o bot publica lá.`, [senderRaw]);
+        return true;
+    }
+
+    /**
      * Lista os grupos da All Stack Community com um ID curto e estável (veja
      * CommunityGroup no schema) — pra referenciar um grupo em $asb responsavel sem
      * precisar colar o JID nem estar dentro dele.
@@ -1978,6 +2017,50 @@ export class MessageHandler {
 
         await this.replySafe(jid, `✅ Anúncio publicado no grupo *${metadata.subject}*.`);
         await this.sendLog(`📣 Anúncio publicado em *${metadata.subject}* via $asb anunciar.`);
+    }
+
+    /**
+     * Publica no grupo "Avisos" da Community — eventos importantes (novo
+     * grupo, novo admin, etc). Único jeito de postar lá: ver
+     * enforceAnnounceGroupLock, que apaga qualquer mensagem manual de quem
+     * não for a própria conta do bot.
+     */
+    private async avisarCommand(msg: any, args: string[]): Promise<void> {
+        if (!(await this.isAuthorized(msg))) return;
+
+        const jid = msg.key.remoteJid!;
+        const logJid = await this.getLogJid();
+        if (!logJid || jid !== logJid) {
+            await this.replySafe(jid, '❌ Esse comando só pode ser usado no grupo de administração.');
+            return;
+        }
+
+        const rawText: string = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
+        const announcement = this.stripLeadingTokens(rawText, 2).trim(); // "$asb avisar "
+        if (!announcement) {
+            await this.replySafe(jid, '❌ Escreva a mensagem. Ex: $asb avisar Novo grupo *Java Devs* foi criado!');
+            return;
+        }
+
+        const avisosJid = await this.findCommunityAnnounceGroupJid();
+        if (!avisosJid) {
+            await this.replySafe(jid, '❌ Grupo de Avisos não encontrado.');
+            return;
+        }
+
+        let mentions: string[] = [];
+        try {
+            const meta = await this.sock.groupMetadata(avisosJid);
+            mentions = meta.participants.map((p) => p.id);
+        } catch (err) {
+            logger.warn({ err, avisosJid }, '[avisarCommand] falha ao buscar metadados do grupo de Avisos');
+        }
+
+        await this.sendSafe(avisosJid, { text: announcement, mentions });
+
+        await this.reactSafe(jid, msg.key, '✅');
+        await this.replySafe(jid, '✅ Aviso publicado no grupo de Avisos.');
+        await this.sendLog(`📢 Aviso publicado no grupo de Avisos via $asb avisar: "${announcement}"`);
     }
 
     /**

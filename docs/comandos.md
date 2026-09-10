@@ -347,7 +347,7 @@ $asb convidar 3 @5541988887777
 
 ### Aprovação automática de mudança de descrição
 
-Isso não é um comando — é automático. Sempre que um admin edita a descrição de um grupo pelo próprio WhatsApp (fora do `$asb regras`), o bot detecta e posta a mudança (antes/depois) **no grupo de admins**, pedindo votação: **✅/❌**, ou responder "sim"/"não".
+Isso não é um comando — é automático. Sempre que um admin edita a descrição de um grupo pelo próprio WhatsApp (fora do `$asb regras`), o bot detecta e posta a mudança (antes/depois) **no grupo de admins**, pedindo votação: **✅/❌**, ou responder "sim"/"não". Só voto de **admin de comunidade** conta — mesmo critério do `$asb propor`, não qualquer membro do grupo de admins.
 
 **Comportamento:** nada aparece no grupo cuja descrição mudou — toda a interação (proposta + votos) acontece no grupo de admins. Se a maioria rejeitar, a versão anterior volta (o bot reverte direto no grupo original) e esse grupo fica **travado por 7 dias**: qualquer tentativa de mudar a descrição nesse período é detectada e revertida automaticamente (não tem como impedir um admin de editar pelo WhatsApp, só reverter depois).
 
@@ -390,6 +390,22 @@ $asb anunciar 3 *Manutenção programada*
 O bot ficará fora do ar hoje às 20h por cerca de 10 minutos.
 ```
 → publica essa mensagem (com negrito e quebra de linha preservados) no grupo de ID 3, marcando todo mundo dele sem poluir o texto, e responde `✅ Anúncio publicado no grupo *Nome do Grupo*.` no grupo de admins.
+
+### `$asb avisar`
+
+Publica no grupo **"Avisos"** que o WhatsApp cria automaticamente pra toda Community — pra eventos importantes da comunidade (novo grupo, novo admin, etc), não pra assuntos de um grupo específico (isso é `$asb anunciar`). Só funciona rodado **no grupo de administração**.
+
+```
+$asb avisar <mensagem>
+```
+
+**Comportamento:** reage ✅, responde no grupo de admins confirmando, marca todo mundo do grupo de Avisos, e manda cópia pro grupo de admins. **O grupo de Avisos é bloqueado pra publicação manual** — qualquer mensagem que não vier desse comando (ou de um anúncio automático, como `$asb promover`) é apagada na hora e quem mandou recebe um aviso no privado. Limitação conhecida: como o bot roda no número de um admin de verdade, uma mensagem que esse mesmo admin mandar manualmente do próprio WhatsApp é indistinguível de uma automática — só essa conta específica escapa da trava.
+
+Exemplo (rodado no grupo de admins):
+```
+$asb avisar Novo grupo *Rust Devs* foi criado! Bora participar.
+```
+→ publica no grupo de Avisos marcando todo mundo, e responde `✅ Aviso publicado no grupo de Avisos.` no grupo de admins.
 
 ### `$asb propor`
 

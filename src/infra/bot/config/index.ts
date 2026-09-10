@@ -88,6 +88,10 @@ export const botConfig = {
                 description: 'Manda o link de convite de um grupo por DM pra alguém (ex-banido ou qualquer pessoa)',
                 usage: '$asb convidar <id-do-grupo> @pessoa (ou $asb convidar <id-do-grupo> <numero>)',
             },
+            avisar: {
+                description: 'Publica um anúncio no grupo "Avisos" da Community, marcando todo mundo dele',
+                usage: '$asb avisar <mensagem>',
+            },
         },
     },
     features: {
