@@ -140,6 +140,20 @@ export class MessageHandler {
     private async bufferForModeration(jid: string | undefined, sender: string | undefined, text: string, key: WAMessageKey | undefined): Promise<void> {
         if (!jid?.endsWith('@g.us') || !sender) return;
 
+        // O bot roda no número de um admin de verdade — mensagens dele (`fromMe`,
+        // não importa o grupo) nunca são de um membro comum, então nunca devem
+        // ser avaliadas pelas regras da comunidade. Sinal direto do WhatsApp
+        // (a própria conta autenticada), não depende de resolver LID/PN.
+        if (key?.fromMe) return;
+
+        // Grupo de administração não é um grupo de comunidade comum — é
+        // conversa interna da staff, não deve ser avaliado contra as regras
+        // que valem pra membros. Incidente real: um admin trocando mensagens
+        // rápidas ali foi lido como "flood" e banido da própria comunidade
+        // (removido do grupo de admins pela própria conta do bot).
+        const adminGroups = await this.adminService.getAdminGroups();
+        if (adminGroups.includes(jid)) return;
+
         await this.pendingModerationService.add(jid, sender, text, key).catch((err) => {
             logger.warn({ err, jid }, '[bufferForModeration] falha ao gravar mensagem na fila de moderação');
         });
@@ -576,6 +590,17 @@ export class MessageHandler {
             try { metadata = await this.sock.groupMetadata(groupJid); } catch { /* segue sem nome bonito */ }
         }
         const targetParticipant = metadata ? findParticipant(metadata, resolvedJid) : undefined;
+
+        // Mesma trava do $asb ban manual — a IA nunca executa banimento contra
+        // um admin do grupo. Em vez de banir, só avisa pro grupo de admins
+        // decidir manualmente.
+        if (isGroupAdmin(targetParticipant)) {
+            await this.sendLog(
+                `🤖⚠️ A IA identificou uma possível violação de @${number} (admin do grupo *${metadata?.subject || groupJid}*), mas não executou banimento — decisão sobre admin requer um humano.\nMotivo: ${reason}`,
+                [resolvedJid],
+            );
+            return;
+        }
 
         await this.banService.ban({
             userJid: resolvedJid,

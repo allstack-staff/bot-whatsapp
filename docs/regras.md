@@ -54,6 +54,8 @@ Se você é admin, veja também o [Código de Conduta dos Admins](conduta-admins
 
 Parte da moderação é feita por um bot, que avalia mensagens novas contra essas regras (a cada hora, ou sob demanda via `$asb moderar`) e pode advertir ou banir automaticamente conforme a classificação acima. O bot **apaga a mensagem que causou a violação** sempre que ela se encaixa em banimento ou em remoção de publicação (regras 0 e 8) e, em caso de banimento, avisa publicamente no próprio grupo — fora disso, não reage nem responde no grupo onde a violação aconteceu. Toda ação automatizada é registrada e avisada também pro grupo de admins, sempre revisável (reação ❌ desfaz).
 
+**O grupo de administração não entra nessa moderação automática.** Ele é espaço interno de trabalho, não um grupo de membros — conversa ali não é avaliada contra as regras acima. O que rege a conduta dos admins entre si é o [Código de Conduta](conduta-admins.html), não esta lista de punições.
+
 ---
 
 Governança da comunidade (como um admin é escolhido, quando um grupo pode ser criado, cargos e responsabilidades): veja [Governança](governanca.html).
