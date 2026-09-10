@@ -202,23 +202,30 @@ export class MessageHandler {
                 const parentTrigger = `${botConfig.commands.prefix}${botConfig.commands.parent}`;
                 const isCommandMessage = parts[0]?.toLowerCase() === parentTrigger.toLowerCase();
 
-                // Reply com texto (sem ser um comando) numa notificação de punição
-                // automática ainda ativa = desfazer com motivo (em vez de reação ❌,
-                // que desfaz sem motivo — ver handleReaction).
+                // Reply com texto (sem ser um comando) numa mensagem interativa do bot —
+                // punição ativa (desfazer, com o texto como motivo), retentativa, votação
+                // de regra/descrição. Alternativa mais prática que reagir com emoji (não
+                // precisa abrir o seletor). Ver handleTextVoteReply.
                 const stanzaId = msgContent.extendedTextMessage?.contextInfo?.stanzaId;
+                let isInteractionReply = false;
                 if (stanzaId && !isCommandMessage) {
+                    const senderRaw = msg.key.participant || msg.key.remoteJid!;
+                    const senderJid = await resolvePnJid(this.sock, senderRaw);
+
                     const punishment = await this.automatedPunishmentService.findActiveByMessageId(stanzaId);
                     if (punishment) {
-                        const senderRaw = msg.key.participant || msg.key.remoteJid!;
-                        const senderJid = await resolvePnJid(this.sock, senderRaw);
+                        isInteractionReply = true;
                         if (await this.isMemberOfAdminGroup(senderRaw, senderJid)) {
                             await this.revertAutomatedPunishment(punishment, senderJid, text.trim());
                         }
-                        continue;
+                    } else {
+                        isInteractionReply = await this.handleTextVoteReply(stanzaId, text, senderRaw, senderJid);
                     }
                 }
 
-                await this.bufferForModeration(msg.key.remoteJid, msg.key.participant || msg.key.remoteJid, text, msg.key);
+                if (!isInteractionReply) {
+                    await this.bufferForModeration(msg.key.remoteJid, msg.key.participant || msg.key.remoteJid, text, msg.key);
+                }
 
                 if (isCommandMessage) {
                     logger.debug({ text, jid: msg.key.remoteJid }, '[handleMessage] command detected');
@@ -567,6 +574,51 @@ export class MessageHandler {
     }
 
     /**
+     * Varre todos os grupos da comunidade removendo quem está com banimento de
+     * comunidade ativo, sempre que esse estado é alcançado (ban direto, ban por
+     * IA, ou conversão via $asb banedit tipo comunidade) — sem esperar a pessoa
+     * tentar reentrar em algum grupo pra só aí ser barrada. Espaça cada remoção
+     * (humanBulkActionDelay) pra não parecer uma rajada de saídas do mesmo
+     * número, padrão que a detecção de bot da Meta observa.
+     */
+    private async sweepCommunityBan(targetJid: string, opts: { excludeGroupJid?: string } = {}): Promise<void> {
+        if (targetJid === this.getBotJid()) {
+            logger.error({ targetJid }, '[sweepCommunityBan] tentativa de varrer a própria conta do bot — ignorado');
+            return;
+        }
+
+        const allGroups = await this.getAllGroupsCached().catch((err) => {
+            logger.warn({ err }, '[sweepCommunityBan] falha ao listar grupos');
+            return {} as Record<string, GroupMetadata>;
+        });
+        const communityGroupIds = await this.getCommunityGroupIds();
+        const number = targetJid.split('@')[0];
+
+        for (const [gid, meta] of Object.entries(allGroups)) {
+            if (!communityGroupIds.has(gid) || gid === opts.excludeGroupJid) continue;
+            const p = findParticipant(meta as GroupMetadata, targetJid);
+            if (!p) continue;
+
+            await humanBulkActionDelay();
+            await this.sock.groupParticipantsUpdate(gid, [p.id], 'remove').catch(async (err: any) => {
+                const groupLabel = (meta as GroupMetadata).subject || gid;
+                await this.sendRetryableLog(
+                    `⚠️ @${number} está banido de comunidade mas não foi possível removê-lo(a) do grupo *${groupLabel}* automaticamente — motivo: ${this.describeError(err)}.`,
+                    () => this.runRetryable(
+                        async () => { await this.sock.groupParticipantsUpdate(gid, [p.id], 'remove'); },
+                        {
+                            success: `✅ @${number} removido(a) do grupo *${groupLabel}* com sucesso (retentativa).`,
+                            failure: (r) => `⚠️ @${number} segue no grupo *${groupLabel}* sem conseguir remover — motivo: ${r}.`,
+                        },
+                        [targetJid],
+                    ),
+                    [targetJid],
+                );
+            });
+        }
+    }
+
+    /**
      * Executa de verdade um banimento de comunidade decidido pela IA — banco,
      * remoção (com retentativa), apagar a(s) mensagem(ns) violadora(s), aviso
      * público no grupo, e registro revertível no grupo de admins. Chamado
@@ -585,6 +637,14 @@ export class MessageHandler {
         const { resolvedJid, groupJid, reason, displayName, messageKeys } = params;
         const number = resolvedJid.split('@')[0];
 
+        // Nunca bane a própria conta do bot — ver getBotJid(). Em tese não deveria
+        // nem chegar aqui (mensagens fromMe nunca entram na fila de moderação),
+        // mas essa é a trava de última linha.
+        if (resolvedJid === this.getBotJid()) {
+            logger.error({ resolvedJid, groupJid, reason }, '[executeAiCommunityBan] tentativa de banir a própria conta do bot — ignorado');
+            return;
+        }
+
         let metadata = params.metadata;
         if (!metadata) {
             try { metadata = await this.sock.groupMetadata(groupJid); } catch { /* segue sem nome bonito */ }
@@ -596,7 +656,7 @@ export class MessageHandler {
         // decidir manualmente.
         if (isGroupAdmin(targetParticipant)) {
             await this.sendLog(
-                `🤖⚠️ A IA identificou uma possível violação de @${number} (admin do grupo *${metadata?.subject || groupJid}*), mas não executou banimento — decisão sobre admin requer um humano.\nMotivo: ${reason}`,
+                `🤖⚠️ *Possível violação — admin*\nUsuário: @${number}\nGrupo: *${metadata?.subject || groupJid}*\nMotivo: ${reason}\nNão executado — decisão manual.`,
                 [resolvedJid],
             );
             return;
@@ -629,6 +689,11 @@ export class MessageHandler {
                 );
             });
         }
+
+        // Comunidade = todos os grupos, não só onde a violação foi flagrada —
+        // varre o resto agora, em vez de só remover reativamente se a pessoa
+        // tentar reentrar em algum deles depois.
+        await this.sweepCommunityBan(resolvedJid, { excludeGroupJid: groupJid });
 
         // Apaga a(s) mensagem(ns) que causou(aram) a violação — a IA não aponta
         // qual exatamente, então apaga tudo desse remetente nesse ciclo (ele
@@ -798,6 +863,8 @@ export class MessageHandler {
      * banimento temporário expirado, sem esperar a pessoa pedir pra voltar.
      * O registro do banimento é removido de qualquer forma (o tempo já
      * passou), a tentativa de readição é só uma cortesia por cima disso.
+     * COMUNIDADE (mesmo temporário) readiciona em todos os grupos da
+     * comunidade, não só no grupo onde o registro do banimento vive.
      */
     async reAddExpiredBans(): Promise<void> {
         let expired: any[];
@@ -809,9 +876,17 @@ export class MessageHandler {
         }
 
         for (const ban of expired) {
-            const { userJid, groupJid } = ban;
+            const { userJid, groupJid, banType } = ban;
             await this.banService.unban(userJid, groupJid).catch(() => {});
-            await this.tryReAddToGroup(userJid, groupJid, 'o banimento temporário expirou');
+
+            if (banType === 'COMUNIDADE') {
+                const communityGroupIds = await this.getCommunityGroupIds();
+                for (const gid of communityGroupIds) {
+                    await this.tryReAddToGroup(userJid, gid, 'o banimento de comunidade temporário expirou');
+                }
+            } else {
+                await this.tryReAddToGroup(userJid, groupJid, 'o banimento temporário expirou');
+            }
         }
     }
 
@@ -1093,7 +1168,7 @@ export class MessageHandler {
             '*Depois:*',
             newDescription || '_(vazia)_',
             '',
-            'Reaja ✅ pra aprovar ou ❌ pra rejeitar. Se a maioria rejeitar, a versão antiga volta e o grupo fica travado por 7 dias.',
+            'Reaja ✅/❌ ou responda "sim"/"não". Se a maioria rejeitar, a versão antiga volta e o grupo fica travado por 7 dias.',
         ].filter(Boolean).join('\n');
 
         const sent = await this.sock.sendMessage(adminGroupJid, {
@@ -1204,6 +1279,82 @@ export class MessageHandler {
                 logger.warn({ err }, '[handleReaction] erro processando reação de votação');
             }
         }
+    }
+
+    private parseVoteIntent(text: string): 'approve' | 'reject' | null {
+        const normalized = text.trim().toLowerCase();
+        if (['sim', 's', 'aprovar', 'aprovo', 'aprovado', 'ok'].includes(normalized)) return 'approve';
+        if (['não', 'nao', 'n', 'rejeitar', 'rejeito', 'rejeitado'].includes(normalized)) return 'reject';
+        return null;
+    }
+
+    private isRetryIntent(text: string): boolean {
+        return ['retry', 'tentar', 'tentar de novo', 'de novo', 'novamente', 'reenviar'].includes(text.trim().toLowerCase());
+    }
+
+    /**
+     * Resposta em texto (sem reagir) numa mensagem interativa do bot pendente —
+     * retentativa, votação de regra, votação de descrição, confirmação de
+     * banimento por IA (legado). Mesma trava de quem pode votar que a reação
+     * já tinha; só muda o jeito de registrar o voto. Retorna true se a
+     * mensagem respondida era uma dessas pendências (pra quem chamou saber
+     * que não é conteúdo de membro, não deve ir pra fila de moderação).
+     */
+    private async handleTextVoteReply(stanzaId: string, text: string, senderRaw: string, senderJid: string): Promise<boolean> {
+        const retry = this.retryableActions.get(stanzaId);
+        if (retry) {
+            if (this.isRetryIntent(text) && (await this.isMemberOfAdminGroup(senderRaw, senderJid))) {
+                this.retryableActions.delete(stanzaId);
+                await retry();
+            }
+            return true;
+        }
+
+        const change = await this.descriptionChangeService.findPendingByVoteMessageId(stanzaId);
+        if (change) {
+            const intent = this.parseVoteIntent(text);
+            if (intent) {
+                const votes = this.descriptionVotes.get(stanzaId) ?? new Map<string, 'approve' | 'reject'>();
+                votes.set(senderRaw, intent);
+                this.descriptionVotes.set(stanzaId, votes);
+                await this.tallyDescriptionVote(change, votes);
+            }
+            return true;
+        }
+
+        const proposal = await this.ruleProposalService.findPendingByVoteMessageId(stanzaId);
+        if (proposal) {
+            const intent = this.parseVoteIntent(text);
+            if (intent && (await this.isAdminOfAdminGroup(senderRaw, senderJid))) {
+                const votes = this.ruleProposalVotes.get(stanzaId) ?? new Map<string, 'approve' | 'reject'>();
+                votes.set(senderRaw, intent);
+                this.ruleProposalVotes.set(stanzaId, votes);
+                await this.tallyRuleProposalVote(proposal, votes);
+            }
+            return true;
+        }
+
+        const pendingAiBan = await this.pendingAiBanService.findPendingByVoteMessageId(stanzaId);
+        if (pendingAiBan) {
+            const intent = this.parseVoteIntent(text);
+            if (intent === 'approve') {
+                await this.pendingAiBanService.resolve(pendingAiBan.id, 'CONFIRMED');
+                const messageKeys = pendingAiBan.messageKeysJson ? JSON.parse(pendingAiBan.messageKeysJson) : undefined;
+                await this.executeAiCommunityBan({
+                    resolvedJid: pendingAiBan.userJid,
+                    groupJid: pendingAiBan.groupJid,
+                    reason: pendingAiBan.reason,
+                    displayName: pendingAiBan.displayName ?? undefined,
+                    messageKeys,
+                });
+            } else if (intent === 'reject') {
+                await this.pendingAiBanService.resolve(pendingAiBan.id, 'DISMISSED');
+                await this.sendLog(`✅ Proposta de banimento por IA dispensada — @${pendingAiBan.userJid.split('@')[0]} não foi banido(a).`);
+            }
+            return true;
+        }
+
+        return false;
     }
 
     private async tallyRuleProposalVote(proposal: any, votes: Map<string, 'approve' | 'reject'>): Promise<void> {
@@ -1391,7 +1542,7 @@ export class MessageHandler {
     private static readonly RETRY_EMOJI = '🔁';
 
     private async sendRetryableLog(text: string, retryAction: () => Promise<void>, mentions?: string[]): Promise<void> {
-        const key = await this.sendLog(`${text}\n\nReaja com 🔁 nesta mensagem pra tentar de novo.`, mentions);
+        const key = await this.sendLog(`${text}\n\nReaja com 🔁 ou responda "tentar" pra tentar de novo.`, mentions);
         if (key?.id) this.retryableActions.set(key.id, retryAction);
     }
 
@@ -1427,6 +1578,21 @@ export class MessageHandler {
             case 'temp':
             default: return 'TEMPORARIO';
         }
+    }
+
+    /**
+     * JID da própria conta que o bot usa — normalizado (sem sufixo de device).
+     * Nunca deve ser alvo de remoção/banimento: se o bot se remove de um grupo,
+     * fica incapaz de avisar ninguém sobre isso nesse mesmo grupo depois
+     * (incidente real: banimento por IA contra o próprio número do admin dono
+     * do bot, no grupo de admins, resultou em silêncio total — nem o aviso
+     * público nem o log de admins saíram, porque o bot tinha acabado de sair
+     * do único grupo pra onde ambos iriam).
+     */
+    private getBotJid(): string | undefined {
+        const raw = this.sock.user?.id;
+        if (!raw) return undefined;
+        return `${raw.split(':')[0].split('@')[0]}@s.whatsapp.net`;
     }
 
     // Traduz erros conhecidos (confirmados em produção) pra uma frase que faz
@@ -1856,7 +2022,7 @@ export class MessageHandler {
         const conflictBlock = draft.conflictNote ? `\n⚠️ Possível conflito: ${draft.conflictNote}` : '';
         const number = senderJid.split('@')[0];
 
-        const text = `📋 *Proposta de nova regra* (sugerida por @${number}, redigida por IA)\n\n"${draft.draftedText}"\nPunição: *${punishmentLabel}*${conflictBlock}\n\nReaja ✅ pra aprovar e publicar, ❌ pra rejeitar. Só votos de admins de comunidade contam.`;
+        const text = `📋 *Proposta de nova regra* (sugerida por @${number}, redigida por IA)\n\n"${draft.draftedText}"\nPunição: *${punishmentLabel}*${conflictBlock}\n\nReaja ✅/❌ ou responda "sim"/"não" pra aprovar/rejeitar. Só votos de admins de comunidade contam.`;
 
         if (!this.githubRulesPublishService.isConfigured()) {
             await this.replySafe(jid, `${text}\n\n⚠️ Aviso: publicação automática não está configurada ainda (falta GITHUB_RULES_TOKEN) — mesmo aprovada, alguém vai precisar publicar manualmente.`);
@@ -2115,6 +2281,12 @@ export class MessageHandler {
         }
 
         const targetJid = await resolvePnJid(this.sock, targetRaw, metadata);
+
+        if (targetJid === this.getBotJid()) {
+            await this.replySafe(jid, '❌ Não é possível banir a própria conta do bot.');
+            return;
+        }
+
         const bannedBy = await resolvePnJid(this.sock, msg.key.participant! || msg.key.remoteJid!, metadata);
 
         // Parse args: se veio de reply, args começa do tipo. Se veio de menção, args[0] é a menção
@@ -2148,25 +2320,11 @@ export class MessageHandler {
 
         await this.reactSafe(jid, msg.key, '✅');
 
-        // Remoção
+        // Remoção — "comunidade" = todos os grupos vinculados à All Stack
+        // Community (via linkedParent), nunca outros grupos/communities onde
+        // o bot só por acaso participa.
         if (banType === 'COMUNIDADE') {
-            // "comunidade" = todos os grupos vinculados à All Stack Community (via
-            // linkedParent) — nunca outros grupos/communities onde o bot só por acaso participa.
-            const allGroups = await this.getAllGroupsCached().catch((err) => {
-                logger.warn({ err }, '[banCommand] falha ao listar grupos pra remoção em massa (comunidade)');
-                return {} as Record<string, GroupMetadata>;
-            });
-            const communityGroupIds = await this.getCommunityGroupIds();
-            for (const [gid, meta] of Object.entries(allGroups)) {
-                if (!communityGroupIds.has(gid)) continue;
-                const p = findParticipant(meta as GroupMetadata, targetJid);
-                if (p) {
-                    // Espaça as remoções — várias saídas de grupo em sequência rápida, vindas
-                    // do mesmo número, é um padrão que a detecção de bot da Meta observa.
-                    await humanBulkActionDelay();
-                    await this.sock.groupParticipantsUpdate(gid, [p.id], 'remove').catch(() => {});
-                }
-            }
+            await this.sweepCommunityBan(targetJid);
         } else if (targetParticipant) {
             await this.sock.groupParticipantsUpdate(jid, [targetParticipant.id], 'remove').catch(() => {});
         }
@@ -2359,6 +2517,9 @@ export class MessageHandler {
             }
 
             await this.banService.updateBanType(targetJid, jid, banType as any);
+            if (banType === 'COMUNIDADE') {
+                await this.sweepCommunityBan(targetJid, { excludeGroupJid: jid });
+            }
             await this.reactSafe(jid, msg.key, '✅');
             await this.replySafe(jid, `✅ Banimento de @${targetJid.split('@')[0]} alterado para *${this.resolveBanTypeLabel(banType)}*.`);
 

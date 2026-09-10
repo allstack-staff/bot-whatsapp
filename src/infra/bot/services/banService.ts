@@ -83,10 +83,15 @@ export class BanService {
         return result.count > 0;
     }
 
-    /** Banimentos temporários já vencidos, ainda não processados. */
+    /**
+     * Banimentos com prazo já vencido, ainda não processados — TEMPORARIO
+     * (escopo de um grupo) e COMUNIDADE com expiresAt setado via $asb banedit
+     * tempo (banimento de comunidade temporário). PERMANENTE nunca tem
+     * expiresAt, então não entra aqui de qualquer forma.
+     */
     async getExpiredTemporaryBans(): Promise<any[]> {
         return prisma.bannedUser.findMany({
-            where: { banType: 'TEMPORARIO', expiresAt: { lte: new Date() } },
+            where: { banType: { in: ['TEMPORARIO', 'COMUNIDADE'] }, expiresAt: { lte: new Date() } },
         });
     }
 }

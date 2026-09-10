@@ -10,7 +10,7 @@ Todo comando é invocado como `$asb <comando> [argumentos]` — o `$asb` (All St
 
 **Reação automática:** ao ver uma mensagem começando com `$asb `, o bot reage imediatamente — ✅ se reconheceu o comando que vem depois (mesmo que depois recuse por falta de permissão) ou ❌ se o que vem depois não existe (ex: `$asb banir` em vez de `$asb ban`). Mensagens começando só com `$ban` (sem o `$asb` na frente) não acionam nada — não são reconhecidas como comando. Alguns comandos substituem a ✅ por uma reação mais específica assim que terminam de processar (ex: ⚠️ no `$asb advertir`) — isso é esperado, é só a confirmação virando o resultado final.
 
-**Retentativa por reação:** quando uma ação automática do bot falha (ex: não conseguiu remover alguém, reverter uma descrição, aplicar a logo, promover via `$asb assumir`), o aviso no grupo de admins vem com a instrução "Reaja com 🔁 nesta mensagem pra tentar de novo" — qualquer pessoa do grupo de admins pode reagir com 🔁 nessa mensagem específica pra fazer o bot tentar a mesma ação de novo, sem precisar rodar um comando. Se falhar de novo, um novo aviso retentável é postado.
+**Retentativa por reação (ou texto):** quando uma ação automática do bot falha (ex: não conseguiu remover alguém, reverter uma descrição, aplicar a logo, promover via `$asb assumir`), o aviso no grupo de admins vem com a instrução "Reaja com 🔁 ou responda 'tentar' pra tentar de novo" — qualquer pessoa do grupo de admins pode reagir com 🔁 **ou simplesmente responder** essa mensagem específica com "tentar" (ou "retry"/"de novo"/"novamente") pra fazer o bot tentar a mesma ação de novo, sem precisar abrir o seletor de emoji nem rodar um comando. Se falhar de novo, um novo aviso retentável é postado. Toda votação por reação do bot (✅/❌) aceita o mesmo tipo de atalho: responder "sim"/"não" (ou variações como "aprovar"/"rejeitar") vale como o voto correspondente.
 
 ## `$asb ajuda` (ou `$asb help`)
 
@@ -137,8 +137,8 @@ $asb banedit @user tipo <permanente|temporario|comunidade>
 $asb banedit @user tempo <7d|12h|30m|45s>
 ```
 
-- `tipo` muda o tipo do banimento (ex: de temporário pra permanente ou comunidade).
-- `tempo` redefine quando um banimento expira, contando a partir de agora.
+- `tipo` muda o tipo do banimento (ex: de temporário pra permanente ou comunidade). Virando `comunidade`, remove a pessoa de todos os grupos que o bot administra na hora (com pausa entre cada remoção) — não espera ela tentar reentrar em algum pra só aí ser barrada.
+- `tempo` redefine quando um banimento expira, contando a partir de agora — inclusive num banimento `comunidade` (banimento de comunidade *temporário*): expirando, a pessoa é readicionada automaticamente em todos os grupos da comunidade, não só naquele onde o registro foi criado.
 
 **Comportamento:** reage ✅, responde no grupo onde rodou, e manda cópia pro grupo de admins.
 
@@ -347,7 +347,7 @@ $asb convidar 3 @5541988887777
 
 ### Aprovação automática de mudança de descrição
 
-Isso não é um comando — é automático. Sempre que um admin edita a descrição de um grupo pelo próprio WhatsApp (fora do `$asb regras`), o bot detecta e posta a mudança (antes/depois) **no grupo de admins**, pedindo votação por reação: **✅ aprova, ❌ rejeita**.
+Isso não é um comando — é automático. Sempre que um admin edita a descrição de um grupo pelo próprio WhatsApp (fora do `$asb regras`), o bot detecta e posta a mudança (antes/depois) **no grupo de admins**, pedindo votação: **✅/❌**, ou responder "sim"/"não".
 
 **Comportamento:** nada aparece no grupo cuja descrição mudou — toda a interação (proposta + votos) acontece no grupo de admins. Se a maioria rejeitar, a versão anterior volta (o bot reverte direto no grupo original) e esse grupo fica **travado por 7 dias**: qualquer tentativa de mudar a descrição nesse período é detectada e revertida automaticamente (não tem como impedir um admin de editar pelo WhatsApp, só reverter depois).
 
@@ -401,7 +401,7 @@ $asb propor <ideia da regra>
 
 Só funciona rodado **no grupo de administração**.
 
-**Comportamento:** reage ✅ ao comando, e posta a proposta redigida no grupo de admins com "Reaja ✅ pra aprovar e publicar, ❌ pra rejeitar" — essa é a mensagem que recebe os votos, não o comando em si. Se a maioria aprovar: publica em `docs/regras.md` (numerada automaticamente, mesmo formato das outras) e avisa no grupo de admins; se a publicação falhar (ex: token do GitHub não configurado), avisa que precisa ser feito manualmente. Se a maioria rejeitar: só avisa a rejeição, nada é publicado.
+**Comportamento:** reage ✅ ao comando, e posta a proposta redigida no grupo de admins com "Reaja ✅/❌ ou responda 'sim'/'não'" — essa é a mensagem que recebe os votos, não o comando em si. Se a maioria aprovar: publica em `docs/regras.md` (numerada automaticamente, mesmo formato das outras) e avisa no grupo de admins; se a publicação falhar (ex: token do GitHub não configurado), avisa que precisa ser feito manualmente. Se a maioria rejeitar: só avisa a rejeição, nada é publicado.
 
 Exemplo (rodado no grupo de admins):
 ```
@@ -414,14 +414,14 @@ $asb propor proibir pedir dinheiro emprestado ou doação nos grupos
 "Proibido pedir dinheiro emprestado ou doação de qualquer tipo nos grupos."
 Punição: Advertência
 
-Reaja ✅ pra aprovar e publicar, ❌ pra rejeitar. Só votos de admins de comunidade contam.
+Reaja ✅/❌ ou responda "sim"/"não" pra aprovar/rejeitar. Só votos de admins de comunidade contam.
 ```
 
 ### Moderação automática por IA
 
 Não é um comando (é o ciclo de hora em hora, ou o disparo manual via `$asb moderar` acima). Se houve mensagem nova em algum grupo desde a última checagem (senão nem chama a IA), o bot avalia o conteúdo contra as regras gerais da comunidade **e** as regras específicas daquele grupo (se houver — veja [Regras por Grupo](regras-grupos.html)), usando o Gemini (grátis, configurado via `GEMINI_API_KEY` no `.env` — sem a chave, esse ciclo simplesmente não faz nada). As regras específicas são buscadas direto da página publicada a cada ciclo — editar a página já vale, sem precisar de deploy do bot. Cada mensagem vai acompanhada de quantas mensagens aquele remetente já mandou no grupo (contador nosso, não é "memória" da IA) — isso é só um dado de contexto pra IA, **não** é agravante: participação baixa nunca sozinha justifica banimento, nem torna uma divulgação relevante ao tema do grupo em violação (veja [Regras](regras.html#classificação-de-punição-resumo)). O grupo de administração **nunca** entra nesse ciclo — é espaço interno de staff, não é avaliado pelas regras da comunidade.
 
-**Comportamento:** qualquer violação de banimento (discriminação, conteúdo explícito, ato ilícito, apostas, etc. — veja [Regras](regras.html)) → banimento de comunidade **executado na hora**, **a(s) mensagem(ns) que causou(aram) a violação é(são) apagada(s)** do grupo, com um aviso resumido público **no próprio grupo** (usuário, tipo, motivo) e o registro completo, revertível, no grupo de admins (veja abaixo) — nada fica esperando confirmação, se a IA errar um admin reverte depois. Qualquer advertência → mesmo mecanismo do `$asb advertir`, mesmo limite de 3/mês, mesmo escalonamento por reincidência, só avisada no grupo de admins, sem aviso público no grupo — **exceto divulgação fora do assunto do grupo e publicação fora de contexto** (regras 0 e 8), que além da advertência já **removem a publicação** na hora.
+**Comportamento:** qualquer violação de banimento (discriminação, conteúdo explícito, ato ilícito, apostas, etc. — veja [Regras](regras.html)) → banimento de comunidade **executado na hora**, removendo a pessoa **de todos os grupos da comunidade** (não só onde a violação foi flagrada — mesma varredura do `$asb ban ... comunidade`), **a(s) mensagem(ns) que causou(aram) a violação é(são) apagada(s)** do grupo onde ela aconteceu, com um aviso resumido público **nesse grupo** (usuário, tipo, motivo) e o registro completo, revertível, no grupo de admins (veja abaixo) — nada fica esperando confirmação, se a IA errar um admin reverte depois. Se o alvo for admin do grupo, a IA **não executa** o banimento — só avisa o grupo de admins pra decisão manual. Qualquer advertência → mesmo mecanismo do `$asb advertir`, mesmo limite de 3/mês, mesmo escalonamento por reincidência, só avisada no grupo de admins, sem aviso público no grupo — **exceto divulgação fora do assunto do grupo e publicação fora de contexto** (regras 0 e 8), que além da advertência já **removem a publicação** na hora.
 
 ### Desfazer uma punição automática
 
@@ -434,7 +434,7 @@ Também não é um comando (é uma reação a uma mensagem existente). Toda vez 
 
 ### Readição automática ao expirar um banimento temporário
 
-Também não é um comando. A cada 5 minutos, o bot confere se algum banimento `temporario` já expirou — se sim, tenta readicionar a pessoa ao grupo automaticamente, sem esperar ela pedir pra voltar.
+Também não é um comando. A cada 5 minutos, o bot confere se algum banimento com prazo (`temporario`, ou `comunidade` com tempo definido via `$asb banedit tempo`) já expirou — se sim, tenta readicionar a pessoa automaticamente, sem esperar ela pedir pra voltar. Pra `temporario`, só no grupo onde o banimento foi aplicado; pra `comunidade`, em todos os grupos da comunidade.
 
 **Comportamento:** nunca responde no grupo (a pessoa nem está lá ainda). Sempre avisa no grupo de admins: ✅ se conseguiu readicionar, ⚠️ se não conseguiu — nesse caso, o link de convite vai tanto pro grupo de admins quanto direto no privado da pessoa, sem precisar de um admin encaminhar na mão.
 
