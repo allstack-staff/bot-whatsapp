@@ -266,14 +266,14 @@ export class MessageHandler {
         }
     }
 
-    async handleGroupParticipantsUpdate({ id, participants, action, author }: any): Promise<void> {
-        logger.debug({ id, participants, action, author }, '[handleGroupParticipantsUpdate] event received');
+    async handleGroupParticipantsUpdate({ id, participants, action, author, authorPn }: any): Promise<void> {
+        logger.debug({ id, participants, action, author, authorPn }, '[handleGroupParticipantsUpdate] event received');
 
         if (!participants?.length) return;
         if (!(await this.isCommunityGroup(id))) return;
 
         if (action === 'remove' || action === 'promote' || action === 'demote') {
-            if (author) await this.recordHumanAdminAction(id, participants, action, author);
+            if (author) await this.recordHumanAdminAction(id, participants, action, author, authorPn);
             return;
         }
 
@@ -349,21 +349,28 @@ export class MessageHandler {
      * já identifica quem fez a ação nativa; quando é o próprio bot (ex: um
      * $asb ban, ou a IA banindo), o author é o JID do bot e a ação é
      * ignorada aqui — ela já foi registrada no ponto de origem.
+     *
+     * `author` pode vir em formato LID (endereçamento por LID é o padrão hoje
+     * em muitos grupos) — resolver sem os metadados do grupo pode falhar ou
+     * até casar com a pessoa errada. Sempre usa `authorPn` (telefone, já
+     * mandado pelo próprio Baileys) quando disponível, e resolve com os
+     * metadados do grupo como fallback — nunca resolve sem esse contexto.
      */
     private async recordHumanAdminAction(
         groupJid: string,
         participants: any[],
         action: 'remove' | 'promote' | 'demote',
         authorRaw: string,
+        authorPn?: string,
     ): Promise<void> {
         const botJid = this.getBotJid();
-        if (authorRaw === botJid) return;
-
-        const authorResolved = await resolvePnJid(this.sock, authorRaw).catch(() => authorRaw);
-        if (authorResolved === botJid) return;
+        if (authorRaw === botJid || authorPn === botJid) return;
 
         let metadata: GroupMetadata | undefined;
         try { metadata = await this.sock.groupMetadata(groupJid); } catch { /* segue sem nome bonito */ }
+
+        const authorResolved = authorPn || (await resolvePnJid(this.sock, authorRaw, metadata).catch(() => authorRaw));
+        if (authorResolved === botJid) return;
 
         const actionTypeMap: Record<string, AdminActionType> = { remove: 'remove', promote: 'promote', demote: 'demote' };
         const verbMap: Record<string, string> = { remove: 'removeu', promote: 'promoveu', demote: 'rebaixou' };
@@ -372,8 +379,9 @@ export class MessageHandler {
 
         for (const participant of participants) {
             try {
-                const targetJid = await resolvePnJid(this.sock, participant.id, metadata);
+                const targetJid = participant.phoneNumber || (await resolvePnJid(this.sock, participant.id, metadata));
                 if (targetJid === botJid) continue; // mexeram no próprio bot, nada a revisar
+                if (targetJid === authorResolved) continue; // author == alvo é sempre artefato de resolução, nunca uma ação real
 
                 const number = targetJid.split('@')[0];
                 await this.recordAdminAction({
@@ -398,18 +406,26 @@ export class MessageHandler {
      * Rejeição manual de um admin comum (action 'rejected', não o bot) vira
      * ação administrativa revisável, igual às outras.
      */
-    async handleGroupJoinRequest({ id, author, participant, participantPn, action }: any): Promise<void> {
+    async handleGroupJoinRequest({ id, author, authorPn, participant, participantPn, action }: any): Promise<void> {
         logger.debug({ id, participant, action }, '[handleGroupJoinRequest] event received');
 
         if (action === 'rejected') {
             if (!author || !participant) return;
             if (!(await this.isCommunityGroup(id))) return;
-            try {
-                const authorResolved = await resolvePnJid(this.sock, author);
-                if (authorResolved === this.getBotJid()) return; // rejeição automática do bot (banido), já tratada em 'created'
+            const botJid = this.getBotJid();
+            if (author === botJid || authorPn === botJid) return; // rejeição automática do bot (banido), já tratada em 'created'
 
-                const targetJid = participantPn || (await resolvePnJid(this.sock, participant));
+            try {
                 const metadata = await this.sock.groupMetadata(id).catch(() => undefined);
+                // Mesma lógica de handleGroupParticipantsUpdate: prefere o campo já em
+                // formato telefone (authorPn/participantPn) — resolver um LID sem os
+                // metadados do grupo pode casar com a pessoa errada.
+                const authorResolved = authorPn || (await resolvePnJid(this.sock, author, metadata));
+                if (authorResolved === botJid) return;
+
+                const targetJid = participantPn || (await resolvePnJid(this.sock, participant, metadata));
+                if (targetJid === authorResolved) return; // artefato de resolução, nunca uma ação real
+
                 const groupLabel = metadata?.subject || id;
                 const authorNumber = authorResolved.split('@')[0];
                 const number = targetJid.split('@')[0];
