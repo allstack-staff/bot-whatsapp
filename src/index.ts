@@ -5,6 +5,8 @@ process.env.TZ = 'America/Sao_Paulo';
 
 import pino from 'pino';
 import * as qrcode from 'qrcode-terminal';
+import * as QRCode from 'qrcode';
+import * as path from 'path';
 import * as dotenv from 'dotenv';
 import {
     makeWASocket,
@@ -48,6 +50,14 @@ async function startBot(): Promise<void> {
             reconnectAttempts = 0;
             logger.info('QR code received — scan with WhatsApp to log in.');
             qrcode.generate(qr, { small: true });
+
+            // Alternativa ao ASCII do terminal (que depende de fonte/encoding do
+            // console, quebra fácil no PowerShell legado) — arquivo de imagem,
+            // sempre sobrescrito a cada QR novo, pra copiar e escanear direto.
+            const qrPath = path.join(process.cwd(), 'qr.png');
+            QRCode.toFile(qrPath, qr).catch((err: unknown) => {
+                logger.warn({ err }, 'Falha ao gerar qr.png');
+            });
         }
 
         if (connection === 'open') {
