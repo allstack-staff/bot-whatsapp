@@ -259,6 +259,20 @@ export class MessageHandler {
                     await this.bufferForModeration(msg.key.remoteJid, msg.key.participant || msg.key.remoteJid, text, msg.key);
                 }
 
+                // Alguém mencionou só o bot (não uma marcação em massa de "@todos",
+                // que lista todo mundo) numa mensagem comum, não um comando — manda
+                // um resumo do que pode precisar, com link pra cada coisa.
+                if (!isInteractionReply && !isCommandMessage && !msg.key.fromMe && remoteJid?.endsWith('@g.us')) {
+                    const mentionedJid = msgContent.extendedTextMessage?.contextInfo?.mentionedJid;
+                    if (mentionedJid?.length === 1) {
+                        const mentionMetadata = await this.sock.groupMetadata(remoteJid).catch(() => undefined);
+                        const mentionedResolved = await resolvePnJid(this.sock, mentionedJid[0], mentionMetadata).catch(() => mentionedJid[0]);
+                        if (mentionedResolved === this.getBotJid()) {
+                            await this.handleBotMention(remoteJid, text);
+                        }
+                    }
+                }
+
                 if (isCommandMessage) {
                     logger.debug({ text, jid: msg.key.remoteJid }, '[handleMessage] command detected');
                     this.trackGroupMessage(msg.key.remoteJid, msg.key);
@@ -515,6 +529,38 @@ export class MessageHandler {
         }
     }
 
+    /**
+     * Alguém mencionou só o bot (não pego numa marcação em massa de "@todos")
+     * numa mensagem comum, fora de comando — manda um resumo do que a pessoa
+     * provavelmente precisa, sempre com o link de cada coisa, e avisa quem é
+     * responsável pelo grupo (mesmo roteamento do pedido de entrada) que
+     * alguém chamou o bot ali, pra decidir se precisa de atenção humana.
+     */
+    private async handleBotMention(jid: string, text: string): Promise<void> {
+        const menu = [
+            '🤖 Coisas que você pode estar procurando:',
+            '',
+            `• *Revisão de banimento*: se foi banido(a) por engano, um admin pode reverter — ${botConfig.docsUrl}comandos.html#desfazer-uma-punição-automática`,
+            `• *Falar com um admin*: marque um admin deste grupo diretamente — quem administra cada grupo: ${botConfig.docsUrl}governanca.html`,
+            `• *Permissão pra divulgação recorrente*: compartilhar a mesma coisa várias vezes (vaga, curso, produto) precisa de autorização prévia — ${botConfig.docsUrl}regras.html`,
+            '',
+            'Todos os comandos: $asb ajuda',
+        ].join('\n');
+        await this.replySafe(jid, menu);
+
+        const responsibleAdmins = await this.adminResponsibilityService.getResponsibleAdmins(jid);
+        const snippet = text.replace(/\n/g, ' ').slice(0, 200);
+        let groupName = jid;
+        try { groupName = (await this.sock.groupMetadata(jid)).subject; } catch { /* usa o jid mesmo se falhar */ }
+
+        if (responsibleAdmins.length) {
+            const mentionsText = responsibleAdmins.map((a) => `@${a.split('@')[0]}`).join(' ');
+            await this.sendLog(`📣 Alguém chamou o bot em *${groupName}*: "${snippet}". ${mentionsText}, dá uma olhada quando puder.`, responsibleAdmins);
+        } else {
+            await this.sendLog(`📣 Alguém chamou o bot em *${groupName}*: "${snippet}".`);
+        }
+    }
+
     // Dicas sobre coisas que o bot faz sozinho (sem comando nenhum) — pra
     // completar o sorteio mensal além dos comandos de botConfig.commands.list.
     // Comandos novos entram automaticamente na lista; isso aqui só precisa de
@@ -529,6 +575,7 @@ export class MessageHandler {
         'você pode propor uma regra nova em linguagem simples com `$asb propor` — a IA redige, e admin comum vota antes de ir pro ar; admin de comunidade publica na hora e é votado depois (manter/ajustar/reverter).',
         'se a ideia mandada pra `$asb propor` for vaga demais, a IA recusa e pede pra detalhar melhor, antes de gastar publicação ou votação com uma regra mal especificada.',
         'quando um admin de comunidade reverte uma ação administrativa, isso já vale na hora — mas também abre uma votação de ratificação entre os outros admins de comunidade; admin comum pode votar/opinar, mas quem decide é a turma de admin de comunidade.',
+        'se alguém marcar só o bot (@) numa mensagem comum, ele responde com um resumo de revisão de banimento, como falar com um admin, e permissão pra divulgação recorrente — sempre com o link de cada coisa — e avisa quem é responsável pelo grupo.',
     ];
 
     /**

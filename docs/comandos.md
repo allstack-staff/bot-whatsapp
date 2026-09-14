@@ -485,8 +485,18 @@ Também não é um comando. A cada 5 minutos, o bot confere se algum banimento c
 
 **Comportamento:** nunca responde no grupo (a pessoa nem está lá ainda). Sempre avisa no grupo de admins: ✅ se conseguiu readicionar, ⚠️ se não conseguiu — nesse caso, o link de convite vai tanto pro grupo de admins quanto direto no privado da pessoa, sem precisar de um admin encaminhar na mão.
 
+### Menção direta ao bot
+
+Também não é um comando. Se alguém marca **só o bot** (não uma marcação em massa tipo "@todos", que lista todo mundo do grupo) numa mensagem comum, fora de comando, o bot responde com um resumo do que a pessoa provavelmente precisa — sempre com o link de cada coisa:
+
+- Revisão de banimento (link pra [Desfazer uma punição automática](#desfazer-uma-punição-automática) acima)
+- Como falar com um admin (link pra [Governança](governanca.html))
+- Permissão pra divulgação recorrente (link pra [Regras](regras.html) — regra 17)
+
+**Comportamento:** responde no próprio grupo, e também avisa quem é responsável por aquele grupo no grupo de admins (mesmo roteamento do pedido de entrada) — se ninguém for responsável, avisa mesmo assim, sem marcar ninguém específico.
+
 ### Dica mensal
 
-Também não é um comando. Uma vez por mês (checado a cada ciclo horário, não é um timer à parte), o bot manda uma dica aleatória no grupo de admins sobre algum comando existente — a ideia é lembrar os admins de recursos que talvez não usem no dia a dia. A dica é sorteada entre os comandos de verdade do bot, então nunca fica desatualizada quando um comando novo é adicionado.
+Também não é um comando. Uma vez por mês (checado a cada ciclo horário, não é um timer à parte), o bot manda uma dica aleatória no grupo de admins — metade das vezes sobre um comando existente, metade sobre algo que o bot já faz sozinho (como a menção direta acima) — a ideia é lembrar os admins de recursos que talvez não usem no dia a dia. A parte de comandos é sorteada entre os comandos de verdade do bot, então nunca fica desatualizada quando um comando novo é adicionado.
 
 **Comportamento:** manda só no grupo de admins, uma mensagem por mês. Não reage, não espera resposta.
