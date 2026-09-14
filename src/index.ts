@@ -86,6 +86,9 @@ async function startBot(): Promise<void> {
                 messageHandler.checkGovernanceCompliance().catch((err) => {
                     logger.warn({ err }, 'Falha na checagem de governança');
                 });
+                messageHandler.checkUnassignedGroups().catch((err) => {
+                    logger.warn({ err }, 'Falha na checagem de grupos sem admin responsável');
+                });
             }, HOURLY_TICK_MS);
 
             if (banExpiryTick) clearInterval(banExpiryTick);

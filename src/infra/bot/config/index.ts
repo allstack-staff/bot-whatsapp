@@ -102,6 +102,10 @@ export const botConfig = {
                 description: 'Publica um anúncio no grupo "Avisos" da Community, marcando todo mundo dele',
                 usage: '$asb avisar <mensagem>',
             },
+            blacklist: {
+                description: 'Gerencia padrões de nome (prefixo/sufixo) banidos automaticamente ao entrar em qualquer grupo — só admin de comunidade',
+                usage: '$asb blacklist adicionar|remover|listar ...',
+            },
         },
     },
     features: {

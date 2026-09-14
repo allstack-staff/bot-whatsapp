@@ -20,4 +20,17 @@ export class MemberActivityService {
         });
         return row?.messageCount ?? 0;
     }
+
+    /** Última atividade conhecida (mensagem de qualquer membro) por grupo — usado pra estatística de grupo inativo. */
+    async getLastActivityByGroup(): Promise<Map<string, Date>> {
+        const rows = await prisma.memberActivity.groupBy({
+            by: ['groupJid'],
+            _max: { updatedAt: true },
+        });
+        const map = new Map<string, Date>();
+        for (const row of rows) {
+            if (row._max.updatedAt) map.set(row.groupJid, row._max.updatedAt);
+        }
+        return map;
+    }
 }

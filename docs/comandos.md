@@ -407,6 +407,24 @@ $asb avisar Novo grupo *Rust Devs* foi criado! Bora participar.
 ```
 → publica no grupo de Avisos marcando todo mundo, e responde `✅ Aviso publicado no grupo de Avisos.` no grupo de admins.
 
+### `$asb blacklist`
+
+Gerencia padrões de nome (prefixo ou sufixo) que são banidos **automaticamente** ao entrar em qualquer grupo da comunidade — alcance é a comunidade toda, por isso só **admin de comunidade** mexe nisso.
+
+```
+$asb blacklist adicionar prefixo|sufixo <texto>
+$asb blacklist remover <id>
+$asb blacklist listar
+```
+
+**Comportamento:** `adicionar`/`remover` reagem ✅ e confirmam no grupo onde rodou, com cópia pro grupo de admins. `listar` mostra todos os padrões cadastrados com o id de cada um (usado em `remover`). O banimento em si não acontece aqui — acontece sozinho quando alguém entra num grupo (veja [Blacklist automática por nome](#blacklist-automática-por-nome) acima).
+
+Exemplo:
+```
+$asb blacklist adicionar prefixo Cassino
+```
+→ `✅ Padrão adicionado (id cm...): prefixo "Cassino".` — a partir daí, qualquer novo participante cujo nome comece com "Cassino" (sem diferenciar maiúsculas) é banido e removido automaticamente ao entrar em qualquer grupo.
+
 ### `$asb propor`
 
 Propõe uma regra nova pra comunidade. Você descreve a ideia em texto livre e informal — a IA primeiro avalia se tem detalhe suficiente pra virar uma regra sem ambiguidade (se for vaga demais, ex: "resolver esse problema" sem dizer o comportamento específico, recusa e pede pra detalhar melhor, apontando o uso do comando). Tendo detalhe, redige como uma frase de regra no mesmo estilo das existentes, classifica a punição (advertência ou banimento) e avisa se conflitar com alguma regra atual.
@@ -485,18 +503,32 @@ Também não é um comando. A cada 5 minutos, o bot confere se algum banimento c
 
 **Comportamento:** nunca responde no grupo (a pessoa nem está lá ainda). Sempre avisa no grupo de admins: ✅ se conseguiu readicionar, ⚠️ se não conseguiu — nesse caso, o link de convite vai tanto pro grupo de admins quanto direto no privado da pessoa, sem precisar de um admin encaminhar na mão.
 
-### Menção direta ao bot
+### Menção direta ao bot (ou reply numa mensagem dele)
 
-Também não é um comando. Se alguém marca **só o bot** (não uma marcação em massa tipo "@todos", que lista todo mundo do grupo) numa mensagem comum, fora de comando, o bot responde com um resumo do que a pessoa provavelmente precisa — sempre com o link de cada coisa:
+Também não é um comando. Se alguém marca o bot, ou responde qualquer mensagem que ele mesmo mandou naquele grupo, fora de comando, a IA decide se responde: só quando é uma **pergunta pertinente**, com caráter informativo de verdade — "zueira", brincadeira, ou comentário sem pedido de informação real é **ignorado, sem resposta nenhuma**. Quando responde, a resposta é embasada só no que as [Regras](regras.html) e as [Regras por Grupo](regras-grupos.html) (se houver) realmente dizem, em tom humanizado — nunca inventa regra, prazo ou procedimento que não está escrito; se a pergunta for sobre algo que as regras não cobrem, orienta a falar com um admin em vez de chutar.
 
-- Revisão de banimento (link pra [Desfazer uma punição automática](#desfazer-uma-punição-automática) acima)
-- Como falar com um admin (link pra [Governança](governanca.html))
-- Permissão pra divulgação recorrente (link pra [Regras](regras.html) — regra 17)
+**Comportamento:** sem `GEMINI_API_KEY`, não responde nada (mesmo se pertinente). Quando responde de verdade, também avisa quem é responsável por aquele grupo no grupo de admins (com o texto da pergunta) — se ninguém for responsável, avisa mesmo assim, sem marcar ninguém específico. Quando ignora (não pertinente), não avisa nada em lugar nenhum — silêncio é o comportamento esperado.
 
-**Comportamento:** responde no próprio grupo, e também avisa quem é responsável por aquele grupo no grupo de admins (mesmo roteamento do pedido de entrada) — se ninguém for responsável, avisa mesmo assim, sem marcar ninguém específico.
+### Grupo sem admin responsável
 
-### Dica mensal
+Também não é um comando. A cada ciclo horário, o bot confere se algum grupo da comunidade está sem `$asb responsavel` definido — se estiver, avisa (categoria alerta, marcando todo o grupo de admins) **uma vez por dia** enquanto isso persistir (não repete toda hora). Enquanto não tiver responsável, pedidos de entrada nesse grupo são **aceitos automaticamente** (sem revisão manual, já que não tem quem revisar) — a rejeição automática de quem já está banido continua funcionando normalmente, é só a parte de "esperar revisão humana" que muda.
 
-Também não é um comando. Uma vez por mês (checado a cada ciclo horário, não é um timer à parte), o bot manda uma dica aleatória no grupo de admins — metade das vezes sobre um comando existente, metade sobre algo que o bot já faz sozinho (como a menção direta acima) — a ideia é lembrar os admins de recursos que talvez não usem no dia a dia. A parte de comandos é sorteada entre os comandos de verdade do bot, então nunca fica desatualizada quando um comando novo é adicionado.
+**Comportamento:** o aviso de pedido pendente marcando o admin responsável (roteado via [`$asb responsavel`](#asb-responsavel)) só existe quando **há** um responsável definido — sem isso, o pedido já é aceito na hora, sem essa notificação específica.
 
-**Comportamento:** manda só no grupo de admins, uma mensagem por mês. Não reage, não espera resposta.
+### Blacklist automática por nome
+
+Também não é um comando *nesse ponto específico* — é o que `$asb blacklist` (abaixo) configura. Sempre que alguém entra em qualquer grupo da comunidade, o bot confere se o nome (perfil do WhatsApp) bate com algum padrão cadastrado (prefixo ou sufixo) — se bater, bane de comunidade e remove **automaticamente**, avisando o grupo de admins. Limitação técnica: o WhatsApp não informa o nome de quem só *pediu* pra entrar (antes de aprovar) — então isso roda **depois** que a pessoa já é participante do grupo (por aprovação, ou grupo sem aprovação prévia), não antes; na prática o efeito é o mesmo (a pessoa não fica no grupo), só que um passo depois.
+
+### Dica mensal (e estatística)
+
+Também não é um comando. Uma vez por mês (checado a cada ciclo horário, não é um timer à parte), o bot manda uma dica aleatória no grupo de admins — metade das vezes sobre um comando existente, metade sobre algo que o bot já faz sozinho — a ideia é lembrar os admins de recursos que talvez não usem no dia a dia. A parte de comandos é sorteada entre os comandos de verdade do bot, então nunca fica desatualizada quando um comando novo é adicionado. Na mesma passada, manda também uma estatística simples — hoje, qual grupo da comunidade está há mais tempo sem mensagem registrada.
+
+**Comportamento:** manda só no grupo de admins, uma dica + uma estatística por mês. Não reage, não espera resposta.
+
+### Moderação por IA em grupo onde o bot não é admin
+
+O bot só precisa ser **membro** de um grupo pra receber mensagens e avaliar contra as regras — não precisa ser admin pra isso. Mas *agir* (remover alguém, apagar mensagem de terceiro) exige ser admin. Se a IA identifica uma violação num grupo onde o bot não é admin, ela **não tenta agir** (evita ficar tentando pra sempre uma ação que vai falhar sempre) — só avisa o grupo de admins que detectou algo e que precisa ser promovido, ou que alguém aja manualmente.
+
+## Alertas vs dicas
+
+Avisos recorrentes no grupo de admins (não os transacionais tipo "banido"/"revertido", que já têm formato próprio) são classificados em duas categorias, por enquanto: **⚠️ Alerta** (algo que precisa de atenção — grupo sem responsável, blacklist, número par de admins, grupo sem admin do bot) e **💡 Dica** (informativo — dica mensal, estatística). Mais categorias podem entrar aqui conforme a necessidade aparecer.

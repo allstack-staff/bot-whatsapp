@@ -228,3 +228,30 @@ model PendingAiBanConfirmation {
 
     @@index([voteMessageId])
 }
+
+// Controla quando cada alerta recorrente foi mandado pela última vez, por
+// grupo — pra não repetir o mesmo alerta toda hora enquanto o problema
+// persistir (ex: grupo sem admin responsável). Persistido de propósito (não
+// em memória) porque deploy reinicia o processo com frequência neste
+// projeto, e um cooldown em memória zeraria a cada restart.
+model GroupAlertState {
+    groupJid   String
+    alertType  String // ex: "sem_responsavel"
+    lastSentAt DateTime
+
+    @@id([groupJid, alertType])
+}
+
+// Padrão de nome (prefixo/sufixo) pra rejeitar/banir automaticamente —
+// alcance global (toda a comunidade), gerenciado via $asb blacklist. Nome só
+// fica disponível depois que a pessoa já é participante (Baileys não expõe
+// nome no evento de pedido de entrada), então a checagem roda no
+// group-participants.update (action "add"), banindo e removendo logo em
+// seguida — não bloqueia o pedido em si, mas tem o mesmo efeito prático.
+model NameBlacklistPattern {
+    id        String   @id @default(cuid())
+    matchType String // PREFIX | SUFFIX
+    pattern   String
+    addedBy   String
+    createdAt DateTime @default(now())
+}

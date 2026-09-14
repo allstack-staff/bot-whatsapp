@@ -21,6 +21,9 @@ import { PendingModerationService } from '../services/pendingModerationService';
 import { PendingAiBanService } from '../services/pendingAiBanService';
 import { AdminActionService, AdminActionType } from '../services/adminActionService';
 import { GroundingService } from '../services/groundingService';
+import { GroupAlertStateService } from '../services/groupAlertStateService';
+import { NameBlacklistService } from '../services/nameBlacklistService';
+import { BotMentionAiService } from '../services/botMentionAiService';
 import { logger } from '../utils/logger';
 import { findParticipant, isGroupAdmin, resolvePnJid } from '../utils/jid';
 import { humanBulkActionDelay, humanReplyDelay } from '../utils/delay';
@@ -47,6 +50,9 @@ export class MessageHandler {
     private pendingAiBanService: PendingAiBanService;
     private adminActionService: AdminActionService;
     private groundingService: GroundingService;
+    private groupAlertStateService: GroupAlertStateService;
+    private nameBlacklistService: NameBlacklistService;
+    private botMentionAiService: BotMentionAiService;
 
     // Rastro (em memória) dos comandos digitados pro bot e das respostas dele em
     // cada grupo, só pra viabilizar o $clear. Não precisa sobreviver a um restart.
@@ -121,6 +127,9 @@ export class MessageHandler {
         this.pendingAiBanService = new PendingAiBanService();
         this.adminActionService = new AdminActionService();
         this.groundingService = new GroundingService();
+        this.groupAlertStateService = new GroupAlertStateService();
+        this.nameBlacklistService = new NameBlacklistService();
+        this.botMentionAiService = new BotMentionAiService();
     }
 
     private commands: Record<string, (msg: any, args: string[]) => Promise<void>> = {
@@ -139,6 +148,7 @@ export class MessageHandler {
         moderar: (msg: any, args: string[]) => this.moderarCommand(msg, args),
         anunciar: (msg: any, args: string[]) => this.anunciarCommand(msg, args),
         avisar: (msg: any, args: string[]) => this.avisarCommand(msg, args),
+        blacklist: (msg: any, args: string[]) => this.blacklistCommand(msg, args),
         propor: (msg: any, args: string[]) => this.proporCommand(msg, args),
         assumir: (msg: any, args: string[]) => this.assumirCommand(msg, args),
         responsavel: (msg: any, args: string[]) => this.responsavelCommand(msg, args),
@@ -260,16 +270,26 @@ export class MessageHandler {
                 }
 
                 // Alguém mencionou só o bot (não uma marcação em massa de "@todos",
-                // que lista todo mundo) numa mensagem comum, não um comando — manda
-                // um resumo do que pode precisar, com link pra cada coisa.
+                // que lista todo mundo), ou respondeu uma mensagem que o próprio bot
+                // mandou nesse grupo (groupMessageLog já rastreia isso) — numa
+                // mensagem comum, fora de comando. Deixa a IA decidir se responde.
                 if (!isInteractionReply && !isCommandMessage && !msg.key.fromMe && remoteJid?.endsWith('@g.us')) {
+                    let isBotMentionOrReply = false;
+
                     const mentionedJid = msgContent.extendedTextMessage?.contextInfo?.mentionedJid;
                     if (mentionedJid?.length === 1) {
                         const mentionMetadata = await this.sock.groupMetadata(remoteJid).catch(() => undefined);
                         const mentionedResolved = await resolvePnJid(this.sock, mentionedJid[0], mentionMetadata).catch(() => mentionedJid[0]);
-                        if (mentionedResolved === this.getBotJid()) {
-                            await this.handleBotMention(remoteJid, text);
-                        }
+                        if (mentionedResolved === this.getBotJid()) isBotMentionOrReply = true;
+                    }
+
+                    if (!isBotMentionOrReply && stanzaId) {
+                        const trackedKeys = this.groupMessageLog.get(remoteJid) ?? [];
+                        if (trackedKeys.some((k) => k.id === stanzaId)) isBotMentionOrReply = true;
+                    }
+
+                    if (isBotMentionOrReply) {
+                        await this.handleBotMention(remoteJid, text);
                     }
                 }
 
@@ -306,6 +326,41 @@ export class MessageHandler {
                     : await resolvePnJid(this.sock, participantId);
 
                 logger.debug({ participantId, resolvedJid, groupId: id }, '[handleGroupParticipantsUpdate] checking ban for participant');
+
+                // Blacklist por nome (prefixo/sufixo) — checa antes do banimento normal.
+                // Baileys não expõe nome no pedido de entrada (só depois que já é
+                // participante), então isso bane e remove logo em seguida, em vez de
+                // recusar o pedido em si — mesmo efeito prático, um passo depois.
+                const blacklistMatch = await this.nameBlacklistService.findMatch(participant.notify || participant.name);
+                if (blacklistMatch) {
+                    await humanBulkActionDelay();
+                    const removeFailed = await this.sock.groupParticipantsUpdate(id, [participantId], 'remove')
+                        .then(() => false)
+                        .catch((err: any) => {
+                            logger.error({ err }, '[handleGroupParticipantsUpdate] falha ao remover participante da blacklist');
+                            return true;
+                        });
+
+                    await this.banService.ban({
+                        userJid: resolvedJid,
+                        displayName: participant.notify || participant.name || undefined,
+                        groupJid: id,
+                        banType: 'COMUNIDADE' as any,
+                        reason: `Nome bate com padrão da blacklist (${blacklistMatch.matchType.toLowerCase()}: "${blacklistMatch.pattern}")`,
+                        bannedBy: 'blacklist-automatica',
+                    });
+                    await this.sweepCommunityBan(resolvedJid, { excludeGroupJid: id });
+
+                    let groupLabel = id;
+                    try { groupLabel = (await this.sock.groupMetadata(id)).subject; } catch { /* usa o jid mesmo */ }
+
+                    await this.sendRecurringNotice(
+                        'alerta',
+                        `@${resolvedJid.split('@')[0]} foi banido(a) automaticamente ao entrar em *${groupLabel}* — nome bate com a blacklist (${blacklistMatch.matchType.toLowerCase()}: "${blacklistMatch.pattern}")${removeFailed ? '. Não consegui remover automaticamente, remova manualmente.' : '.'}`,
+                        [resolvedJid],
+                    );
+                    continue;
+                }
 
                 const ban = await this.banService.getActiveBan(resolvedJid, id);
                 logger.debug({ resolvedJid, found: !!ban }, '[handleGroupParticipantsUpdate] ban lookup result');
@@ -510,14 +565,34 @@ export class MessageHandler {
                 return;
             }
 
-            // Não banido — só avisa quem é responsável pelo grupo, pra revisar manualmente.
-            const responsibleAdmins = await this.adminResponsibilityService.getResponsibleAdmins(id);
-            if (!responsibleAdmins.length) return;
-
             let groupName = id;
             try {
                 groupName = (await this.sock.groupMetadata(id)).subject;
             } catch { /* usa o jid mesmo se falhar */ }
+
+            // Não banido. Com admin responsável definido: avisa e espera revisão
+            // manual, como sempre. Sem admin responsável: ninguém ficaria de olho
+            // no pedido, então aceita sozinho em vez de deixar pendente pra
+            // sempre — o alerta diário de "grupo sem responsável" (checkUnassignedGroups)
+            // já cobre isso separadamente.
+            const responsibleAdmins = await this.adminResponsibilityService.getResponsibleAdmins(id);
+            if (!responsibleAdmins.length) {
+                const approveFailed = await this.sock.groupRequestParticipantsUpdate(id, [participant], 'approve')
+                    .then(() => false)
+                    .catch((err: any) => {
+                        logger.warn({ err, id, participant }, '[handleGroupJoinRequest] falha ao aceitar pedido automaticamente (sem responsável)');
+                        return true;
+                    });
+
+                await this.sendRecurringNotice(
+                    'alerta',
+                    approveFailed
+                        ? `Pedido de entrada de @${resolvedJid.split('@')[0]} em *${groupName}* — grupo sem admin responsável, tentei aceitar automaticamente mas não consegui. Defina um responsável (\`$asb responsavel\`) ou aceite manualmente.`
+                        : `@${resolvedJid.split('@')[0]} foi aceito(a) automaticamente em *${groupName}* — grupo sem admin responsável pra revisar. Defina um com \`$asb responsavel\`.`,
+                    [resolvedJid],
+                );
+                return;
+            }
 
             const mentionsText = responsibleAdmins.map((a) => `@${a.split('@')[0]}`).join(' ');
             await this.sendLog(
@@ -530,23 +605,23 @@ export class MessageHandler {
     }
 
     /**
-     * Alguém mencionou só o bot (não pego numa marcação em massa de "@todos")
-     * numa mensagem comum, fora de comando — manda um resumo do que a pessoa
-     * provavelmente precisa, sempre com o link de cada coisa, e avisa quem é
-     * responsável pelo grupo (mesmo roteamento do pedido de entrada) que
-     * alguém chamou o bot ali, pra decidir se precisa de atenção humana.
+     * Alguém mencionou o bot, ou respondeu uma mensagem que ele mandou nesse
+     * grupo, fora de comando — a IA decide se é uma pergunta pertinente
+     * (responde, embasada nas regras, tom humanizado) ou "zueira"/coisa sem
+     * caráter informativo (ignora, sem responder nada). Só avisa quem é
+     * responsável pelo grupo quando a IA realmente respondeu — pra não virar
+     * ruído toda vez que alguém só brinca com o bot.
      */
     private async handleBotMention(jid: string, text: string): Promise<void> {
-        const menu = [
-            '🤖 Coisas que você pode estar procurando:',
-            '',
-            `• *Revisão de banimento*: se foi banido(a) por engano, um admin pode reverter — ${botConfig.docsUrl}comandos.html#desfazer-uma-punição-automática`,
-            `• *Falar com um admin*: marque um admin deste grupo diretamente — quem administra cada grupo: ${botConfig.docsUrl}governanca.html`,
-            `• *Permissão pra divulgação recorrente*: compartilhar a mesma coisa várias vezes (vaga, curso, produto) precisa de autorização prévia — ${botConfig.docsUrl}regras.html`,
-            '',
-            'Todos os comandos: $asb ajuda',
-        ].join('\n');
-        await this.replySafe(jid, menu);
+        if (!this.botMentionAiService.isConfigured()) return;
+
+        const shortId = await this.communityGroupService.getShortIdByJid(jid);
+        const extraRules = await this.groupRulesService.getRulesFor(shortId);
+
+        const response = await this.botMentionAiService.respond({ text, extraRules });
+        if (!response.pertinent || !response.answer) return;
+
+        await this.replySafe(jid, response.answer);
 
         const responsibleAdmins = await this.adminResponsibilityService.getResponsibleAdmins(jid);
         const snippet = text.replace(/\n/g, ' ').slice(0, 200);
@@ -555,9 +630,9 @@ export class MessageHandler {
 
         if (responsibleAdmins.length) {
             const mentionsText = responsibleAdmins.map((a) => `@${a.split('@')[0]}`).join(' ');
-            await this.sendLog(`📣 Alguém chamou o bot em *${groupName}*: "${snippet}". ${mentionsText}, dá uma olhada quando puder.`, responsibleAdmins);
+            await this.sendLog(`📣 Bot respondeu uma pergunta em *${groupName}*: "${snippet}". ${mentionsText}, dá uma olhada se precisar.`, responsibleAdmins);
         } else {
-            await this.sendLog(`📣 Alguém chamou o bot em *${groupName}*: "${snippet}".`);
+            await this.sendLog(`📣 Bot respondeu uma pergunta em *${groupName}*: "${snippet}".`);
         }
     }
 
@@ -610,11 +685,18 @@ export class MessageHandler {
             }
         }
 
-        await this.sendLog(
-            `💡 *Você sabia?* ${tip}\n\nVeja todos os comandos: ${botConfig.docsUrl}comandos.html`,
+        await this.sendRecurringNotice(
+            'dica',
+            `${tip}\n\nVeja todos os comandos: ${botConfig.docsUrl}comandos.html`,
             mentions,
         );
         await this.monthlyTipService.markSent();
+
+        // Mesma cadência mensal da dica — uma estatística útil junto, sem
+        // precisar de um agendamento à parte.
+        await this.checkGroupActivityStats().catch((err) => {
+            logger.warn({ err }, '[checkMonthlyTip] falha ao checar estatística de atividade');
+        });
     }
 
     /** Limpa da fila de moderação tudo com mais de 24h — chamado no ciclo horário. */
@@ -1105,6 +1187,19 @@ export class MessageHandler {
         }
         const targetParticipant = metadata ? findParticipant(metadata, resolvedJid) : undefined;
 
+        // O bot só precisa ser membro pra moderar por IA, mas remover alguém
+        // exige ser admin do grupo — sem isso, tentar age e cai num loop de
+        // retentativa que nunca vai funcionar (a causa não se resolve sozinha).
+        // Detecta e avisa em vez de tentar e falhar pra sempre.
+        if (!this.isBotAdminOfGroup(metadata)) {
+            await this.sendRecurringNotice(
+                'alerta',
+                `IA identificou uma possível violação de @${number} em *${metadata?.subject || groupJid}*, mas o bot não é admin desse grupo — não consigo agir. Promova o bot a admin, ou aja manualmente.\nMotivo: ${reason}`,
+                [resolvedJid],
+            );
+            return;
+        }
+
         // Mesma trava do $asb ban manual — a IA nunca executa banimento contra
         // um admin do grupo. Em vez de banir, só avisa pro grupo de admins
         // decidir manualmente.
@@ -1314,7 +1409,7 @@ export class MessageHandler {
                         // própria publicação é removida — não precisa de confirmação, já
                         // que só apaga a mensagem, não afeta a permanência da pessoa.
                         let removedNote = '';
-                        if (violation.category === 'divulgacao_fora_contexto') {
+                        if (violation.category === 'divulgacao_fora_contexto' && this.isBotAdminOfGroup(metadata)) {
                             const violatingKeys = keysBySenderByGroup.get(groupJid)?.get(violation.sender) ?? [];
                             for (const msgKey of violatingKeys) {
                                 await this.sock.sendMessage(groupJid, { delete: msgKey }).catch((err) => {
@@ -1322,6 +1417,8 @@ export class MessageHandler {
                                 });
                             }
                             if (violatingKeys.length) removedNote = ' (publicação removida)';
+                        } else if (violation.category === 'divulgacao_fora_contexto') {
+                            removedNote = ' (bot não é admin desse grupo — publicação não removida)';
                         }
 
                         await this.warningService.issue(resolvedJid, groupJid, `[IA] ${violation.reason}`, 'ia-moderacao');
@@ -2124,6 +2221,16 @@ export class MessageHandler {
     }
 
     /**
+     * Aviso recorrente pro grupo de admins, classificado em duas categorias
+     * por enquanto: "alerta" (algo que precisa de atenção, ex: grupo sem
+     * responsável) e "dica" (informativo, ex: dica mensal, estatística).
+     */
+    private async sendRecurringNotice(category: 'alerta' | 'dica', text: string, mentions?: string[]): Promise<void> {
+        const prefix = category === 'alerta' ? '⚠️ *Alerta*' : '💡 *Dica*';
+        await this.sendLog(`${prefix}\n${text}`, mentions);
+    }
+
+    /**
      * Erro técnico com detalhe (stack, corpo de resposta HTTP, etc) pro
      * grupo de debugging — separado do aviso conciso que já vai pro grupo de
      * admins (esse continua "informar e orientar", sem detalhe técnico).
@@ -2195,6 +2302,18 @@ export class MessageHandler {
         const raw = this.sock.user?.id;
         if (!raw) return undefined;
         return `${raw.split(':')[0].split('@')[0]}@s.whatsapp.net`;
+    }
+
+    /**
+     * O bot pode ser membro de um grupo sem ser admin lá (só precisa ser
+     * membro pra receber mensagens e moderar por IA) — mas ações que exigem
+     * admin (remover, apagar mensagem de terceiro) falham nesse caso. Usado
+     * pra decidir "detecto e aviso" vs "detecto e ajo de verdade".
+     */
+    private isBotAdminOfGroup(metadata: GroupMetadata | undefined): boolean {
+        const botJid = this.getBotJid();
+        if (!metadata || !botJid) return false;
+        return isGroupAdmin(findParticipant(metadata, botJid));
     }
 
     // Traduz erros conhecidos (confirmados em produção) pra uma frase que faz
@@ -2662,6 +2781,72 @@ export class MessageHandler {
         await this.reactSafe(jid, msg.key, '✅');
         await this.replySafe(jid, '✅ Aviso publicado no grupo de Avisos.');
         await this.sendLog(`📢 Aviso publicado no grupo de Avisos via $asb avisar: "${announcement}"`);
+    }
+
+    /**
+     * Blacklist por padrão de nome (prefixo/sufixo) — alcance global (toda a
+     * comunidade), então só admin de comunidade mexe. Banimento automático
+     * roda em handleGroupParticipantsUpdate quando alguém que bate no padrão
+     * entra em qualquer grupo.
+     */
+    private async blacklistCommand(msg: any, args: string[]): Promise<void> {
+        if (!(await this.isAuthorized(msg))) return;
+
+        const jid = msg.key.remoteJid!;
+        const senderRaw = msg.key.participant! || msg.key.remoteJid!;
+        const senderJid = await resolvePnJid(this.sock, senderRaw);
+
+        if (!(await this.isAdminOfAdminGroup(senderRaw, senderJid))) {
+            await this.replySafe(jid, '❌ Só admin de comunidade pode mexer na blacklist (alcance é a comunidade toda).');
+            return;
+        }
+
+        const sub = args[0]?.toLowerCase();
+
+        if (sub === 'adicionar') {
+            const typeArg = args[1]?.toLowerCase();
+            const matchType = typeArg === 'prefixo' ? 'PREFIX' : typeArg === 'sufixo' ? 'SUFFIX' : null;
+            const pattern = args.slice(2).join(' ').trim();
+            if (!matchType || !pattern) {
+                await this.replySafe(jid, '❌ Use: $asb blacklist adicionar prefixo|sufixo <texto>\nEx: $asb blacklist adicionar prefixo Cassino');
+                return;
+            }
+            const created = await this.nameBlacklistService.add(matchType, pattern, senderJid);
+            await this.reactSafe(jid, msg.key, '✅');
+            await this.replySafe(jid, `✅ Padrão adicionado (id ${created.id}): ${typeArg} "${pattern}".`);
+            await this.sendLog(`🚫 @${senderJid.split('@')[0]} adicionou padrão de blacklist: ${typeArg} "${pattern}" (id ${created.id}).`);
+            return;
+        }
+
+        if (sub === 'remover') {
+            const id = args[1];
+            if (!id) {
+                await this.replySafe(jid, '❌ Use: $asb blacklist remover <id> (veja o id com $asb blacklist listar)');
+                return;
+            }
+            const removed = await this.nameBlacklistService.remove(id);
+            if (!removed) {
+                await this.replySafe(jid, `❌ Nenhum padrão com id ${id}.`);
+                return;
+            }
+            await this.reactSafe(jid, msg.key, '✅');
+            await this.replySafe(jid, `✅ Padrão ${id} removido.`);
+            await this.sendLog(`🚫 @${senderJid.split('@')[0]} removeu padrão de blacklist (id ${id}).`);
+            return;
+        }
+
+        if (sub === 'listar') {
+            const patterns = await this.nameBlacklistService.list();
+            if (!patterns.length) {
+                await this.replySafe(jid, '📋 Blacklist vazia.');
+                return;
+            }
+            const lines = patterns.map((p) => `${p.id} — ${p.matchType === 'PREFIX' ? 'prefixo' : 'sufixo'} "${p.pattern}"`);
+            await this.replySafe(jid, `📋 *Blacklist* (${patterns.length})\n${lines.join('\n')}`);
+            return;
+        }
+
+        await this.replySafe(jid, '❌ Use: $asb blacklist adicionar|remover|listar\nEx: $asb blacklist adicionar prefixo Cassino');
     }
 
     /**
@@ -3497,11 +3682,98 @@ export class MessageHandler {
 
         if (isOddViolation && !this.governanceOddAdminWarned) {
             this.governanceOddAdminWarned = true;
-            await this.sendLog(
-                `⚠️ Número de admins de comunidade está par (${communityAdminCount}) — a governança pede número ímpar, pra sempre ter critério de desempate em votação. Ajustem promovendo ou removendo um admin de comunidade.`,
+            await this.sendRecurringNotice(
+                'alerta',
+                `Número de admins de comunidade está par (${communityAdminCount}) — a governança pede número ímpar, pra sempre ter critério de desempate em votação. Ajustem promovendo ou removendo um admin de comunidade.`,
             );
         } else if (!isOddViolation) {
             this.governanceOddAdminWarned = false;
         }
+    }
+
+    /**
+     * Grupo sem admin responsável definido é avisado uma vez por dia (não
+     * todo ciclo horário — GroupAlertStateService cuida do cooldown,
+     * persistido pra sobreviver a deploy) até alguém resolver. Não é um
+     * problema que se resolve sozinho, diferente do número par de admins
+     * (que é binário e raro de mudar sem querer) — daqui a pouco a mesma
+     * pendência de entrada teria voltado a acontecer, então vale insistir.
+     */
+    private static readonly UNASSIGNED_GROUP_ALERT_TYPE = 'sem_responsavel';
+    private static readonly UNASSIGNED_GROUP_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
+    async checkUnassignedGroups(): Promise<void> {
+        let groups: Record<string, GroupMetadata>;
+        try {
+            groups = await this.getAllGroupsCached();
+        } catch (err) {
+            logger.warn({ err }, '[checkUnassignedGroups] falha ao listar grupos');
+            return;
+        }
+
+        const communityGroupIds = await this.getCommunityGroupIds();
+        const logJid = await this.getLogJid();
+        let mentions: string[] | undefined;
+        if (logJid) {
+            try {
+                const meta = await this.sock.groupMetadata(logJid);
+                mentions = meta.participants.map((p) => p.id);
+            } catch { /* segue sem marcar ninguém */ }
+        }
+
+        for (const [gid, meta] of Object.entries(groups)) {
+            if (!communityGroupIds.has(gid)) continue;
+
+            const responsibleAdmins = await this.adminResponsibilityService.getResponsibleAdmins(gid);
+            if (responsibleAdmins.length) continue;
+
+            const shouldSend = await this.groupAlertStateService.shouldSend(
+                gid,
+                MessageHandler.UNASSIGNED_GROUP_ALERT_TYPE,
+                MessageHandler.UNASSIGNED_GROUP_COOLDOWN_MS,
+            );
+            if (!shouldSend) continue;
+
+            await this.sendRecurringNotice(
+                'alerta',
+                `Grupo *${(meta as GroupMetadata).subject || gid}* não tem admin responsável definido. Pedidos de entrada estão sendo aceitos automaticamente enquanto isso. Defina um com \`$asb responsavel\`.`,
+                mentions,
+            );
+            await this.groupAlertStateService.markSent(gid, MessageHandler.UNASSIGNED_GROUP_ALERT_TYPE);
+        }
+    }
+
+    /**
+     * Estatística periódica simples — hoje só "grupo há mais tempo sem
+     * mensagem registrada", usando o próprio MemberActivity que já existe
+     * (não precisa de tabela nova). Estrutura pronta pra somar outras
+     * estatísticas depois sem redesenhar nada.
+     */
+    async checkGroupActivityStats(): Promise<void> {
+        const communityGroupIds = await this.getCommunityGroupIds();
+        if (!communityGroupIds.size) return;
+
+        const lastActivityByGroup = await this.memberActivityService.getLastActivityByGroup();
+
+        let oldestGroupJid: string | undefined;
+        let oldestDate: Date | undefined;
+        for (const gid of communityGroupIds) {
+            const lastActivity = lastActivityByGroup.get(gid);
+            if (!lastActivity || !oldestDate || lastActivity < oldestDate) {
+                oldestGroupJid = gid;
+                oldestDate = lastActivity;
+            }
+        }
+        if (!oldestGroupJid) return;
+
+        let groupLabel = oldestGroupJid;
+        try { groupLabel = (await this.sock.groupMetadata(oldestGroupJid)).subject; } catch { /* usa o jid mesmo */ }
+
+        const daysSince = oldestDate ? Math.floor((Date.now() - oldestDate.getTime()) / (24 * 60 * 60 * 1000)) : null;
+        const activitySummary = daysSince === null
+            ? 'nunca teve mensagem registrada'
+            : `sem mensagem registrada há ${daysSince} dia(s)`;
+
+        await this.sendRecurringNotice('dica', `📊 O grupo *${groupLabel}* está ${activitySummary} — vale a pena dar uma olhada.`);
     }
 }
