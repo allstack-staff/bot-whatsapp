@@ -3873,6 +3873,7 @@ export class MessageHandler {
         }
 
         const reason = `Acúmulo de 3 ou mais advertências no mês (${tier}ª punição nesse grupo)`;
+        const number = targetJid.split('@')[0];
 
         await this.banService.ban({
             userJid: targetJid,
@@ -3884,9 +3885,28 @@ export class MessageHandler {
             bannedBy: 'sistema (advertências)',
         });
 
+        // Banimento fica registrado (bloqueia reentrada) mesmo sem o bot ser
+        // admin aqui — mas sem admin, nem tenta remover: evita o mesmo problema
+        // que já existe pro banimento por IA (ver executeAiCommunityBan) de
+        // anunciar publicamente "banido" sem ter certeza nenhuma de que a
+        // remoção de fato aconteceu (causou confusão real num grupo — o bot
+        // dizia "banido automaticamente" e a pessoa continuava lá).
+        if (!this.isBotAdminOfGroup(metadata)) {
+            await this.sendRecurringNotice(
+                'alerta',
+                `@${number} atingiu 3 advertências no mês em *${metadata.subject || groupJid}* (banimento ${durationLabel} registrado), mas o bot não é admin desse grupo — não consegui remover. Promova o bot a admin, ou remova manualmente.`,
+                [targetJid],
+            );
+            await this.notifyRevertiblePunishment({ userJid: targetJid, groupJid, banType, reason, source: 'advertencias' },
+                `🚫 @${number} banido automaticamente por acúmulo de advertências (3/mês) — ${durationLabel}, mas o bot não é admin do grupo e não conseguiu remover.${tierNote}`,
+            );
+            return;
+        }
+
+        let removeFailed = false;
         if (targetParticipant) {
             let removeError: unknown;
-            const removeFailed = await this.sock.groupParticipantsUpdate(groupJid, [targetParticipant.id], 'remove')
+            removeFailed = await this.sock.groupParticipantsUpdate(groupJid, [targetParticipant.id], 'remove')
                 .then(() => false)
                 .catch((err: any) => {
                     removeError = err;
@@ -3894,14 +3914,13 @@ export class MessageHandler {
                     return true;
                 });
             if (removeFailed) {
-                const targetNumber = targetJid.split('@')[0];
                 await this.sendRetryableLog(
-                    `⚠️ @${targetNumber} atingiu 3 advertências no mês (banimento ${durationLabel} aplicado) mas não foi possível removê-lo(a) do grupo automaticamente — motivo: ${this.describeError(removeError)}.`,
+                    `⚠️ @${number} atingiu 3 advertências no mês (banimento ${durationLabel} aplicado) mas não foi possível removê-lo(a) do grupo automaticamente — motivo: ${this.describeError(removeError)}.`,
                     () => this.runRetryable(
                         async () => { await this.sock.groupParticipantsUpdate(groupJid, [targetParticipant.id], 'remove'); },
                         {
-                            success: `✅ @${targetNumber} removido(a) do grupo com sucesso (retentativa).`,
-                            failure: (reason) => `⚠️ @${targetNumber} segue no grupo apesar do banimento por advertências — motivo: ${reason}.`,
+                            success: `✅ @${number} removido(a) do grupo com sucesso (retentativa).`,
+                            failure: (reason) => `⚠️ @${number} segue no grupo apesar do banimento por advertências — motivo: ${reason}.`,
                         },
                         [targetJid],
                     ),
@@ -3910,8 +3929,11 @@ export class MessageHandler {
             }
         }
 
-        const number = targetJid.split('@')[0];
-        await this.replySafe(groupJid, `🚫 @${number} atingiu 3 advertências no mês e foi banido automaticamente (${durationLabel}).`);
+        // Só anuncia "banido" no próprio grupo quando a remoção de fato
+        // aconteceu — nunca claim de sucesso sem confirmação.
+        if (!removeFailed) {
+            await this.replySafe(groupJid, `🚫 @${number} atingiu 3 advertências no mês e foi banido automaticamente (${durationLabel}).`);
+        }
 
         await this.notifyRevertiblePunishment({ userJid: targetJid, groupJid, banType, reason, source: 'advertencias' },
             `🚫 @${number} banido automaticamente por acúmulo de advertências (3/mês) — ${durationLabel}.${tierNote}`,
