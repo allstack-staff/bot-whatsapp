@@ -676,7 +676,7 @@ export class MessageHandler {
 
         const commandEntries = Object.values(botConfig.commands.list);
         const pool: string[] = [
-            ...commandEntries.map((info) => `O comando \`${info.usage}\` — ${info.description}.`),
+            ...commandEntries.map((info) => MESSAGES.monthlyTipCommandLine({ usage: info.usage, description: info.description })),
             ...MessageHandler.AUTOMATIC_BEHAVIOR_TIPS,
         ];
         if (!pool.length) return;
@@ -698,7 +698,7 @@ export class MessageHandler {
 
         await this.sendRecurringNotice(
             'dica',
-            `${tip}\n\nVeja todos os comandos: ${botConfig.docsUrl}comandos.html`,
+            MESSAGES.monthlyTipNotice({ tip, commandsUrl: `${botConfig.docsUrl}comandos.html` }),
             mentions,
         );
         await this.monthlyTipService.markSent();
@@ -2923,7 +2923,7 @@ export class MessageHandler {
         const senderJid = await resolvePnJid(this.sock, senderRaw);
 
         if (!(await this.isAdminOfAdminGroup(senderRaw, senderJid))) {
-            await this.replySafe(jid, '❌ Só admin de comunidade pode mexer na blacklist (alcance é a comunidade toda).');
+            await this.replySafe(jid, MESSAGES.blacklistNotCommunityAdmin);
             return;
         }
 
@@ -2934,45 +2934,45 @@ export class MessageHandler {
             const matchType = typeArg === 'prefixo' ? 'PREFIX' : typeArg === 'sufixo' ? 'SUFFIX' : null;
             const pattern = args.slice(2).join(' ').trim();
             if (!matchType || !pattern) {
-                await this.replySafe(jid, '❌ Use: $asb blacklist adicionar prefixo|sufixo <texto>\nEx: $asb blacklist adicionar prefixo Cassino');
+                await this.replySafe(jid, MESSAGES.blacklistAddUsage);
                 return;
             }
             const created = await this.nameBlacklistService.add(matchType, pattern, senderJid);
             await this.reactSafe(jid, msg.key, '✅');
-            await this.replySafe(jid, `✅ Padrão adicionado (id ${created.id}): ${typeArg} "${pattern}".`);
-            await this.sendLog(`🚫 @${senderJid.split('@')[0]} adicionou padrão de blacklist: ${typeArg} "${pattern}" (id ${created.id}).`);
+            await this.replySafe(jid, MESSAGES.blacklistAddedPublic({ id: created.id, typeArg, pattern }));
+            await this.sendLog(MESSAGES.blacklistAddedLog({ number: senderJid.split('@')[0], typeArg, pattern, id: created.id }));
             return;
         }
 
         if (sub === 'remover') {
             const id = args[1];
             if (!id) {
-                await this.replySafe(jid, '❌ Use: $asb blacklist remover <id> (veja o id com $asb blacklist listar)');
+                await this.replySafe(jid, MESSAGES.blacklistRemoveUsage);
                 return;
             }
             const removed = await this.nameBlacklistService.remove(id);
             if (!removed) {
-                await this.replySafe(jid, `❌ Nenhum padrão com id ${id}.`);
+                await this.replySafe(jid, MESSAGES.blacklistRemoveNotFound({ id }));
                 return;
             }
             await this.reactSafe(jid, msg.key, '✅');
-            await this.replySafe(jid, `✅ Padrão ${id} removido.`);
-            await this.sendLog(`🚫 @${senderJid.split('@')[0]} removeu padrão de blacklist (id ${id}).`);
+            await this.replySafe(jid, MESSAGES.blacklistRemovedPublic({ id }));
+            await this.sendLog(MESSAGES.blacklistRemovedLog({ number: senderJid.split('@')[0], id }));
             return;
         }
 
         if (sub === 'listar') {
             const patterns = await this.nameBlacklistService.list();
             if (!patterns.length) {
-                await this.replySafe(jid, '📋 Blacklist vazia.');
+                await this.replySafe(jid, MESSAGES.blacklistEmpty);
                 return;
             }
-            const lines = patterns.map((p) => `${p.id} — ${p.matchType === 'PREFIX' ? 'prefixo' : 'sufixo'} "${p.pattern}"`);
-            await this.replySafe(jid, `📋 *Blacklist* (${patterns.length})\n${lines.join('\n')}`);
+            const lines = patterns.map((p) => MESSAGES.blacklistListLine({ id: p.id, typeLabel: p.matchType === 'PREFIX' ? 'prefixo' : 'sufixo', pattern: p.pattern }));
+            await this.replySafe(jid, MESSAGES.blacklistList({ count: patterns.length, lines: lines.join('\n') }));
             return;
         }
 
-        await this.replySafe(jid, '❌ Use: $asb blacklist adicionar|remover|listar\nEx: $asb blacklist adicionar prefixo Cassino');
+        await this.replySafe(jid, MESSAGES.blacklistUsage);
     }
 
     /**
@@ -4079,7 +4079,7 @@ export class MessageHandler {
             this.governanceOddAdminWarned = true;
             await this.sendRecurringNotice(
                 'alerta',
-                `Número de admins de comunidade está par (${communityAdminCount}) — a governança pede número ímpar, pra sempre ter critério de desempate em votação. Ajustem promovendo ou removendo um admin de comunidade.`,
+                MESSAGES.governanceOddAdminWarning({ count: communityAdminCount }),
             );
         } else if (!isOddViolation) {
             this.governanceOddAdminWarned = false;
@@ -4135,7 +4135,7 @@ export class MessageHandler {
 
             await this.sendRecurringNotice(
                 'alerta',
-                `Grupo *${(meta as GroupMetadata).subject || gid}* não tem admin responsável definido. Pedidos de entrada estão sendo aceitos automaticamente enquanto isso. Defina um com \`$asb responsavel\`.`,
+                MESSAGES.unassignedGroupAlert({ groupName: (meta as GroupMetadata).subject || gid }),
                 mentions,
             );
             await this.groupAlertStateService.markSent(gid, MessageHandler.UNASSIGNED_GROUP_ALERT_TYPE);
@@ -4171,9 +4171,9 @@ export class MessageHandler {
 
         const daysSince = oldestDate ? Math.floor((Date.now() - oldestDate.getTime()) / (24 * 60 * 60 * 1000)) : null;
         const activitySummary = daysSince === null
-            ? 'nunca teve mensagem registrada'
-            : `sem mensagem registrada há ${daysSince} dia(s)`;
+            ? MESSAGES.activityNeverRecorded
+            : MESSAGES.activityDaysSince({ days: daysSince });
 
-        await this.sendRecurringNotice('dica', `📊 O grupo *${groupLabel}* está ${activitySummary} — vale a pena dar uma olhada.`);
+        await this.sendRecurringNotice('dica', MESSAGES.activityStatNotice({ groupLabel, summary: activitySummary }));
     }
 }

@@ -20,6 +20,40 @@ export const MESSAGES = {
     memberTip: (p: { tip: string; rulesUrl: string }) =>
         `💡 *Dica*\n\n${p.tip}\n\nRegras completas: ${p.rulesUrl}`,
 
+    // ===== Dica mensal pros admins (checkMonthlyTip) =====
+    monthlyTipCommandLine: (p: { usage: string; description: string }) =>
+        `O comando \`${p.usage}\` — ${p.description}.`,
+    monthlyTipNotice: (p: { tip: string; commandsUrl: string }) =>
+        `${p.tip}\n\nVeja todos os comandos: ${p.commandsUrl}`,
+
+    // ===== $asb blacklist =====
+    blacklistNotCommunityAdmin: '❌ Só admin de comunidade pode mexer na blacklist (alcance é a comunidade toda).',
+    blacklistAddUsage: '❌ Use: $asb blacklist adicionar prefixo|sufixo <texto>\nEx: $asb blacklist adicionar prefixo Cassino',
+    blacklistAddedPublic: (p: { id: string; typeArg: string; pattern: string }) =>
+        `✅ Padrão adicionado (id ${p.id}): ${p.typeArg} "${p.pattern}".`,
+    blacklistAddedLog: (p: { number: string; typeArg: string; pattern: string; id: string }) =>
+        `🚫 @${p.number} adicionou padrão de blacklist: ${p.typeArg} "${p.pattern}" (id ${p.id}).`,
+    blacklistRemoveUsage: '❌ Use: $asb blacklist remover <id> (veja o id com $asb blacklist listar)',
+    blacklistRemoveNotFound: (p: { id: string }) => `❌ Nenhum padrão com id ${p.id}.`,
+    blacklistRemovedPublic: (p: { id: string }) => `✅ Padrão ${p.id} removido.`,
+    blacklistRemovedLog: (p: { number: string; id: string }) =>
+        `🚫 @${p.number} removeu padrão de blacklist (id ${p.id}).`,
+    blacklistEmpty: '📋 Blacklist vazia.',
+    blacklistListLine: (p: { id: string; typeLabel: string; pattern: string }) =>
+        `${p.id} — ${p.typeLabel} "${p.pattern}"`,
+    blacklistList: (p: { count: number; lines: string }) => `📋 *Blacklist* (${p.count})\n${p.lines}`,
+    blacklistUsage: '❌ Use: $asb blacklist adicionar|remover|listar\nEx: $asb blacklist adicionar prefixo Cassino',
+
+    // ===== Checagem de governança / grupo sem responsável / estatística (checkGovernanceCompliance / checkUnassignedGroups / checkGroupActivityStats) =====
+    governanceOddAdminWarning: (p: { count: number }) =>
+        `Número de admins de comunidade está par (${p.count}) — a governança pede número ímpar, pra sempre ter critério de desempate em votação. Ajustem promovendo ou removendo um admin de comunidade.`,
+    unassignedGroupAlert: (p: { groupName: string }) =>
+        `Grupo *${p.groupName}* não tem admin responsável definido. Pedidos de entrada estão sendo aceitos automaticamente enquanto isso. Defina um com \`$asb responsavel\`.`,
+    activityNeverRecorded: 'nunca teve mensagem registrada',
+    activityDaysSince: (p: { days: number }) => `sem mensagem registrada há ${p.days} dia(s)`,
+    activityStatNotice: (p: { groupLabel: string; summary: string }) =>
+        `📊 O grupo *${p.groupLabel}* está ${p.summary} — vale a pena dar uma olhada.`,
+
     // ===== Compartilhada entre vários comandos que aceitam ID curto de grupo =====
     groupIdNotFound: (p: { id: number }) => `❌ Nenhum grupo com o ID ${p.id}. Use $asb grupos pra ver a lista.`,
 
