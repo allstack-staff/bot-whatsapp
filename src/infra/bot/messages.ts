@@ -20,6 +20,70 @@ export const MESSAGES = {
     memberTip: (p: { tip: string; rulesUrl: string }) =>
         `💡 *Dica*\n\n${p.tip}\n\nRegras completas: ${p.rulesUrl}`,
 
+    // ===== Compartilhada entre vários comandos que aceitam ID curto de grupo =====
+    groupIdNotFound: (p: { id: number }) => `❌ Nenhum grupo com o ID ${p.id}. Use $asb grupos pra ver a lista.`,
+
+    // ===== $asb assumir =====
+    assumirOnlyInGroup: '❌ Este comando só funciona em grupos.',
+    assumirNotInAdminGroup: '❌ Você precisa estar no grupo de administração para usar este comando.',
+    assumirNotCommunityGroup: '❌ Esse grupo não é da All Stack Community.',
+    assumirMetadataError: '❌ Erro ao buscar dados do grupo. Tente novamente.',
+    assumirNotMember: (p: { groupName: string }) =>
+        `❌ Você não é membro do grupo *${p.groupName}* — entre nele antes de usar $asb assumir.`,
+    assumirAlreadyAdmin: (p: { groupName: string }) => `⚠️ Você já é admin do grupo *${p.groupName}*.`,
+    assumirPromoteFailedPublic: (p: { groupLabel: string; reason: string }) =>
+        `⚠️ Não foi possível te tornar admin do grupo *${p.groupLabel}* automaticamente — motivo: ${p.reason}. Confira se o bot ainda é admin lá.`,
+    assumirPromoteFailedRetry: (p: { number: string; groupLabel: string; reason: string }) =>
+        `⚠️ @${p.number} tentou virar admin do grupo *${p.groupLabel}* via $asb assumir, mas a promoção falhou — motivo: ${p.reason}.`,
+    assumirPromoteRetrySuccess: (p: { number: string; groupLabel: string }) =>
+        `✅ @${p.number} promovido(a) a admin do grupo *${p.groupLabel}* com sucesso (retentativa).`,
+    assumirPromoteRetryFailure: (p: { number: string; groupLabel: string; errorDetail: string }) =>
+        `⚠️ @${p.number} ainda não conseguiu virar admin do grupo *${p.groupLabel}* via $asb assumir — motivo: ${p.errorDetail}.`,
+    assumirConfirmPublic: (p: { groupName: string }) => `✅ Você agora é admin do grupo *${p.groupName}*.`,
+    assumirLog: (p: { number: string; groupName: string }) =>
+        `👑 @${p.number} virou admin do grupo *${p.groupName}* via $asb assumir.`,
+
+    // ===== $asb responsavel =====
+    responsavelNoTarget: '❌ Marque a pessoa (ou várias) ou responda a mensagem dela. Ex: $asb responsavel @admin1 @admin2 (ou $asb responsavel <id1> <id2> @admin a partir do grupo de admins — veja $asb grupos)',
+    responsavelNoValidTarget: '❌ Nenhuma pessoa válida marcada.',
+    responsavelMetadataError: (p: { groupJid: string }) => `❌ Não foi possível buscar os dados do grupo ${p.groupJid}.`,
+    responsavelSkippedNote: (p: { skippedList: string }) => ` (ignorado(s) por não ser admin do grupo: ${p.skippedList})`,
+    responsavelGroupSummaryAssigned: (p: { groupName: string; assignedList: string; plural: boolean; skippedNote: string }) =>
+        `*${p.groupName}*: ${p.assignedList} ${p.plural ? 'agora são responsáveis' : 'agora é responsável'}.${p.skippedNote}`,
+    responsavelGroupSummaryNoAdmin: (p: { groupName: string }) =>
+        `*${p.groupName}*: ninguém marcado é admin desse grupo — nenhuma alteração.`,
+    responsavelFailure: (p: { summaries: string }) => `❌ ${p.summaries}`,
+    responsavelSuccess: (p: { summaryText: string }) => `✅ ${p.summaryText}`,
+    responsavelLog: (p: { summaryText: string }) => `👤 Responsável(is) atualizado(s):\n${p.summaryText}`,
+
+    // ===== $asb revogar =====
+    revogarNoAdminGroup: '❌ Nenhum grupo de admins registrado. Use $asb home no grupo de admins primeiro.',
+    revogarNoTarget: '❌ Marque a pessoa ou responda a mensagem dela. Ex: $asb revogar @admin motivo',
+    revogarTargetIsBot: '❌ Não dá pra revogar o próprio bot.',
+    revogarTargetNotAdmin: '❌ Essa pessoa não é admin de comunidade — nada pra revogar.',
+    revogarAlreadyPending: '❌ Já existe uma votação de remoção em andamento pra essa pessoa.',
+    revogarVoteText: (p: { number: string; requestedByNumber: string; reason: string }) => [
+        `🗳️ *Proposta de remoção de admin* — @${p.number}`,
+        `Por: @${p.requestedByNumber}`,
+        `Motivo: ${p.reason}`,
+        '',
+        'Se aprovada pela maioria dos admins de comunidade, a pessoa sai do grupo de admins e perde o cargo de admin em todos os grupos da comunidade.',
+        'Reaja ✅ (remover) ou ❌ (manter) — ou responda "sim"/"não".',
+    ].join('\n'),
+    revogarVoteFailed: '❌ Não foi possível abrir a votação. Tente novamente.',
+    revogarVoteOpenedElsewhere: (p: { number: string }) => `🗳️ Votação de remoção aberta no grupo de admins pra @${p.number}.`,
+    adminRemovalRejected: (p: { number: string }) =>
+        `✅ Remoção de @${p.number} rejeitada pela maioria — cargo de admin mantido.`,
+    adminRemovalNoOtherGroups: 'nenhum outro grupo (já não era admin em mais nenhum além do de admins)',
+    adminRemovalExecutedLog: (p: { number: string; demotedList: string }) =>
+        `✅ @${p.number} removido(a) do grupo de admins e rebaixado(a) em: ${p.demotedList}.`,
+
+    // ===== $asb promover =====
+    promoverNoTarget: '❌ Marque a pessoa ou responda a mensagem dela. Ex: $asb promover @user',
+    promoverNotInGroup: '❌ Essa pessoa não está nesse grupo.',
+    promoverAnnouncement: (p: { number: string; groupName: string }) =>
+        `🎉 @${p.number} foi promovido(a) a admin — agora é responsável pelo grupo *${p.groupName}*.`,
+
     // ===== $asb propor =====
     proporWrongGroup: '❌ Esse comando só pode ser usado no grupo de administração.',
     proporNotConfigured: '❌ Redação de regras por IA não está configurada (falta GEMINI_API_KEY no servidor).',

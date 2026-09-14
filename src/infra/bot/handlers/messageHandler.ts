@@ -3114,7 +3114,7 @@ export class MessageHandler {
         const currentJid = msg.key.remoteJid!;
 
         if (!currentJid.endsWith('@g.us')) {
-            await this.replySafe(currentJid, '❌ Este comando só funciona em grupos.');
+            await this.replySafe(currentJid, MESSAGES.assumirOnlyInGroup);
             return;
         }
 
@@ -3122,7 +3122,7 @@ export class MessageHandler {
         const senderJid = await resolvePnJid(this.sock, senderRaw);
 
         if (!(await this.isMemberOfAdminGroup(senderRaw, senderJid))) {
-            await this.replySafe(currentJid, '❌ Você precisa estar no grupo de administração para usar este comando.');
+            await this.replySafe(currentJid, MESSAGES.assumirNotInAdminGroup);
             return;
         }
 
@@ -3131,14 +3131,14 @@ export class MessageHandler {
         if (maybeId !== null) {
             const resolved = await this.communityGroupService.getJidByShortId(maybeId);
             if (!resolved) {
-                await this.replySafe(currentJid, `❌ Nenhum grupo com o ID ${maybeId}. Use $asb grupos pra ver a lista.`);
+                await this.replySafe(currentJid, MESSAGES.groupIdNotFound({ id: maybeId }));
                 return;
             }
             targetGroupJid = resolved;
         }
 
         if (!(await this.isCommunityGroup(targetGroupJid))) {
-            await this.replySafe(currentJid, '❌ Esse grupo não é da All Stack Community.');
+            await this.replySafe(currentJid, MESSAGES.assumirNotCommunityGroup);
             return;
         }
 
@@ -3147,17 +3147,17 @@ export class MessageHandler {
             metadata = await this.sock.groupMetadata(targetGroupJid);
         } catch (err) {
             logger.error({ err, targetGroupJid }, '[assumirCommand] falha ao buscar metadados');
-            await this.replySafe(currentJid, '❌ Erro ao buscar dados do grupo. Tente novamente.');
+            await this.replySafe(currentJid, MESSAGES.assumirMetadataError);
             return;
         }
 
         const senderParticipant = findParticipant(metadata, senderRaw) || findParticipant(metadata, senderJid);
         if (!senderParticipant) {
-            await this.replySafe(currentJid, `❌ Você não é membro do grupo *${metadata.subject}* — entre nele antes de usar $asb assumir.`);
+            await this.replySafe(currentJid, MESSAGES.assumirNotMember({ groupName: metadata.subject }));
             return;
         }
         if (isGroupAdmin(senderParticipant)) {
-            await this.replySafe(currentJid, `⚠️ Você já é admin do grupo *${metadata.subject}*.`);
+            await this.replySafe(currentJid, MESSAGES.assumirAlreadyAdmin({ groupName: metadata.subject }));
             return;
         }
 
@@ -3175,14 +3175,14 @@ export class MessageHandler {
         if (promoteFailed) {
             const reason = this.describeError(promoteError);
             const groupLabel = metadata.subject;
-            await this.replySafe(currentJid, `⚠️ Não foi possível te tornar admin do grupo *${groupLabel}* automaticamente — motivo: ${reason}. Confira se o bot ainda é admin lá.`);
+            await this.replySafe(currentJid, MESSAGES.assumirPromoteFailedPublic({ groupLabel, reason }));
             await this.sendRetryableLog(
-                `⚠️ @${number} tentou virar admin do grupo *${groupLabel}* via $asb assumir, mas a promoção falhou — motivo: ${reason}.`,
+                MESSAGES.assumirPromoteFailedRetry({ number, groupLabel, reason }),
                 () => this.runRetryable(
                     async () => { await this.sock.groupParticipantsUpdate(targetGroupJid, [senderParticipant.id], 'promote'); },
                     {
-                        success: `✅ @${number} promovido(a) a admin do grupo *${groupLabel}* com sucesso (retentativa).`,
-                        failure: (r) => `⚠️ @${number} ainda não conseguiu virar admin do grupo *${groupLabel}* via $asb assumir — motivo: ${r}.`,
+                        success: MESSAGES.assumirPromoteRetrySuccess({ number, groupLabel }),
+                        failure: (errorDetail) => MESSAGES.assumirPromoteRetryFailure({ number, groupLabel, errorDetail }),
                     },
                     [senderJid],
                 ),
@@ -3192,11 +3192,11 @@ export class MessageHandler {
         }
 
         await this.reactSafe(currentJid, msg.key, '✅');
-        await this.replySafe(currentJid, `✅ Você agora é admin do grupo *${metadata.subject}*.`);
+        await this.replySafe(currentJid, MESSAGES.assumirConfirmPublic({ groupName: metadata.subject }));
 
         const logJid = await this.getLogJid();
         if (logJid && logJid !== currentJid) {
-            await this.sendLog(`👑 @${number} virou admin do grupo *${metadata.subject}* via $asb assumir.`, [senderJid]);
+            await this.sendLog(MESSAGES.assumirLog({ number, groupName: metadata.subject }), [senderJid]);
         }
     }
 
@@ -3227,7 +3227,7 @@ export class MessageHandler {
             for (const id of groupShortIds) {
                 const resolved = await this.communityGroupService.getJidByShortId(id);
                 if (!resolved) {
-                    await this.replySafe(currentJid, `❌ Nenhum grupo com o ID ${id}. Use $asb grupos pra ver a lista.`);
+                    await this.replySafe(currentJid, MESSAGES.groupIdNotFound({ id }));
                     return;
                 }
                 targetGroupJids.push(resolved);
@@ -3247,7 +3247,7 @@ export class MessageHandler {
         })();
 
         if (!targetsRaw.length) {
-            await this.replySafe(currentJid, '❌ Marque a pessoa (ou várias) ou responda a mensagem dela. Ex: $asb responsavel @admin1 @admin2 (ou $asb responsavel <id1> <id2> @admin a partir do grupo de admins — veja $asb grupos)');
+            await this.replySafe(currentJid, MESSAGES.responsavelNoTarget);
             return;
         }
 
@@ -3259,7 +3259,7 @@ export class MessageHandler {
         }
 
         if (!resolvedTargets.length) {
-            await this.replySafe(currentJid, '❌ Nenhuma pessoa válida marcada.');
+            await this.replySafe(currentJid, MESSAGES.responsavelNoValidTarget);
             return;
         }
 
@@ -3278,7 +3278,7 @@ export class MessageHandler {
                 metadata = await this.sock.groupMetadata(groupJid);
             } catch (err) {
                 logger.warn({ err, groupJid }, '[responsavelCommand] falha ao buscar metadados do grupo');
-                summaries.push(`❌ Não consegui buscar os dados do grupo ${groupJid}.`);
+                summaries.push(MESSAGES.responsavelMetadataError({ groupJid }));
                 continue;
             }
 
@@ -3298,26 +3298,26 @@ export class MessageHandler {
             if (assigned.length) {
                 const assignedList = assigned.map((n) => `@${n}`).join(', ');
                 const skippedNote = skipped.length
-                    ? ` (ignorado(s) por não ser admin do grupo: ${skipped.map((n) => `@${n}`).join(', ')})`
+                    ? MESSAGES.responsavelSkippedNote({ skippedList: skipped.map((n) => `@${n}`).join(', ') })
                     : '';
-                summaries.push(`*${metadata.subject}*: ${assignedList} ${assigned.length > 1 ? 'agora são responsáveis' : 'agora é responsável'}.${skippedNote}`);
+                summaries.push(MESSAGES.responsavelGroupSummaryAssigned({ groupName: metadata.subject, assignedList, plural: assigned.length > 1, skippedNote }));
             } else {
-                summaries.push(`*${metadata.subject}*: ninguém marcado é admin desse grupo — nenhuma alteração.`);
+                summaries.push(MESSAGES.responsavelGroupSummaryNoAdmin({ groupName: metadata.subject }));
             }
         }
 
         if (!allAssigned.size) {
-            await this.replySafe(currentJid, `❌ ${summaries.join('\n')}`);
+            await this.replySafe(currentJid, MESSAGES.responsavelFailure({ summaries: summaries.join('\n') }));
             return;
         }
 
         const summaryText = summaries.join('\n');
         await this.reactSafe(currentJid, msg.key, '✅');
-        await this.replySafe(currentJid, `✅ ${summaryText}`);
+        await this.replySafe(currentJid, MESSAGES.responsavelSuccess({ summaryText }));
 
         const logJid = await this.getLogJid();
         if (logJid && logJid !== currentJid) {
-            await this.sendLog(`👤 Responsável(is) atualizado(s):\n${summaryText}`, [...allAssigned]);
+            await this.sendLog(MESSAGES.responsavelLog({ summaryText }), [...allAssigned]);
         }
     }
 
@@ -3333,13 +3333,13 @@ export class MessageHandler {
         const currentJid = msg.key.remoteJid!;
         const logJid = await this.getLogJid();
         if (!logJid) {
-            await this.replySafe(currentJid, '❌ Nenhum grupo de admins registrado. Use $asb home no grupo de admins primeiro.');
+            await this.replySafe(currentJid, MESSAGES.revogarNoAdminGroup);
             return;
         }
 
         const { jid: targetRaw, fromQuoted } = this.getTargetJid(msg);
         if (!targetRaw) {
-            await this.replySafe(currentJid, '❌ Marque a pessoa ou responda a mensagem dela. Ex: $asb revogar @admin motivo');
+            await this.replySafe(currentJid, MESSAGES.revogarNoTarget);
             return;
         }
 
@@ -3347,18 +3347,18 @@ export class MessageHandler {
         const targetJid = await resolvePnJid(this.sock, targetRaw, adminMeta);
 
         if (targetJid === this.getBotJid()) {
-            await this.replySafe(currentJid, '❌ Não dá pra revogar o próprio bot.');
+            await this.replySafe(currentJid, MESSAGES.revogarTargetIsBot);
             return;
         }
 
         if (!(await this.isAdminOfAdminGroup(targetRaw, targetJid))) {
-            await this.replySafe(currentJid, '❌ Essa pessoa não é admin de comunidade — nada pra revogar.');
+            await this.replySafe(currentJid, MESSAGES.revogarTargetNotAdmin);
             return;
         }
 
         const existing = await this.adminRemovalService.findActivePendingForTarget(targetJid);
         if (existing) {
-            await this.replySafe(currentJid, '❌ Já existe uma votação de remoção em andamento pra essa pessoa.');
+            await this.replySafe(currentJid, MESSAGES.revogarAlreadyPending);
             return;
         }
 
@@ -3369,14 +3369,7 @@ export class MessageHandler {
         const requestedBy = await resolvePnJid(this.sock, msg.key.participant! || msg.key.remoteJid!, adminMeta);
         const number = targetJid.split('@')[0];
 
-        const text = [
-            `🗳️ *Proposta de remoção de admin* — @${number}`,
-            `Por: @${requestedBy.split('@')[0]}`,
-            `Motivo: ${reason}`,
-            '',
-            'Se aprovada pela maioria dos admins de comunidade, a pessoa sai do grupo de admins e perde o cargo de admin em todos os grupos da comunidade.',
-            'Reaja ✅ (remover) ou ❌ (manter) — ou responda "sim"/"não".',
-        ].join('\n');
+        const text = MESSAGES.revogarVoteText({ number, requestedByNumber: requestedBy.split('@')[0], reason });
 
         const sent = await this.sock.sendMessage(logJid, {
             text,
@@ -3387,7 +3380,7 @@ export class MessageHandler {
         });
 
         if (!sent?.key?.id) {
-            await this.replySafe(currentJid, '❌ Não foi possível abrir a votação. Tente novamente.');
+            await this.replySafe(currentJid, MESSAGES.revogarVoteFailed);
             return;
         }
         this.trackGroupMessage(logJid, sent.key);
@@ -3402,7 +3395,7 @@ export class MessageHandler {
 
         await this.reactSafe(currentJid, msg.key, '🗳️');
         if (logJid !== currentJid) {
-            await this.replySafe(currentJid, `🗳️ Votação de remoção aberta no grupo de admins pra @${number}.`);
+            await this.replySafe(currentJid, MESSAGES.revogarVoteOpenedElsewhere({ number }));
         }
     }
 
@@ -3430,7 +3423,7 @@ export class MessageHandler {
         } else if (rejections >= majority) {
             this.adminRemovalVotes.delete(removal.voteMessageId);
             await this.adminRemovalService.resolve(removal.id, 'REJECTED');
-            await this.sendLog(`✅ Remoção de @${removal.targetJid.split('@')[0]} rejeitada pela maioria — cargo de admin mantido.`);
+            await this.sendLog(MESSAGES.adminRemovalRejected({ number: removal.targetJid.split('@')[0] }));
         }
         // senão, segue pendente aguardando mais votos
     }
@@ -3487,8 +3480,8 @@ export class MessageHandler {
 
         const demotedList = demotedFrom.length
             ? demotedFrom.join(', ')
-            : 'nenhum outro grupo (já não era admin em mais nenhum além do de admins)';
-        await this.sendLog(`✅ @${number} removido(a) do grupo de admins e rebaixado(a) em: ${demotedList}.`);
+            : MESSAGES.adminRemovalNoOtherGroups;
+        await this.sendLog(MESSAGES.adminRemovalExecutedLog({ number, demotedList }));
     }
 
     /**
@@ -3503,7 +3496,7 @@ export class MessageHandler {
         const { jid: targetRaw } = this.getTargetJid(msg);
 
         if (!targetRaw) {
-            await this.replySafe(jid, '❌ Marque a pessoa ou responda a mensagem dela. Ex: $asb promover @user');
+            await this.replySafe(jid, MESSAGES.promoverNoTarget);
             return;
         }
 
@@ -3511,7 +3504,7 @@ export class MessageHandler {
         const targetJid = await resolvePnJid(this.sock, targetRaw, metadata);
 
         if (!targetParticipant) {
-            await this.replySafe(jid, '❌ Essa pessoa não está nesse grupo.');
+            await this.replySafe(jid, MESSAGES.promoverNotInGroup);
             return;
         }
 
@@ -3521,7 +3514,7 @@ export class MessageHandler {
         await this.adminResponsibilityService.assign(targetJid, jid);
 
         const number = targetJid.split('@')[0];
-        const announcement = `🎉 @${number} foi promovido(a) a admin — agora é responsável pelo grupo *${metadata.subject}*.`;
+        const announcement = MESSAGES.promoverAnnouncement({ number, groupName: metadata.subject });
 
         await this.reactSafe(jid, msg.key, '✅');
         await this.replySafe(jid, announcement);
