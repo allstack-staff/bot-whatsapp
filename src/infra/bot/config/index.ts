@@ -75,8 +75,8 @@ export const botConfig = {
                 usage: '$asb assumir [id]',
             },
             responsavel: {
-                description: 'Marca um admin como responsável por um grupo (atual, ou por ID — veja $asb grupos)',
-                usage: '$asb responsavel [id] @admin',
+                description: 'Marca um ou mais admins como responsáveis por um grupo (atual, ou por ID — veja $asb grupos)',
+                usage: '$asb responsavel [id] @admin1 [@admin2 ...]',
             },
             promover: {
                 description: 'Promove alguém a admin, marca como responsável e anuncia',

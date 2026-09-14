@@ -287,22 +287,29 @@ $asb assumir 3
 
 ### `$asb responsavel`
 
-Marca um admin como responsável por um grupo — usado pra rotear avisos de pendência (ex: pedido de entrada) e pra saber quem anunciar quando alguém é promovido.
+Marca um ou mais admins como responsáveis por um grupo — usado pra rotear avisos de pendência (ex: pedido de entrada) e pra saber quem anunciar quando alguém é promovido. Um grupo pode ter mais de um responsável ao mesmo tempo.
 
 ```
-$asb responsavel [id] @admin
+$asb responsavel [id] @admin1 [@admin2 ...]
 ```
 
 - Sem `id`: usa o grupo atual (precisa rodar dentro dele).
 - Com `id` (veja `$asb grupos`): referencia outro grupo pelo número — dá pra rodar isso **direto do grupo de admins**, sem precisar entrar no grupo alvo.
+- Marcando várias pessoas na mesma mensagem, todas viram responsáveis pelo grupo de uma vez. Reply a uma mensagem (sem menção) vale só pra uma pessoa.
 
-**Comportamento:** reage ✅, responde no grupo onde rodou. Manda cópia pro grupo de admins só se o comando não tiver rodado lá mesmo (senão seria a mesma mensagem duas vezes). Não manda nada pro próprio admin marcado além disso.
+**Comportamento:** reage ✅, responde no grupo onde rodou. Manda cópia pro grupo de admins só se o comando não tiver rodado lá mesmo (senão seria a mesma mensagem duas vezes). Não manda nada pros próprios admins marcados além disso.
 
 Exemplo (dentro do grupo):
 ```
 $asb responsavel @5541988887777
 ```
 → `✅ @5541988887777 agora é responsável pelo grupo *Nome do Grupo*.`
+
+Exemplo (marcando dois admins de uma vez):
+```
+$asb responsavel @5541988887777 @5551910542711
+```
+→ `✅ @5541988887777, @5551910542711 agora são responsáveis pelo grupo *Nome do Grupo*.`
 
 Exemplo (do grupo de admins, referenciando pelo ID visto em `$asb grupos`):
 ```

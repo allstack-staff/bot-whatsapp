@@ -3089,23 +3089,61 @@ export class MessageHandler {
         }
 
         const metadata = await this.sock.groupMetadata(targetGroupJid);
-        const { jid: targetRaw } = this.getTargetJid(msg);
 
-        if (!targetRaw) {
-            await this.replySafe(currentJid, '❌ Marque a pessoa ou responda a mensagem dela. Ex: $asb responsavel @admin (ou $asb responsavel <id> @admin a partir do grupo de admins — veja $asb grupos)');
+        // Aceita mais de uma pessoa marcada de uma vez (um grupo pode ter
+        // vários admins responsáveis — o modelo já suporta isso, só faltava
+        // o comando aceitar mais de uma menção). Reply a uma mensagem continua
+        // valendo só pra uma pessoa por vez.
+        const mentioned: string[] = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+        const targetsRaw = mentioned.length ? mentioned : (() => {
+            const { jid } = this.getTargetJid(msg);
+            return jid ? [jid] : [];
+        })();
+
+        if (!targetsRaw.length) {
+            await this.replySafe(currentJid, '❌ Marque a pessoa (ou várias) ou responda a mensagem dela. Ex: $asb responsavel @admin1 @admin2 (ou $asb responsavel <id> @admin a partir do grupo de admins — veja $asb grupos)');
             return;
         }
 
-        const targetJid = await resolvePnJid(this.sock, targetRaw, metadata);
-        await this.adminResponsibilityService.assign(targetJid, targetGroupJid);
+        // Só quem já é admin do grupo alvo no WhatsApp pode virar responsável —
+        // filtra em vez de aceitar qualquer marcação. Isso também é o que
+        // protege contra um "@todos" (marca-todos do WhatsApp) varrendo o
+        // grupo inteiro: cada participante comum marcado é ignorado, não vira
+        // responsável só por ter sido incluído na marcação em massa.
+        const botJid = this.getBotJid();
+        const targetJids: string[] = [];
+        const skippedNumbers: string[] = [];
+        for (const raw of targetsRaw) {
+            const resolved = await resolvePnJid(this.sock, raw, metadata);
+            if (resolved === botJid) continue;
+            const participant = findParticipant(metadata, resolved);
+            if (participant && isGroupAdmin(participant)) {
+                targetJids.push(resolved);
+            } else {
+                skippedNumbers.push(resolved.split('@')[0]);
+            }
+        }
 
-        const number = targetJid.split('@')[0];
+        if (!targetJids.length) {
+            await this.replySafe(currentJid, `❌ Nenhuma das pessoas marcadas é admin do grupo *${metadata.subject}* no WhatsApp — só quem já é admin lá pode virar responsável.`);
+            return;
+        }
+
+        for (const targetJid of targetJids) {
+            await this.adminResponsibilityService.assign(targetJid, targetGroupJid);
+        }
+
+        const numbers = targetJids.map((j) => j.split('@')[0]);
+        const mentionList = numbers.map((n) => `@${n}`).join(', ');
+        const skippedNote = skippedNumbers.length
+            ? ` (ignorado(s) por não ser admin do grupo: ${skippedNumbers.map((n) => `@${n}`).join(', ')})`
+            : '';
         await this.reactSafe(currentJid, msg.key, '✅');
-        await this.replySafe(currentJid, `✅ @${number} agora é responsável pelo grupo *${metadata.subject}*.`);
+        await this.replySafe(currentJid, `✅ ${mentionList} ${targetJids.length > 1 ? 'agora são responsáveis' : 'agora é responsável'} pelo grupo *${metadata.subject}*.${skippedNote}`);
 
         const logJid = await this.getLogJid();
         if (logJid && logJid !== currentJid) {
-            await this.sendLog(`👤 @${number} marcado como responsável pelo grupo *${metadata.subject}*.`, [targetJid]);
+            await this.sendLog(`👤 ${mentionList} marcado(s) como responsável(is) pelo grupo *${metadata.subject}*.`, targetJids);
         }
     }
 
