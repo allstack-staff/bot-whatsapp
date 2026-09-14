@@ -974,7 +974,7 @@ export class MessageHandler {
         mentions?: string[];
     }): Promise<void> {
         const noticeKey = await this.sendLog(
-            `${data.noticeText}\n\nAdmin de comunidade: responda esta mensagem com o motivo (embasado nas regras) pra reverter.`,
+            MESSAGES.adminActionNotice({ noticeText: data.noticeText }),
             data.mentions,
         );
 
@@ -1017,7 +1017,7 @@ export class MessageHandler {
                     if (code) inviteLink = `\nLink de convite: https://chat.whatsapp.com/${code}`;
                 } catch { /* segue sem link */ }
                 if (action.targetJid) {
-                    await this.sendSafe(action.targetJid, { text: `Sua entrada no grupo foi reavaliada e aceita.${inviteLink}` });
+                    await this.sendSafe(action.targetJid, { text: MESSAGES.joinRejectRevertedDm({ inviteLink }) });
                 }
                 break;
             }
@@ -1090,8 +1090,8 @@ export class MessageHandler {
         });
 
         if (!grounding.grounded && !founderActor) {
-            await this.sendSafe(actorJid, { text: `❌ Reversão não aplicada — motivo não embasado nas regras.\n${grounding.feedback}` });
-            await this.sendLog(`🧭 Tentativa de reversão de @${number} não embasada nas regras — feedback enviado no privado.`);
+            await this.sendSafe(actorJid, { text: MESSAGES.adminActionRevertNotGrounded({ feedback: grounding.feedback }) });
+            await this.sendLog(MESSAGES.adminActionRevertNotGroundedLog({ number }));
             return;
         }
 
@@ -1099,7 +1099,7 @@ export class MessageHandler {
         await this.adminActionService.resolve(action.id, 'REVERTED', actorJid);
 
         const groundingNote = founderActor && !grounding.grounded ? ' (decisão do fundador — aplicada sem checagem de embasamento)' : '';
-        await this.sendLog(`🔄 @${number} (admin de comunidade) reverteu: "${action.description}"${groundingNote}.\nMotivo: ${reasonText}`, [actorJid]);
+        await this.sendLog(MESSAGES.adminActionRevertedLog({ number, description: action.description, groundingNote, reasonText }), [actorJid]);
 
         if (founderActor) return; // fundador não entra em ratificação
 
@@ -1112,7 +1112,7 @@ export class MessageHandler {
         if (!logJid) return;
 
         const number = decidedBy.split('@')[0];
-        const text = `⚖️ Decisão monocrática de @${number}, já em vigor: reverteu "${action.description}".\nOutros admins de comunidade: reaja ✅/❌ ou responda "sim"/"não" pra ratificar/derrubar.`;
+        const text = MESSAGES.adminActionRatificationOpen({ number, description: action.description });
         const sent = await this.sock.sendMessage(logJid, { text, mentions: [decidedBy] }).catch((err: any) => {
             logger.warn({ err }, '[openAdminActionRatification] falha ao postar votação');
             return undefined;
@@ -1145,12 +1145,12 @@ export class MessageHandler {
         if (approvals >= majority) {
             this.adminActionRatificationVotes.delete(action.voteMessageId);
             await this.adminActionService.resolve(action.id, 'RATIFIED');
-            await this.sendLog(`✅ Decisão ratificada pela maioria dos admins de comunidade: "${action.description}".`);
+            await this.sendLog(MESSAGES.adminActionRatified({ description: action.description }));
         } else if (rejections >= majority) {
             this.adminActionRatificationVotes.delete(action.voteMessageId);
             await this.reapplyOriginalAdminAction(action);
             await this.adminActionService.resolve(action.id, 'OVERTURNED');
-            await this.sendLog(`❌ Decisão derrubada pela maioria dos admins de comunidade — "${action.description}" volta a valer.`);
+            await this.sendLog(MESSAGES.adminActionOverturned({ description: action.description }));
         }
     }
 
@@ -1185,21 +1185,21 @@ export class MessageHandler {
         if (manter >= majority) {
             this.ruleRatificationVotes.delete(proposal.voteMessageId);
             await this.ruleProposalService.resolve(proposal.id, 'RATIFIED');
-            await this.sendLog(`✅ Regra ${proposal.ruleNumber} ratificada pela maioria dos admins de comunidade — mantida: "${proposal.draftedText}".`);
+            await this.sendLog(MESSAGES.ruleRatified({ ruleNumber: proposal.ruleNumber, draftedText: proposal.draftedText }));
         } else if (reverter >= majority) {
             this.ruleRatificationVotes.delete(proposal.voteMessageId);
             try {
                 await this.githubRulesPublishService.revertRule(proposal.ruleNumber, proposal.draftedText);
                 await this.ruleProposalService.resolve(proposal.id, 'REVERTED');
-                await this.sendLog(`❌ Regra ${proposal.ruleNumber} derrubada pela maioria dos admins de comunidade e removida de docs/regras.md: "${proposal.draftedText}".`);
+                await this.sendLog(MESSAGES.ruleReverted({ ruleNumber: proposal.ruleNumber, draftedText: proposal.draftedText }));
             } catch (err) {
                 logger.error({ err }, '[tallyRuleRatification] falha ao reverter regra publicada');
-                await this.sendLog(`⚠️ Regra ${proposal.ruleNumber} derrubada pela maioria mas não foi possível remover automaticamente — motivo: ${this.describeError(err)}. Remova manualmente de docs/regras.md: "${proposal.draftedText}".`);
+                await this.sendLog(MESSAGES.ruleRevertFailed({ ruleNumber: proposal.ruleNumber, draftedText: proposal.draftedText, errorDetail: this.describeError(err) }));
             }
         } else if (ajustar >= majority) {
             this.ruleRatificationVotes.delete(proposal.voteMessageId);
             await this.ruleProposalService.resolve(proposal.id, 'NEEDS_ADJUSTMENT');
-            await this.sendLog(`🔧 Regra ${proposal.ruleNumber} precisa de ajuste, segundo a maioria dos admins de comunidade — ela continua em vigor por ora. Proponha o ajuste com $asb propor.`);
+            await this.sendLog(MESSAGES.ruleNeedsAdjustment({ ruleNumber: proposal.ruleNumber }));
         }
     }
 
@@ -1243,7 +1243,7 @@ export class MessageHandler {
         if (!this.isBotAdminOfGroup(metadata)) {
             await this.sendRecurringNotice(
                 'alerta',
-                `IA identificou uma possível violação de @${number} em *${metadata?.subject || groupJid}*, mas o bot não é admin desse grupo — não consigo agir. Promova o bot a admin, ou aja manualmente.\nMotivo: ${reason}`,
+                MESSAGES.aiNotAdminAlert({ number, groupName: metadata?.subject || groupJid, reason }),
                 [resolvedJid],
             );
             return;
@@ -1254,7 +1254,7 @@ export class MessageHandler {
         // decidir manualmente.
         if (isGroupAdmin(targetParticipant)) {
             await this.sendLog(
-                `🤖⚠️ *Possível violação — admin*\nUsuário: @${number}\nGrupo: *${metadata?.subject || groupJid}*\nMotivo: ${reason}\nNão executado — decisão manual.`,
+                MESSAGES.aiTargetIsAdminLog({ number, groupName: metadata?.subject || groupJid, reason }),
                 [resolvedJid],
             );
             return;
@@ -1265,7 +1265,7 @@ export class MessageHandler {
         const pendingRatification = await this.adminActionService.findPendingRatificationByTarget(resolvedJid);
         if (pendingRatification) {
             await this.sendLog(
-                `🤖⚠️ IA identificou uma possível violação de @${number}, mas há uma decisão em votação de ratificação sobre a mesma pessoa — não executado até a votação concluir.\nMotivo: ${reason}`,
+                MESSAGES.aiPendingRatificationLog({ number, reason }),
                 [resolvedJid],
             );
             return;
@@ -1285,12 +1285,12 @@ export class MessageHandler {
                 logger.error({ err, groupJid, targetJid: resolvedJid }, '[executeAiCommunityBan] falha ao remover após ban da IA');
                 const groupLabel = metadata?.subject || groupJid;
                 await this.sendRetryableLog(
-                    `⚠️ IA baniu @${number} mas não foi possível removê-lo(a) do grupo *${groupLabel}* automaticamente — motivo: ${this.describeError(err)}.`,
+                    MESSAGES.aiBanRemoveFailedRetry({ number, groupLabel, errorDetail: this.describeError(err) }),
                     () => this.runRetryable(
                         async () => { await this.sock.groupParticipantsUpdate(groupJid, [targetParticipant.id], 'remove'); },
                         {
-                            success: `✅ @${number} removido(a) do grupo *${groupLabel}* com sucesso.`,
-                            failure: (r) => `⚠️ IA baniu @${number} mas não foi possível removê-lo(a) do grupo *${groupLabel}* automaticamente — motivo: ${r}.`,
+                            success: MESSAGES.aiBanRemoveRetrySuccess({ number, groupLabel }),
+                            failure: (errorDetail) => MESSAGES.aiBanRemoveFailedRetry({ number, groupLabel, errorDetail }),
                         },
                         [resolvedJid],
                     ),
@@ -1320,7 +1320,7 @@ export class MessageHandler {
 
         await this.notifyRevertiblePunishment(
             { userJid: resolvedJid, groupJid, banType: 'COMUNIDADE', reason, source: 'ia' },
-            `🤖🚫 Uma violação grave de @${number} foi identificada em *${metadata?.subject || groupJid}* — banido de toda a comunidade.\nMotivo: ${reason}`,
+            MESSAGES.aiViolationGraveHeadline({ number, groupName: metadata?.subject || groupJid, reason }),
         );
     }
 
@@ -1408,8 +1408,8 @@ export class MessageHandler {
             // horas, como já aconteceu), as mensagens continuam na fila pro próximo
             // ciclo/comando em vez de serem descartadas sem nunca terem sido avaliadas.
             logger.warn({ err }, '[runAiModerationCycle] erro processando moderação em lote');
-            await this.sendLog(`⚠️ Não foi possível concluir o ciclo de moderação por IA — motivo: ${this.describeError(err)}. As mensagens continuam na fila pro próximo ciclo.`).catch(() => {});
-            await this.sendDebugLog(`[runAiModerationCycle] evaluateBatch falhou:\n${this.describeErrorDetailed(err)}`).catch(() => {});
+            await this.sendLog(MESSAGES.aiModerationCycleFailed({ errorDetail: this.describeError(err) })).catch(() => {});
+            await this.sendDebugLog(MESSAGES.aiModerationCycleFailedDebug({ detail: this.describeErrorDetailed(err) })).catch(() => {});
             throw err; // propaga — quem chamou (ex: $moderar) precisa saber que falhou, não fingir sucesso
         }
 
@@ -1451,7 +1451,7 @@ export class MessageHandler {
                         });
                     } else if (await this.adminActionService.findPendingRatificationByTarget(resolvedJid)) {
                         await this.sendLog(
-                            `🤖⚠️ IA identificou uma possível violação de @${number}, mas há uma decisão em votação de ratificação sobre a mesma pessoa — não executado até a votação concluir.\nMotivo: ${violation.reason}`,
+                            MESSAGES.aiPendingRatificationLog({ number, reason: violation.reason }),
                             [resolvedJid],
                         );
                     } else {
@@ -1466,15 +1466,15 @@ export class MessageHandler {
                                     logger.warn({ err, groupJid, msgKey }, '[runAiModerationCycle] falha ao apagar publicação fora de contexto');
                                 });
                             }
-                            if (violatingKeys.length) removedNote = ' (publicação removida)';
+                            if (violatingKeys.length) removedNote = MESSAGES.aiRemovedPublicationNote;
                         } else if (violation.category === 'divulgacao_fora_contexto') {
-                            removedNote = ' (bot não é admin desse grupo — publicação não removida)';
+                            removedNote = MESSAGES.aiRemovedPublicationNoteNotAdmin;
                         }
 
                         await this.warningService.issue(resolvedJid, groupJid, `[IA] ${violation.reason}`, 'ia-moderacao');
                         const count = await this.warningService.countThisMonth(resolvedJid, groupJid);
                         await this.sendLog(
-                            `🤖⚠️ Uma advertência foi aplicada a @${number} em *${metadata?.subject || groupJid}*${removedNote} (${count}/3 esse mês).\nMotivo: ${violation.reason}`,
+                            MESSAGES.aiWarningIssuedLog({ number, groupName: metadata?.subject || groupJid, removedNote, count, reason: violation.reason }),
                             [resolvedJid],
                         );
                         if (count >= 3 && metadata) {
@@ -1484,8 +1484,8 @@ export class MessageHandler {
                 }
             } catch (err) {
                 logger.warn({ err, groupJid }, '[runAiModerationCycle] erro processando moderação do grupo');
-                await this.sendLog(`⚠️ Não foi possível concluir a moderação por IA no grupo *${groupJid}* — motivo: ${this.describeError(err)}.`).catch(() => {});
-                await this.sendDebugLog(`[runAiModerationCycle] falha processando grupo ${groupJid}:\n${this.describeErrorDetailed(err)}`).catch(() => {});
+                await this.sendLog(MESSAGES.aiModerationGroupFailed({ groupJid, errorDetail: this.describeError(err) })).catch(() => {});
+                await this.sendDebugLog(MESSAGES.aiModerationGroupFailedDebug({ groupJid, detail: this.describeErrorDetailed(err) })).catch(() => {});
             }
         }
     }

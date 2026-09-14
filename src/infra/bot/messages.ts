@@ -16,6 +16,60 @@
  */
 
 export const MESSAGES = {
+    // ===== Pipeline de AdminAction (recordAdminAction / revisão / ratificação) =====
+    adminActionNotice: (p: { noticeText: string }) =>
+        `${p.noticeText}\n\nAdmin de comunidade: responda esta mensagem com o motivo (embasado nas regras) pra reverter.`,
+    joinRejectRevertedDm: (p: { inviteLink: string }) =>
+        `Sua entrada no grupo foi reavaliada e aceita.${p.inviteLink}`,
+    adminActionRevertNotGrounded: (p: { feedback: string }) =>
+        `❌ Reversão não aplicada — motivo não embasado nas regras.\n${p.feedback}`,
+    adminActionRevertNotGroundedLog: (p: { number: string }) =>
+        `🧭 Tentativa de reversão de @${p.number} não embasada nas regras — feedback enviado no privado.`,
+    adminActionRevertedLog: (p: { number: string; description: string; groundingNote: string; reasonText: string }) =>
+        `🔄 @${p.number} (admin de comunidade) reverteu: "${p.description}"${p.groundingNote}.\nMotivo: ${p.reasonText}`,
+    adminActionRatificationOpen: (p: { number: string; description: string }) =>
+        `⚖️ Decisão monocrática de @${p.number}, já em vigor: reverteu "${p.description}".\nOutros admins de comunidade: reaja ✅/❌ ou responda "sim"/"não" pra ratificar/derrubar.`,
+    adminActionRatified: (p: { description: string }) =>
+        `✅ Decisão ratificada pela maioria dos admins de comunidade: "${p.description}".`,
+    adminActionOverturned: (p: { description: string }) =>
+        `❌ Decisão derrubada pela maioria dos admins de comunidade — "${p.description}" volta a valer.`,
+
+    // ===== Ratificação de regra publicada ($asb propor, admin de comunidade) =====
+    ruleRatified: (p: { ruleNumber: number; draftedText: string }) =>
+        `✅ Regra ${p.ruleNumber} ratificada pela maioria dos admins de comunidade — mantida: "${p.draftedText}".`,
+    ruleReverted: (p: { ruleNumber: number; draftedText: string }) =>
+        `❌ Regra ${p.ruleNumber} derrubada pela maioria dos admins de comunidade e removida de docs/regras.md: "${p.draftedText}".`,
+    ruleRevertFailed: (p: { ruleNumber: number; draftedText: string; errorDetail: string }) =>
+        `⚠️ Regra ${p.ruleNumber} derrubada pela maioria mas não foi possível remover automaticamente — motivo: ${p.errorDetail}. Remova manualmente de docs/regras.md: "${p.draftedText}".`,
+    ruleNeedsAdjustment: (p: { ruleNumber: number }) =>
+        `🔧 Regra ${p.ruleNumber} precisa de ajuste, segundo a maioria dos admins de comunidade — ela continua em vigor por ora. Proponha o ajuste com $asb propor.`,
+
+    // ===== Moderação por IA (executeAiCommunityBan / runAiModerationCycle) =====
+    aiNotAdminAlert: (p: { number: string; groupName: string; reason: string }) =>
+        `IA identificou uma possível violação de @${p.number} em *${p.groupName}*, mas o bot não é admin desse grupo — não consigo agir. Promova o bot a admin, ou aja manualmente.\nMotivo: ${p.reason}`,
+    aiTargetIsAdminLog: (p: { number: string; groupName: string; reason: string }) =>
+        `🤖⚠️ *Possível violação — admin*\nUsuário: @${p.number}\nGrupo: *${p.groupName}*\nMotivo: ${p.reason}\nNão executado — decisão manual.`,
+    aiPendingRatificationLog: (p: { number: string; reason: string }) =>
+        `🤖⚠️ IA identificou uma possível violação de @${p.number}, mas há uma decisão em votação de ratificação sobre a mesma pessoa — não executado até a votação concluir.\nMotivo: ${p.reason}`,
+    aiBanRemoveFailedRetry: (p: { number: string; groupLabel: string; errorDetail: string }) =>
+        `⚠️ IA baniu @${p.number} mas não foi possível removê-lo(a) do grupo *${p.groupLabel}* automaticamente — motivo: ${p.errorDetail}.`,
+    aiBanRemoveRetrySuccess: (p: { number: string; groupLabel: string }) =>
+        `✅ @${p.number} removido(a) do grupo *${p.groupLabel}* com sucesso.`,
+    aiViolationGraveHeadline: (p: { number: string; groupName: string; reason: string }) =>
+        `🤖🚫 Uma violação grave de @${p.number} foi identificada em *${p.groupName}* — banido de toda a comunidade.\nMotivo: ${p.reason}`,
+    aiModerationCycleFailed: (p: { errorDetail: string }) =>
+        `⚠️ Não foi possível concluir o ciclo de moderação por IA — motivo: ${p.errorDetail}. As mensagens continuam na fila pro próximo ciclo.`,
+    aiModerationCycleFailedDebug: (p: { detail: string }) =>
+        `[runAiModerationCycle] evaluateBatch falhou:\n${p.detail}`,
+    aiRemovedPublicationNote: ' (publicação removida)',
+    aiRemovedPublicationNoteNotAdmin: ' (bot não é admin desse grupo — publicação não removida)',
+    aiWarningIssuedLog: (p: { number: string; groupName: string; removedNote: string; count: number; reason: string }) =>
+        `🤖⚠️ Uma advertência foi aplicada a @${p.number} em *${p.groupName}*${p.removedNote} (${p.count}/3 esse mês).\nMotivo: ${p.reason}`,
+    aiModerationGroupFailed: (p: { groupJid: string; errorDetail: string }) =>
+        `⚠️ Não foi possível concluir a moderação por IA no grupo *${p.groupJid}* — motivo: ${p.errorDetail}.`,
+    aiModerationGroupFailedDebug: (p: { groupJid: string; detail: string }) =>
+        `[runAiModerationCycle] falha processando grupo ${p.groupJid}:\n${p.detail}`,
+
     // ===== $asb ban =====
     banNoTarget: '❌ Marque o usuário ou responda a mensagem dele. Ex: $asb ban @user permanente motivo',
     banTargetIsAdmin: '❌ Não é possível banir um admin do grupo.',
