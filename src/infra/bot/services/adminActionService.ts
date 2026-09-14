@@ -35,6 +35,21 @@ export class AdminActionService {
         });
     }
 
+    /**
+     * Decisão monocrática desse alvo ainda em votação de ratificação —
+     * enquanto isso, nenhum outro admin de comunidade pode tomar uma NOVA
+     * ação sobre o mesmo assunto (ex: banir de novo quem acabou de ser
+     * desbanido); a única forma válida de discordar é votar na ratificação
+     * em andamento, com motivo. Depois que a votação resolver (ratificada ou
+     * derrubada), uma nova decisão monocrática sobre o mesmo alvo é permitida
+     * de novo (e abre sua própria ratificação).
+     */
+    async findPendingRatificationByTarget(targetJid: string): Promise<any | null> {
+        return prisma.adminAction.findFirst({
+            where: { targetJid, status: 'REVERTED', voteMessageId: { not: null } },
+        });
+    }
+
     async setNoticeMessageId(id: string, noticeMessageId: string): Promise<void> {
         await prisma.adminAction.update({ where: { id }, data: { noticeMessageId } });
     }

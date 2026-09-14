@@ -32,6 +32,8 @@ Qualquer ação administrativa — `$asb ban`, `$asb advertir`, remover/promover
 - **Motivo não embasado**: a reversão **não é aplicada**, o admin recebe no privado a explicação da IA sobre o que faltou, e a ação original permanece.
 - **Fundador**: única exceção — pode embasar como qualquer outro admin, mas se preferir, a decisão dele vale mesmo que a IA não considere embasada (não entra em ratificação também). É a válvula de escape pra quando a IA erra o julgamento ou o caso é urgente demais pra esperar.
 
+**Enquanto uma decisão monocrática está em votação de ratificação, ninguém pode tomar uma nova ação sobre a mesma pessoa** (banir de novo quem acabou de ser desbanido, por exemplo) — o bot bloqueia essa tentativa. A única forma válida de discordar nesse período é **votar na ratificação em andamento, com motivo** — não abrir uma ação paralela. Depois que a votação resolver (ratificada ou derrubada), aí sim outro admin de comunidade pode tomar uma nova decisão monocrática sobre o mesmo assunto, que abre sua própria ratificação.
+
 ## Votação em propostas
 
 Admin de comunidade é **obrigado a votar** em toda proposta submetida à votação (mudança de descrição, proposta de regra via `$asb propor`, remoção de admin, etc.) — não é opcional, é parte do cargo. Votar contra (divergência) exige **apresentar o motivo, bem elaborado** — um voto de rejeição sem justificativa não ajuda ninguém a entender o que precisa mudar na proposta.

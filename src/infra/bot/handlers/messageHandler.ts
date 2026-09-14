@@ -1013,6 +1013,17 @@ export class MessageHandler {
             return;
         }
 
+        // Uma decisão monocrática desse alvo já está em votação de ratificação —
+        // nenhuma ação nova sobre o mesmo assunto até isso resolver.
+        const pendingRatification = await this.adminActionService.findPendingRatificationByTarget(resolvedJid);
+        if (pendingRatification) {
+            await this.sendLog(
+                `🤖⚠️ IA identificou uma possível violação de @${number}, mas há uma decisão em votação de ratificação sobre a mesma pessoa — não executado até a votação concluir.\nMotivo: ${reason}`,
+                [resolvedJid],
+            );
+            return;
+        }
+
         await this.banService.ban({
             userJid: resolvedJid,
             displayName: displayName || targetParticipant?.notify || targetParticipant?.name || undefined,
@@ -1190,6 +1201,11 @@ export class MessageHandler {
                             metadata,
                             messageKeys: violatingKeys,
                         });
+                    } else if (await this.adminActionService.findPendingRatificationByTarget(resolvedJid)) {
+                        await this.sendLog(
+                            `🤖⚠️ IA identificou uma possível violação de @${number}, mas há uma decisão em votação de ratificação sobre a mesma pessoa — não executado até a votação concluir.\nMotivo: ${violation.reason}`,
+                            [resolvedJid],
+                        );
                     } else {
                         // Publicação fora de contexto (regra 8): além da advertência, a
                         // própria publicação é removida — não precisa de confirmação, já
@@ -2808,6 +2824,12 @@ export class MessageHandler {
             return;
         }
 
+        const pendingRatification = await this.adminActionService.findPendingRatificationByTarget(targetJid);
+        if (pendingRatification) {
+            await this.replySafe(jid, `❌ @${targetJid.split('@')[0]} tem uma decisão em votação de ratificação — vote nela (✅/❌ com motivo) em vez de tomar uma nova ação. Aguarde a votação concluir.`);
+            return;
+        }
+
         const bannedBy = await resolvePnJid(this.sock, msg.key.participant! || msg.key.remoteJid!, metadata);
 
         // Parse args: se veio de reply, args começa do tipo. Se veio de menção, args[0] é a menção
@@ -3101,6 +3123,13 @@ export class MessageHandler {
         }
 
         const targetJid = await resolvePnJid(this.sock, targetRaw, metadata);
+
+        const pendingRatification = await this.adminActionService.findPendingRatificationByTarget(targetJid);
+        if (pendingRatification) {
+            await this.replySafe(jid, `❌ @${targetJid.split('@')[0]} tem uma decisão em votação de ratificação — vote nela (✅/❌ com motivo) em vez de tomar uma nova ação. Aguarde a votação concluir.`);
+            return;
+        }
+
         const issuedBy = await resolvePnJid(this.sock, msg.key.participant! || msg.key.remoteJid!, metadata);
 
         // Se veio de menção, args[0] é o "@numero" literal no texto — pula pro motivo de verdade.

@@ -459,6 +459,8 @@ Também não é um comando. Toda ação administrativa gera um aviso revisável 
 
 **Comportamento:** motivo embasado → reverte na hora e abre uma segunda votação (✅/❌ ou "sim"/"não") entre os *outros* admins de comunidade, pra ratificar ou derrubar essa decisão — enquanto não bate maioria de nenhum dos dois lados, a reversão continua valendo; maioria ❌ desfaz a reversão (a ação original volta a valer). Motivo não embasado → nada é revertido, e quem tentou recebe a explicação da IA no privado. O fundador (`FOUNDER_JID`) é a única exceção: a decisão dele vale mesmo sem embasamento aprovado, e não entra em votação de ratificação.
 
+**Enquanto essa votação de ratificação está rolando, `$asb ban`/`$asb advertir` (manual ou por IA) contra a mesma pessoa é bloqueado** — o bot recusa e pede pra votar na ratificação em vez de tomar uma ação nova. Só volta a liberar depois que a votação resolver.
+
 ### Readição automática ao expirar um banimento temporário
 
 Também não é um comando. A cada 5 minutos, o bot confere se algum banimento com prazo (`temporario`, ou `comunidade` com tempo definido via `$asb banedit tempo`) já expirou — se sim, tenta readicionar a pessoa automaticamente, sem esperar ela pedir pra voltar. Pra `temporario`, só no grupo onde o banimento foi aplicado; pra `comunidade`, em todos os grupos da comunidade.
