@@ -80,6 +80,9 @@ async function startBot(): Promise<void> {
                 messageHandler.checkMonthlyTip().catch((err) => {
                     logger.warn({ err }, 'Falha ao checar/enviar dica mensal');
                 });
+                messageHandler.checkMemberTip().catch((err) => {
+                    logger.warn({ err }, 'Falha ao checar/enviar dica pra membros');
+                });
                 messageHandler.pruneOldModerationMessages().catch((err) => {
                     logger.warn({ err }, 'Falha ao limpar fila de moderação antiga');
                 });

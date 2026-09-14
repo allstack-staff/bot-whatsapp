@@ -552,6 +552,12 @@ Também não é um comando. Uma vez por mês (checado a cada ciclo horário, nã
 
 **Comportamento:** manda só no grupo de admins, uma dica + uma estatística por mês. Não reage, não espera resposta.
 
+### Dica pra membros
+
+Também não é um comando. A cada ~2 dias (mesmo mecanismo de checagem horária da dica mensal, cadência própria persistida), o bot manda uma dica sobre as **regras da comunidade** — voltada a membros comuns, não a admins — em **um único grupo da comunidade, sorteado ao acaso**. Nunca manda a mesma dica em todos os grupos de uma vez: é sempre um grupo por vez, e o próximo (dali a ~2 dias) pode cair em outro grupo, sorteado de novo.
+
+**Comportamento:** manda direto no grupo sorteado (não passa pelo grupo de admins). Não reage, não espera resposta.
+
 ### Moderação por IA em grupo onde o bot não é admin
 
 O bot só precisa ser **membro** de um grupo pra receber mensagens e avaliar contra as regras — não precisa ser admin pra isso. Mas *agir* (remover alguém, apagar mensagem de terceiro) exige ser admin. Se a IA identifica uma violação num grupo onde o bot não é admin, ela **não tenta agir** (evita ficar tentando pra sempre uma ação que vai falhar sempre) — só avisa o grupo de admins que detectou algo e que precisa ser promovido, ou que alguém aja manualmente.

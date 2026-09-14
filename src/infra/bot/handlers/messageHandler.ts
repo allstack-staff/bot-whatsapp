@@ -25,6 +25,7 @@ import { GroupAlertStateService } from '../services/groupAlertStateService';
 import { NameBlacklistService } from '../services/nameBlacklistService';
 import { BotMentionAiService } from '../services/botMentionAiService';
 import { AdminRemovalService } from '../services/adminRemovalService';
+import { MemberTipService } from '../services/memberTipService';
 import { MESSAGES } from '../messages';
 import { logger } from '../utils/logger';
 import { findParticipant, isGroupAdmin, resolvePnJid } from '../utils/jid';
@@ -56,6 +57,7 @@ export class MessageHandler {
     private nameBlacklistService: NameBlacklistService;
     private botMentionAiService: BotMentionAiService;
     private adminRemovalService: AdminRemovalService;
+    private memberTipService: MemberTipService;
 
     // Rastro (em memória) dos comandos digitados pro bot e das respostas dele em
     // cada grupo, só pra viabilizar o $clear. Não precisa sobreviver a um restart.
@@ -137,6 +139,7 @@ export class MessageHandler {
         this.nameBlacklistService = new NameBlacklistService();
         this.botMentionAiService = new BotMentionAiService();
         this.adminRemovalService = new AdminRemovalService();
+        this.memberTipService = new MemberTipService();
     }
 
     private commands: Record<string, (msg: any, args: string[]) => Promise<void>> = {
@@ -705,6 +708,42 @@ export class MessageHandler {
         await this.checkGroupActivityStats().catch((err) => {
             logger.warn({ err }, '[checkMonthlyTip] falha ao checar estatística de atividade');
         });
+    }
+
+    // Dicas voltadas a membros comuns (não admins) — sobre as regras da
+    // comunidade, não sobre comandos do bot (isso é AUTOMATIC_BEHAVIOR_TIPS,
+    // que é pro grupo de admins). Baseadas no que já está em docs/regras.md.
+    private static readonly MEMBER_TIPS: string[] = [
+        'divulgar algo só vale se ajudar diretamente no assunto do grupo — fora disso, a publicação é removida e rende uma advertência (regra 0).',
+        '3 advertências no mesmo mês geram banimento automático: 7 dias na 1ª vez, 30 na 2ª, permanente da 3ª em diante. O contador reinicia todo mês.',
+        'conteúdo discriminatório, explícito, pirataria/malware, apostas ou golpe financeiro dão banimento imediato — sem advertência antes.',
+        'mandar mensagem no privado pra alguém sem autorização é proibido — pode virar advertência ou até banimento, dependendo do caso.',
+        'divulgar o mesmo conteúdo em vários grupos de boa-fé é permitido, mas se tiver intenção comercial (link de afiliado, curso pago, etc), conta como flood de comunidade mesmo que os grupos pareçam bem escolhidos — e isso é banimento imediato.',
+        'se você marcar o bot (@) numa mensagem, ele pode responder dúvidas sobre as regras, revisão de banimento, ou permissão pra divulgar algo.',
+        'toda punição automática é revisável — um admin de comunidade pode reverter, desde que com motivo embasado nas regras.',
+        'participação baixa no grupo nunca é agravante — uma divulgação pontual relevante ao tema é sempre só remoção + advertência, não importa há quanto tempo você está aqui.',
+        'orientar e ensinar é sempre bem-vindo por aqui — fazer o trabalho de outra pessoa por completo (prova, entrevista, trabalho de faculdade) não.',
+    ];
+
+    /**
+     * Dica pros membros (não admins), a cada ~2 dias — sempre em UM grupo só
+     * por vez, sorteado entre os da comunidade, nunca em todos de uma vez
+     * (rajada de mensagens no mesmo ciclo é o tipo de padrão que a detecção
+     * de bot da Meta observa). Cadência persistida (MemberTipService), não em
+     * memória, pra sobreviver a deploy sem resetar a contagem de dias.
+     */
+    async checkMemberTip(): Promise<void> {
+        if (!(await this.memberTipService.shouldSendTip())) return;
+
+        const communityGroupIds = await this.getCommunityGroupIds();
+        if (!communityGroupIds.size) return;
+
+        const ids = [...communityGroupIds];
+        const groupJid = ids[Math.floor(Math.random() * ids.length)];
+        const tip = MessageHandler.MEMBER_TIPS[Math.floor(Math.random() * MessageHandler.MEMBER_TIPS.length)];
+
+        await this.replySafe(groupJid, MESSAGES.memberTip({ tip, rulesUrl: `${botConfig.docsUrl}regras.html` }));
+        await this.memberTipService.markSent();
     }
 
     /** Limpa da fila de moderação tudo com mais de 24h — chamado no ciclo horário. */

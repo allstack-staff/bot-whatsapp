@@ -162,6 +162,14 @@ model MonthlyTipState {
     lastSentAt DateTime?
 }
 
+// Cadência da dica pra membros (checkMemberTip) — separada da dica pros
+// admins (MonthlyTipState): intervalo de 2 dias em vez de mensal, e persistida
+// pelo mesmo motivo (deploy reinicia o processo com frequência neste projeto).
+model MemberTipState {
+    id         Int       @id @default(1)
+    lastSentAt DateTime?
+}
+
 // Fila de mensagens ainda não avaliadas pela moderação por IA — persistida
 // (não só em memória) pra sobreviver a um restart/deploy do bot sem perder o
 // que ainda não foi checado. Só guarda 24h sempre: mensagem mais velha que

@@ -16,6 +16,10 @@
  */
 
 export const MESSAGES = {
+    // ===== Dica pra membros (checkMemberTip) =====
+    memberTip: (p: { tip: string; rulesUrl: string }) =>
+        `💡 *Dica*\n\n${p.tip}\n\nRegras completas: ${p.rulesUrl}`,
+
     // ===== Pipeline de AdminAction (recordAdminAction / revisão / ratificação) =====
     adminActionNotice: (p: { noticeText: string }) =>
         `${p.noticeText}\n\nAdmin de comunidade: responda esta mensagem com o motivo (embasado nas regras) pra reverter.`,
