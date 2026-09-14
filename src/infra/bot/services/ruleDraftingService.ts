@@ -1,17 +1,22 @@
 import { logger } from '../utils/logger';
 import { CommunityRulesService } from './communityRulesService';
 
-export interface RuleDraft {
-    draftedText: string;
-    punishment: 'ADVERTENCIA' | 'BANIMENTO';
+export interface RuleDraftResult {
+    sufficient: boolean;
+    /** Preenchido quando sufficient=false — o que falta detalhar. */
+    detailFeedback?: string;
+    draftedText?: string;
+    punishment?: 'ADVERTENCIA' | 'BANIMENTO';
     conflictNote?: string;
 }
 
 /**
  * Pega a ideia crua de um admin e devolve uma regra redigida no mesmo estilo
  * das já existentes, já classificada (advertência/banimento) e com um aviso
- * se conflitar com alguma regra atual — pra um humano aprovar antes de ir
- * pro ar (o bot nunca publica uma regra nova sem um ✅ de admin de comunidade).
+ * se conflitar com alguma regra atual. Antes de redigir, avalia se a ideia
+ * tem detalhe suficiente pra virar uma regra sem ambiguidade — se for vaga
+ * demais, recusa e devolve o que falta especificar, em vez de inventar
+ * detalhe que o proponente não deu.
  */
 export class RuleDraftingService {
     private readonly apiKey = process.env.GEMINI_API_KEY;
@@ -22,12 +27,12 @@ export class RuleDraftingService {
         return Boolean(this.apiKey);
     }
 
-    async draft(rawIdea: string): Promise<RuleDraft | null> {
+    async draft(rawIdea: string): Promise<RuleDraftResult | null> {
         if (!this.apiKey) return null;
 
         const currentRules = await this.communityRulesService.getRules();
 
-        const prompt = `Você ajuda a redigir regras novas pra comunidade "All Stack Community" (mentoria em programação no WhatsApp). Regras atuais, pro estilo e pra checar conflito:\n${currentRules}\n\nUm admin sugeriu, em texto livre e informal, a seguinte ideia de regra nova:\n"${rawIdea.replace(/"/g, "'")}"\n\nRedija essa ideia como UMA frase de regra, no mesmo estilo direto das regras acima (sem numeração, ela será numerada depois). Classifique a punição como exatamente "ADVERTENCIA" ou "BANIMENTO" (banimento imediato de comunidade), seguindo o mesmo critério de severidade das regras já existentes. Se a ideia contradiz, enfraquece, ou já está coberta por alguma regra existente, explique brevemente em "conflictNote"; se não há conflito, deixe "conflictNote" como null.\n\nResponda APENAS com um JSON válido, sem texto antes ou depois, no formato:\n{"draftedText": "<frase da regra>", "punishment": "ADVERTENCIA" ou "BANIMENTO", "conflictNote": "<aviso curto ou null>"}`;
+        const prompt = `Você ajuda a redigir regras novas pra comunidade "All Stack Community" (mentoria em programação no WhatsApp). Regras atuais, pro estilo e pra checar conflito:\n${currentRules}\n\nUm admin sugeriu, em texto livre e informal, a seguinte ideia de regra nova:\n"${rawIdea.replace(/"/g, "'")}"\n\nPrimeiro avalie se essa ideia tem detalhe suficiente pra virar uma regra clara, sem ambiguidade — precisa dar pra entender exatamente o que fica proibido/exigido e em que situação. Ideias vagas (ex: só "resolver esse problema", "banir gente chata", sem dizer o comportamento específico) NÃO têm detalhe suficiente. Se não tiver, não redija nada — responda só com "sufficient": false e um "detailFeedback" curto explicando o que falta especificar.\n\nSe tiver detalhe suficiente, redija a ideia como UMA frase de regra, no mesmo estilo direto das regras acima (sem numeração, ela será numerada depois). Classifique a punição como exatamente "ADVERTENCIA" ou "BANIMENTO" (banimento imediato de comunidade), seguindo o mesmo critério de severidade das regras já existentes. Se a ideia contradiz, enfraquece, ou já está coberta por alguma regra existente, explique brevemente em "conflictNote"; se não há conflito, deixe "conflictNote" como null.\n\nResponda APENAS com um JSON válido, sem texto antes ou depois, no formato:\n{"sufficient": true ou false, "detailFeedback": "<o que falta, só se sufficient=false, senão null>", "draftedText": "<frase da regra, só se sufficient=true, senão null>", "punishment": "ADVERTENCIA" ou "BANIMENTO" ou null, "conflictNote": "<aviso curto ou null>"}`;
 
         try {
             const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${this.apiKey}`;
@@ -50,10 +55,22 @@ export class RuleDraftingService {
             if (!jsonMatch) return null;
 
             const parsed = JSON.parse(jsonMatch[0]);
+            if (typeof parsed?.sufficient !== 'boolean') return null;
+
+            if (!parsed.sufficient) {
+                return {
+                    sufficient: false,
+                    detailFeedback: typeof parsed.detailFeedback === 'string' && parsed.detailFeedback.trim()
+                        ? parsed.detailFeedback.trim()
+                        : 'Descreva melhor o que deve ser proibido/exigido e em que situação.',
+                };
+            }
+
             if (typeof parsed?.draftedText !== 'string' || !parsed.draftedText.trim()) return null;
             if (parsed.punishment !== 'ADVERTENCIA' && parsed.punishment !== 'BANIMENTO') return null;
 
             return {
+                sufficient: true,
                 draftedText: parsed.draftedText.trim(),
                 punishment: parsed.punishment,
                 conflictNote: typeof parsed.conflictNote === 'string' && parsed.conflictNote.trim() ? parsed.conflictNote.trim() : undefined,

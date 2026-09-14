@@ -91,8 +91,8 @@ export const botConfig = {
                 usage: '$asb anunciar <id> <mensagem>',
             },
             propor: {
-                description: 'Propõe uma regra nova pra votação dos admins de comunidade; aprovada, publica sozinho',
-                usage: '$asb propor <ideia da regra>',
+                description: 'Propõe uma regra nova (IA redige); admin comum vota antes de publicar, admin de comunidade publica na hora e é ratificado depois',
+                usage: '$asb propor <ideia da regra, com detalhe suficiente pra não ser ambígua>',
             },
             convidar: {
                 description: 'Manda o link de convite de um grupo por DM pra alguém (ex-banido ou qualquer pessoa)',

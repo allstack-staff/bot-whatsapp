@@ -79,6 +79,11 @@ export class MessageHandler {
     // openAdminActionRatification) — mesmo padrão de voto por reação/texto
     // das outras votações, só que o alvo é um AdminAction, não uma proposta.
     private adminActionRatificationVotes: Map<string, Map<string, 'approve' | 'reject'>> = new Map();
+    // Ratificação de regra publicada por decisão monocrática de admin de
+    // comunidade (ver $asb propor) — 3 opções (manter/ajustar/reverter), e
+    // qualquer membro do grupo de admins pode votar/opinar, mas só o voto de
+    // quem é admin de comunidade conta pra maioria (isCommunityAdmin).
+    private ruleRatificationVotes: Map<string, Map<string, { intent: 'manter' | 'reverter' | 'ajustar'; isCommunityAdmin: boolean }>> = new Map();
     // Aviso único de número par de admins de comunidade — evita repetir todo
     // ciclo enquanto a situação não mudar (ver checkGovernanceCompliance).
     private governanceOddAdminWarned = false;
@@ -521,7 +526,9 @@ export class MessageHandler {
         'qualquer grupo sem foto ganha a logo da comunidade automaticamente, sem precisar pedir.',
         'quando um admin do grupo de administração some, ele continua registrado no banco — trocar o número do bot não perde o histórico.',
         'toda ação automática que falha (remover alguém, reverter descrição, etc.) vem com "reaja com 🔁 pra tentar de novo" na mensagem de aviso.',
-        'você pode propor uma regra nova em linguagem simples com `$asb propor` — a IA redige, os admins de comunidade votam, e aprovada já vai pro ar sozinha.',
+        'você pode propor uma regra nova em linguagem simples com `$asb propor` — a IA redige, e admin comum vota antes de ir pro ar; admin de comunidade publica na hora e é votado depois (manter/ajustar/reverter).',
+        'se a ideia mandada pra `$asb propor` for vaga demais, a IA recusa e pede pra detalhar melhor, antes de gastar publicação ou votação com uma regra mal especificada.',
+        'quando um admin de comunidade reverte uma ação administrativa, isso já vale na hora — mas também abre uma votação de ratificação entre os outros admins de comunidade; admin comum pode votar/opinar, mas quem decide é a turma de admin de comunidade.',
     ];
 
     /**
@@ -966,6 +973,55 @@ export class MessageHandler {
             await this.reapplyOriginalAdminAction(action);
             await this.adminActionService.resolve(action.id, 'OVERTURNED');
             await this.sendLog(`❌ Decisão derrubada pela maioria dos admins de comunidade — "${action.description}" volta a valer.`);
+        }
+    }
+
+    /**
+     * Ratificação de uma regra publicada na hora por decisão monocrática de
+     * admin de comunidade ($asb propor) — 3 opções. Admin comum pode votar
+     * (registrado, opinião considerada), mas só voto de admin de comunidade
+     * conta pra maioria — a decisão final é da turma de admin de comunidade.
+     */
+    private async tallyRuleRatification(
+        proposal: any,
+        votes: Map<string, { intent: 'manter' | 'reverter' | 'ajustar'; isCommunityAdmin: boolean }>,
+    ): Promise<void> {
+        const logJid = await this.getLogJid();
+        if (!logJid) return;
+
+        let communityAdminCount = 0;
+        try {
+            const meta = await this.sock.groupMetadata(logJid);
+            communityAdminCount = meta.participants.filter((p) => isGroupAdmin(p)).length;
+        } catch {
+            return;
+        }
+        if (!communityAdminCount) return;
+
+        const majority = Math.floor(communityAdminCount / 2) + 1;
+        const bindingVotes = [...votes.values()].filter((v) => v.isCommunityAdmin);
+        const manter = bindingVotes.filter((v) => v.intent === 'manter').length;
+        const reverter = bindingVotes.filter((v) => v.intent === 'reverter').length;
+        const ajustar = bindingVotes.filter((v) => v.intent === 'ajustar').length;
+
+        if (manter >= majority) {
+            this.ruleRatificationVotes.delete(proposal.voteMessageId);
+            await this.ruleProposalService.resolve(proposal.id, 'RATIFIED');
+            await this.sendLog(`✅ Regra ${proposal.ruleNumber} ratificada pela maioria dos admins de comunidade — mantida: "${proposal.draftedText}".`);
+        } else if (reverter >= majority) {
+            this.ruleRatificationVotes.delete(proposal.voteMessageId);
+            try {
+                await this.githubRulesPublishService.revertRule(proposal.ruleNumber, proposal.draftedText);
+                await this.ruleProposalService.resolve(proposal.id, 'REVERTED');
+                await this.sendLog(`❌ Regra ${proposal.ruleNumber} derrubada pela maioria dos admins de comunidade e removida de docs/regras.md: "${proposal.draftedText}".`);
+            } catch (err) {
+                logger.error({ err }, '[tallyRuleRatification] falha ao reverter regra publicada');
+                await this.sendLog(`⚠️ Regra ${proposal.ruleNumber} derrubada pela maioria mas não foi possível remover automaticamente — motivo: ${this.describeError(err)}. Remova manualmente de docs/regras.md: "${proposal.draftedText}".`);
+            }
+        } else if (ajustar >= majority) {
+            this.ruleRatificationVotes.delete(proposal.voteMessageId);
+            await this.ruleProposalService.resolve(proposal.id, 'NEEDS_ADJUSTMENT');
+            await this.sendLog(`🔧 Regra ${proposal.ruleNumber} precisa de ajuste, segundo a maioria dos admins de comunidade — ela continua em vigor por ora. Proponha o ajuste com $asb propor.`);
         }
     }
 
@@ -1692,11 +1748,42 @@ export class MessageHandler {
                     this.adminActionRatificationVotes.set(key.id, votes);
 
                     await this.tallyAdminActionRatification(adminActionVote, votes);
+                    continue;
+                }
+
+                const liveRuleProposal = await this.ruleProposalService.findLiveByVoteMessageId(key.id);
+                if (liveRuleProposal) {
+                    const reactorResolved = await resolvePnJid(this.sock, reactorRaw);
+                    if (!(await this.isMemberOfAdminGroup(reactorRaw, reactorResolved))) continue;
+                    const isCommunityAdmin = await this.isAdminOfAdminGroup(reactorRaw, reactorResolved);
+
+                    const votes = this.ruleRatificationVotes.get(key.id) ?? new Map<string, { intent: 'manter' | 'reverter' | 'ajustar'; isCommunityAdmin: boolean }>();
+                    if (emoji === '✅') {
+                        votes.set(reactorRaw, { intent: 'manter', isCommunityAdmin });
+                    } else if (emoji === '❌') {
+                        votes.set(reactorRaw, { intent: 'reverter', isCommunityAdmin });
+                    } else if (emoji === '🔧') {
+                        votes.set(reactorRaw, { intent: 'ajustar', isCommunityAdmin });
+                    } else {
+                        votes.delete(reactorRaw);
+                    }
+                    this.ruleRatificationVotes.set(key.id, votes);
+
+                    await this.tallyRuleRatification(liveRuleProposal, votes);
                 }
             } catch (err) {
                 logger.warn({ err }, '[handleReaction] erro processando reação de votação');
             }
         }
+    }
+
+    /** 3 opções pra ratificação de regra publicada por decisão monocrática — ver $asb propor. */
+    private parseRuleRatificationIntent(text: string): 'manter' | 'reverter' | 'ajustar' | null {
+        const normalized = text.trim().toLowerCase();
+        if (['manter', 'aprovar', 'aprovo', 'sim', 'ok'].includes(normalized)) return 'manter';
+        if (['reverter', 'rejeitar', 'não', 'nao'].includes(normalized)) return 'reverter';
+        if (['ajustar', 'ajuste', 'corrigir', 'ajeitar'].includes(normalized)) return 'ajustar';
+        return null;
     }
 
     private parseVoteIntent(text: string): 'approve' | 'reject' | null {
@@ -1780,6 +1867,19 @@ export class MessageHandler {
                 votes.set(senderRaw, intent);
                 this.adminActionRatificationVotes.set(stanzaId, votes);
                 await this.tallyAdminActionRatification(adminActionVote, votes);
+            }
+            return true;
+        }
+
+        const liveRuleProposal = await this.ruleProposalService.findLiveByVoteMessageId(stanzaId);
+        if (liveRuleProposal) {
+            const intent = this.parseRuleRatificationIntent(text);
+            if (intent && (await this.isMemberOfAdminGroup(senderRaw, senderJid))) {
+                const isCommunityAdmin = await this.isAdminOfAdminGroup(senderRaw, senderJid);
+                const votes = this.ruleRatificationVotes.get(stanzaId) ?? new Map<string, { intent: 'manter' | 'reverter' | 'ajustar'; isCommunityAdmin: boolean }>();
+                votes.set(senderRaw, { intent, isCommunityAdmin });
+                this.ruleRatificationVotes.set(stanzaId, votes);
+                await this.tallyRuleRatification(liveRuleProposal, votes);
             }
             return true;
         }
@@ -2518,11 +2618,19 @@ export class MessageHandler {
     }
 
     /**
-     * Pega a ideia crua de um admin, manda pra IA redigir como regra (mesmo
-     * estilo das existentes, já classificada advertência/banimento, com aviso
-     * de conflito se houver), e abre votação no grupo de admins — só admin de
-     * comunidade vota (ver isAdminOfAdminGroup). Aprovada, publica sozinho em
-     * docs/regras.md via API do GitHub (precisa de GITHUB_RULES_TOKEN).
+     * Pega a ideia crua de um admin, manda pra IA revisar: se for vaga demais
+     * pra virar uma regra sem ambiguidade, recusa e pede pra detalhar melhor
+     * (sem gastar publicação/votação numa ideia mal especificada). Se tiver
+     * detalhe suficiente, redige no mesmo estilo das regras existentes.
+     *
+     * Dois caminhos daqui, dependendo de quem propôs:
+     * - **Admin de comunidade**: decisão monocrática — publica direto em
+     *   docs/regras.md na hora, e SÓ DEPOIS abre uma ratificação (manter,
+     *   ajustar, ou reverter) entre os outros admins de comunidade. Admin
+     *   comum pode votar/opinar também, mas só o voto de admin de comunidade
+     *   decide.
+     * - **Admin comum**: vota ANTES de publicar — proposta só vai pro ar se a
+     *   maioria dos admins de comunidade aprovar.
      */
     private async proporCommand(msg: any, args: string[]): Promise<void> {
         if (!(await this.isAuthorized(msg))) return;
@@ -2542,7 +2650,8 @@ export class MessageHandler {
         const rawText: string = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
         const rawIdea = this.stripLeadingTokens(rawText, 2).trim(); // "$asb propor "
         if (!rawIdea) {
-            await this.replySafe(jid, '❌ Descreva a ideia da regra. Ex: $asb propor proibir gente pedindo doação de dinheiro nos grupos');
+            const usage = botConfig.commands.list.propor?.usage ?? '$asb propor <ideia da regra>';
+            await this.replySafe(jid, `❌ Descreva a ideia da regra. Uso: ${usage}\nEx: $asb propor proibir gente pedindo doação de dinheiro nos grupos`);
             return;
         }
 
@@ -2555,11 +2664,58 @@ export class MessageHandler {
             return;
         }
 
+        if (!draft.sufficient) {
+            const usage = botConfig.commands.list.propor?.usage ?? '$asb propor <ideia da regra>';
+            await this.replySafe(jid, `❌ ${draft.detailFeedback}\nDetalhe melhor e tente de novo. Uso: ${usage}`);
+            return;
+        }
+
         const punishmentLabel = draft.punishment === 'BANIMENTO' ? 'Banimento da comunidade' : 'Advertência';
         const conflictBlock = draft.conflictNote ? `\n⚠️ Possível conflito: ${draft.conflictNote}` : '';
         const number = senderJid.split('@')[0];
+        const draftedText = draft.draftedText!;
+        const punishment = draft.punishment!;
 
-        const text = `📋 *Proposta de nova regra* (sugerida por @${number}, redigida por IA)\n\n"${draft.draftedText}"\nPunição: *${punishmentLabel}*${conflictBlock}\n\nReaja ✅/❌ ou responda "sim"/"não" pra aprovar/rejeitar. Só votos de admins de comunidade contam.`;
+        const isCommunityAdminProposer = await this.isAdminOfAdminGroup(senderRaw, senderJid);
+
+        if (isCommunityAdminProposer) {
+            if (!this.githubRulesPublishService.isConfigured()) {
+                await this.replySafe(jid, '❌ Publicação automática não está configurada (falta GITHUB_RULES_TOKEN) — decisão monocrática exige publicar na hora, então não dá pra seguir sem isso. Publique manualmente ou peça pra configurar o token.');
+                return;
+            }
+
+            let ruleNumber: number;
+            try {
+                ruleNumber = await this.githubRulesPublishService.publishNewRule(draftedText, punishment);
+            } catch (err) {
+                logger.error({ err }, '[proporCommand] falha ao publicar regra (decisão monocrática)');
+                await this.replySafe(jid, `❌ Não foi possível publicar agora — motivo: ${this.describeError(err)}.`);
+                return;
+            }
+
+            await this.reactSafe(jid, msg.key, '✅');
+
+            const text = `📋 *Regra ${ruleNumber} publicada* — decisão monocrática de @${number}, já em vigor.\n\n"${draftedText}"\nPunição: *${punishmentLabel}*${conflictBlock}\n\nOutros admins de comunidade: reaja ✅ manter, ❌ reverter, 🔧 ajustar (ou responda "manter"/"reverter"/"ajustar"). Admin comum também pode votar, mas quem decide é a turma de admin de comunidade.`;
+            const sent = await this.sendLog(text, [senderJid]);
+            if (!sent?.id) {
+                await this.replySafe(jid, '❌ Regra publicada, mas não foi possível abrir a votação de ratificação — abra manualmente uma discussão sobre ela no grupo de admins.');
+                return;
+            }
+
+            await this.ruleProposalService.createLive({
+                proposedBy: senderJid,
+                rawIdea,
+                draftedText,
+                punishment,
+                conflictNote: draft.conflictNote,
+                ruleNumber,
+                voteMessageId: sent.id,
+            });
+            return;
+        }
+
+        // Admin comum: vota antes de publicar (fluxo original).
+        const text = `📋 *Proposta de nova regra* (sugerida por @${number}, redigida por IA)\n\n"${draftedText}"\nPunição: *${punishmentLabel}*${conflictBlock}\n\nReaja ✅/❌ ou responda "sim"/"não" pra aprovar/rejeitar. Só votos de admins de comunidade contam.`;
 
         if (!this.githubRulesPublishService.isConfigured()) {
             await this.replySafe(jid, `${text}\n\n⚠️ Aviso: publicação automática não está configurada ainda (falta GITHUB_RULES_TOKEN) — mesmo aprovada, alguém vai precisar publicar manualmente.`);
@@ -2574,8 +2730,8 @@ export class MessageHandler {
         await this.ruleProposalService.createPending({
             proposedBy: senderJid,
             rawIdea,
-            draftedText: draft.draftedText,
-            punishment: draft.punishment,
+            draftedText,
+            punishment,
             conflictNote: draft.conflictNote,
             voteMessageId: sent.id,
         });

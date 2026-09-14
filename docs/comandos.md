@@ -409,17 +409,21 @@ $asb avisar Novo grupo *Rust Devs* foi criado! Bora participar.
 
 ### `$asb propor`
 
-Propõe uma regra nova pra comunidade. Você descreve a ideia em texto livre e informal; a IA redige como uma frase de regra no mesmo estilo das existentes, classifica a punição (advertência ou banimento) e avisa se conflitar com alguma regra atual. A proposta então vai pra votação no grupo de admins — só **admins de comunidade** votam (admin do próprio grupo de administração; um admin responsável só por um grupo não conta). Aprovada pela maioria, o bot publica sozinho em [Regras](regras.html), sem precisar de deploy.
+Propõe uma regra nova pra comunidade. Você descreve a ideia em texto livre e informal — a IA primeiro avalia se tem detalhe suficiente pra virar uma regra sem ambiguidade (se for vaga demais, ex: "resolver esse problema" sem dizer o comportamento específico, recusa e pede pra detalhar melhor, apontando o uso do comando). Tendo detalhe, redige como uma frase de regra no mesmo estilo das existentes, classifica a punição (advertência ou banimento) e avisa se conflitar com alguma regra atual.
 
 ```
-$asb propor <ideia da regra>
+$asb propor <ideia da regra, com detalhe suficiente pra não ser ambígua>
 ```
 
-Só funciona rodado **no grupo de administração**.
+Só funciona rodado **no grupo de administração**. Comportamento depois daqui **depende de quem propôs**:
 
-**Comportamento:** reage ✅ ao comando, e posta a proposta redigida no grupo de admins com "Reaja ✅/❌ ou responda 'sim'/'não'" — essa é a mensagem que recebe os votos, não o comando em si. Se a maioria aprovar: publica em `docs/regras.md` (numerada automaticamente, mesmo formato das outras) e avisa no grupo de admins; se a publicação falhar (ex: token do GitHub não configurado), avisa que precisa ser feito manualmente. Se a maioria rejeitar: só avisa a rejeição, nada é publicado.
+**Admin de comunidade propondo — decisão monocrática:** a regra é publicada em `docs/regras.md` **na hora** (numerada automaticamente), sem esperar votação nenhuma. Só depois disso o bot abre uma votação de **ratificação** no grupo de admins, com 3 opções: reaja **✅ manter**, **❌ reverter**, ou **🔧 ajustar** (ou responda "manter"/"reverter"/"ajustar"). Admin comum também pode votar nessa ratificação — a opinião é registrada — mas só o voto de admin de comunidade conta pra decidir. Maioria ✅ mantém a regra como está; maioria ❌ remove ela de `docs/regras.md` de novo; maioria 🔧 avisa que precisa de ajuste, mas a regra continua em vigor até alguém propor a versão ajustada. Enquanto não bate maioria de nenhuma opção, a regra publicada continua valendo.
 
-Exemplo (rodado no grupo de admins):
+**Admin comum propondo — vota antes de publicar:** a proposta vai pra votação (✅/❌ ou "sim"/"não") no grupo de admins **antes** de qualquer publicação — só admins de comunidade votam. Maioria aprova → publica em `docs/regras.md`, sem precisar de deploy. Maioria rejeita → nada é publicado.
+
+Se a publicação (imediata ou após aprovação) falhar — ex: token do GitHub não configurado — o bot avisa que precisa ser feito manualmente.
+
+Exemplo (rodado no grupo de admins, por um admin comum):
 ```
 $asb propor proibir pedir dinheiro emprestado ou doação nos grupos
 ```
@@ -431,6 +435,20 @@ $asb propor proibir pedir dinheiro emprestado ou doação nos grupos
 Punição: Advertência
 
 Reaja ✅/❌ ou responda "sim"/"não" pra aprovar/rejeitar. Só votos de admins de comunidade contam.
+```
+
+Exemplo (mesmo comando, rodado por um admin de comunidade):
+```
+$asb propor proibir pedir dinheiro emprestado ou doação nos grupos
+```
+→ publica direto como regra 18 em `docs/regras.md`, e posta:
+```
+📋 Regra 18 publicada — decisão monocrática de @55..., já em vigor.
+
+"Proibido pedir dinheiro emprestado ou doação de qualquer tipo nos grupos."
+Punição: Advertência
+
+Outros admins de comunidade: reaja ✅ manter, ❌ reverter, 🔧 ajustar (ou responda "manter"/"reverter"/"ajustar"). Admin comum também pode votar, mas quem decide é a turma de admin de comunidade.
 ```
 
 ### Moderação automática por IA
