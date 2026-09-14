@@ -3958,7 +3958,7 @@ export class MessageHandler {
                 [targetJid],
             );
             await this.notifyRevertiblePunishment({ userJid: targetJid, groupJid, banType, reason, source: 'advertencias' },
-                MESSAGES.warningPunishmentNotAdminHeadline({ number, durationLabel, tierNote }),
+                MESSAGES.warningPunishmentNotAdminHeadline({ number, groupName: metadata.subject || groupJid, durationLabel, tierNote }),
             );
             return;
         }
@@ -3996,7 +3996,7 @@ export class MessageHandler {
         }
 
         await this.notifyRevertiblePunishment({ userJid: targetJid, groupJid, banType, reason, source: 'advertencias' },
-            MESSAGES.warningPunishmentHeadline({ number, durationLabel, tierNote }),
+            MESSAGES.warningPunishmentHeadline({ number, groupName: metadata.subject || groupJid, durationLabel, tierNote }),
         );
     }
 

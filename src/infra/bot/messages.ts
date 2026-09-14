@@ -418,19 +418,19 @@ export const MESSAGES = {
     // ===== Punição automática por acúmulo de advertências (applyWarningPunishment) =====
     warningPunishmentTierNote: '\n⚠️ Essa é a 3ª vez (ou mais) que essa pessoa é punida por acúmulo de advertências nesse grupo — avaliem se deve virar banimento de comunidade (use $asb banedit @user tipo comunidade se decidirem).',
     warningPunishmentNotAdminAlert: (p: { number: string; groupName: string; durationLabel: string }) =>
-        `@${p.number} atingiu 3 advertências no mês em *${p.groupName}* (banimento ${p.durationLabel} registrado), mas o bot não é admin desse grupo — não consegui remover. Promova o bot a admin, ou remova manualmente.`,
-    warningPunishmentNotAdminHeadline: (p: { number: string; durationLabel: string; tierNote: string }) =>
-        `🚫 @${p.number} banido automaticamente por acúmulo de advertências (3/mês) — ${p.durationLabel}, mas o bot não é admin do grupo e não conseguiu remover.${p.tierNote}`,
+        `@${p.number} atingiu 3 advertências no mês em *${p.groupName}* (banimento ${p.durationLabel} registrado, válido só nesse grupo), mas o bot não é admin desse grupo — não foi possível remover. Promova o bot a admin, ou remova manualmente.`,
+    warningPunishmentNotAdminHeadline: (p: { number: string; groupName: string; durationLabel: string; tierNote: string }) =>
+        `🚫 @${p.number} banido automaticamente por acúmulo de advertências (3/mês) em *${p.groupName}* — ${p.durationLabel}, válido só nesse grupo, mas o bot não é admin lá e não foi possível remover.${p.tierNote}`,
     warningPunishmentRemoveFailedRetry: (p: { number: string; durationLabel: string; errorDetail: string }) =>
-        `⚠️ @${p.number} atingiu 3 advertências no mês (banimento ${p.durationLabel} aplicado) mas não foi possível removê-lo(a) do grupo automaticamente — motivo: ${p.errorDetail}.`,
+        `⚠️ @${p.number} atingiu 3 advertências no mês (banimento ${p.durationLabel} aplicado, válido só nesse grupo) mas não foi possível removê-lo(a) do grupo automaticamente — motivo: ${p.errorDetail}.`,
     warningPunishmentRemoveRetrySuccess: (p: { number: string }) =>
         `✅ @${p.number} removido(a) do grupo com sucesso (retentativa).`,
     warningPunishmentRemoveRetryFailure: (p: { number: string; errorDetail: string }) =>
         `⚠️ @${p.number} segue no grupo apesar do banimento por advertências — motivo: ${p.errorDetail}.`,
     warningPunishmentConfirmPublic: (p: { number: string; durationLabel: string }) =>
-        `🚫 @${p.number} atingiu 3 advertências no mês e foi banido automaticamente (${p.durationLabel}).`,
-    warningPunishmentHeadline: (p: { number: string; durationLabel: string; tierNote: string }) =>
-        `🚫 @${p.number} banido automaticamente por acúmulo de advertências (3/mês) — ${p.durationLabel}.${p.tierNote}`,
+        `🚫 @${p.number} atingiu 3 advertências no mês e foi banido automaticamente (${p.durationLabel}) — válido só neste grupo.`,
+    warningPunishmentHeadline: (p: { number: string; groupName: string; durationLabel: string; tierNote: string }) =>
+        `🚫 @${p.number} banido automaticamente por acúmulo de advertências (3/mês) em *${p.groupName}* — ${p.durationLabel}, válido só nesse grupo.${p.tierNote}`,
 
     // ===== Punição revisável (notifyRevertiblePunishment / revertAutomatedPunishment) =====
     revertiblePunishmentNotice: (p: { headline: string }) =>
