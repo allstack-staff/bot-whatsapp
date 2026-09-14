@@ -54,6 +54,64 @@ export const MESSAGES = {
     activityStatNotice: (p: { groupLabel: string; summary: string }) =>
         `📊 O grupo *${p.groupLabel}* está ${p.summary} — vale a pena dar uma olhada.`,
 
+    // ===== Wrappers compartilhados por TODA mensagem (sendRecurringNotice / sendDebugLog / sendRetryableLog) =====
+    recurringNoticeAlertPrefix: '⚠️ *Alerta*',
+    recurringNoticeTipPrefix: '💡 *Dica*',
+    recurringNotice: (p: { prefix: string; text: string }) => `${p.prefix}\n${p.text}`,
+    debugLogText: (p: { text: string }) => `🛠️ ${p.text}`,
+    retryableNotice: (p: { text: string }) => `${p.text}\n\nReaja com 🔁 ou responda "tentar" pra tentar de novo.`,
+
+    // ===== Pedido de entrada em grupo (handleGroupJoinRequest) =====
+    joinRejectDescription: (p: { authorNumber: string; number: string; groupLabel: string }) =>
+        `@${p.authorNumber} rejeitou o pedido de entrada de @${p.number} em *${p.groupLabel}*`,
+    joinRejectNotice: (p: { authorNumber: string; number: string; groupLabel: string }) =>
+        `🚪 @${p.authorNumber} rejeitou o pedido de entrada de @${p.number} em *${p.groupLabel}*.`,
+    joinBannedRejectRetrySuccess: (p: { number: string }) =>
+        `✅ Pedido de entrada de @${p.number} rejeitado com sucesso.`,
+    joinBannedRejectRetryFailure: (p: { number: string; banTypeLabel: string; reason: string; errorDetail: string }) =>
+        `⚠️ @${p.number} pediu entrada com banimento ${p.banTypeLabel} ativo (Motivo: ${p.reason}) mas não foi possível rejeitar automaticamente — motivo: ${p.errorDetail}.`,
+    joinBannedRejectedLog: (p: { number: string; banTypeLabel: string; reason: string }) =>
+        `🚫 Pedido de entrada de @${p.number} rejeitado automaticamente — banimento ${p.banTypeLabel} ativo — Motivo: ${p.reason}`,
+    joinNoResponsibleFailed: (p: { number: string; groupName: string }) =>
+        `Pedido de entrada de @${p.number} em *${p.groupName}* — grupo sem admin responsável, não foi possível aceitar automaticamente. Defina um responsável (\`$asb responsavel\`) ou aceite manualmente.`,
+    joinNoResponsibleApproved: (p: { number: string; groupName: string }) =>
+        `@${p.number} foi aceito(a) automaticamente em *${p.groupName}* — grupo sem admin responsável pra revisar. Defina um com \`$asb responsavel\`.`,
+    joinPendingNotice: (p: { groupName: string; number: string; mentionsText: string }) =>
+        `📥 Pedido de entrada pendente em *${p.groupName}* — @${p.number}. ${p.mentionsText}, dá uma olhada quando puder.`,
+
+    // ===== Menção/reply ao bot (handleBotMention) =====
+    botMentionAnsweredLogWithAdmins: (p: { groupName: string; snippet: string; mentionsText: string }) =>
+        `📣 Bot respondeu uma pergunta em *${p.groupName}*: "${p.snippet}". ${p.mentionsText}, dá uma olhada se precisar.`,
+    botMentionAnsweredLog: (p: { groupName: string; snippet: string }) =>
+        `📣 Bot respondeu uma pergunta em *${p.groupName}*: "${p.snippet}".`,
+
+    // ===== Readição automática (reAddExpiredBans / tryReAddToGroup) =====
+    reAddSuccessLog: (p: { number: string; groupName: string; contextLabel: string }) =>
+        `✅ @${p.number} foi readicionado(a) ao grupo *${p.groupName}* automaticamente — ${p.contextLabel}.`,
+    reAddManualDm: (p: { groupName: string; inviteLink: string }) =>
+        `Você foi readicionado(a) ao grupo *${p.groupName}*, mas precisa entrar manualmente.${p.inviteLink}`,
+    reAddDeniedRetry: (p: { number: string; groupName: string; contextLabel: string; inviteLink: string }) =>
+        `⚠️ @${p.number} não pôde ser readicionado(a) ao grupo *${p.groupName}* (${p.contextLabel}) — WhatsApp negou.${p.inviteLink}`,
+    reAddErrorRetry: (p: { number: string; groupName: string; contextLabel: string; errorDetail: string }) =>
+        `⚠️ Não foi possível readicionar @${p.number} automaticamente ao grupo *${p.groupName}* (${p.contextLabel}) — motivo: ${p.errorDetail}.`,
+
+    // ===== Diversos: handleMessage / checkAndApplyGroupPhotos / $asb moderar / votos legados de banimento por IA / isAuthorized =====
+    debugHandleMessageError: (p: { jid: string; detail: string }) =>
+        `[handleMessage] erro processando mensagem em ${p.jid}:\n${p.detail}`,
+    photoAppliedLog: (p: { groupName: string }) =>
+        `🖼️ Logo da comunidade aplicada automaticamente no grupo *${p.groupName}* (estava sem foto).`,
+    moderarNotConfigured: '❌ Moderação por IA não está configurada (falta GEMINI_API_KEY no servidor).',
+    moderarCycleFailed: '❌ O ciclo de moderação falhou — veja o motivo no grupo de admins. Nada foi reagendado.',
+    moderarConfirmPublic: (p: { targetLabel: string }) =>
+        `✅ Ciclo de moderação por IA concluído agora (${p.targetLabel}). Próximo automático em 1h a partir deste.`,
+    moderarLog: (p: { targetLabel: string }) =>
+        `🤖 Ciclo de moderação por IA rodado manualmente via $asb moderar (${p.targetLabel}) — próximo automático reagendado pra daqui 1h.`,
+    pendingAiBanDismissedLog: (p: { number: string }) =>
+        `✅ Proposta de banimento por IA dispensada — @${p.number} não foi banido(a).`,
+    adminActionReactionOnlyLog: '❌ Reação sozinha não reverte — responda esta mensagem com o motivo, embasado nas regras.',
+    isAuthorizedMetadataError: '❌ Erro ao verificar permissões. Tente novamente.',
+    isAuthorizedNotGroupAdmin: '❌ Você precisa ser admin do grupo para usar este comando.',
+
     // ===== Compartilhada entre vários comandos que aceitam ID curto de grupo =====
     groupIdNotFound: (p: { id: number }) => `❌ Nenhum grupo com o ID ${p.id}. Use $asb grupos pra ver a lista.`,
 

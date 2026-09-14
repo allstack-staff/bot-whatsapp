@@ -311,7 +311,7 @@ export class MessageHandler {
                 }
             } catch (err) {
                 logger.error({ err, text: msgContent.conversation?.slice(0, 50) }, '[handleMessage] command error');
-                await this.sendDebugLog(`[handleMessage] erro processando mensagem em ${msg.key.remoteJid}:\n${this.describeErrorDetailed(err)}`).catch(() => {});
+                await this.sendDebugLog(MESSAGES.debugHandleMessageError({ jid: msg.key.remoteJid, detail: this.describeErrorDetailed(err) })).catch(() => {});
             }
         }
     }
@@ -520,8 +520,8 @@ export class MessageHandler {
                     actionType: 'join_reject',
                     groupJid: id,
                     targetJid,
-                    description: `@${authorNumber} rejeitou o pedido de entrada de @${number} em *${groupLabel}*`,
-                    noticeText: `🚪 @${authorNumber} rejeitou o pedido de entrada de @${number} em *${groupLabel}*.`,
+                    description: MESSAGES.joinRejectDescription({ authorNumber, number, groupLabel }),
+                    noticeText: MESSAGES.joinRejectNotice({ authorNumber, number, groupLabel }),
                     mentions: [authorResolved, targetJid],
                 });
             } catch (err) {
@@ -554,13 +554,13 @@ export class MessageHandler {
                     const retryAction = () => this.runRetryable(
                         async () => { await this.sock.groupRequestParticipantsUpdate(id, [participant], 'reject'); },
                         {
-                            success: `✅ Pedido de entrada de @${number} rejeitado com sucesso.`,
-                            failure: (reason) => `⚠️ @${number} pediu entrada com banimento ${banTypeLabel} ativo (Motivo: ${ban.reason}) mas não foi possível rejeitar automaticamente — motivo: ${reason}.`,
+                            success: MESSAGES.joinBannedRejectRetrySuccess({ number }),
+                            failure: (errorDetail) => MESSAGES.joinBannedRejectRetryFailure({ number, banTypeLabel, reason: ban.reason, errorDetail }),
                         },
                         [resolvedJid],
                     );
                     await this.sendRetryableLog(
-                        `⚠️ @${number} pediu entrada com banimento ${banTypeLabel} ativo (Motivo: ${ban.reason}) mas não foi possível rejeitar automaticamente — motivo: ${this.describeError(rejectError)}.`,
+                        MESSAGES.joinBannedRejectRetryFailure({ number, banTypeLabel, reason: ban.reason, errorDetail: this.describeError(rejectError) }),
                         retryAction,
                         [resolvedJid],
                     );
@@ -570,7 +570,7 @@ export class MessageHandler {
                 logger.info({ resolvedJid, groupId: id, reason: ban.reason }, 'Rejected join request from banned user');
 
                 await this.sendLog(
-                    `🚫 Pedido de entrada de @${number} rejeitado automaticamente — banimento ${banTypeLabel} ativo — Motivo: ${ban.reason}`,
+                    MESSAGES.joinBannedRejectedLog({ number, banTypeLabel, reason: ban.reason }),
                     [resolvedJid],
                 );
                 return;
@@ -595,11 +595,12 @@ export class MessageHandler {
                         return true;
                     });
 
+                const number = resolvedJid.split('@')[0];
                 await this.sendRecurringNotice(
                     'alerta',
                     approveFailed
-                        ? `Pedido de entrada de @${resolvedJid.split('@')[0]} em *${groupName}* — grupo sem admin responsável, tentei aceitar automaticamente mas não consegui. Defina um responsável (\`$asb responsavel\`) ou aceite manualmente.`
-                        : `@${resolvedJid.split('@')[0]} foi aceito(a) automaticamente em *${groupName}* — grupo sem admin responsável pra revisar. Defina um com \`$asb responsavel\`.`,
+                        ? MESSAGES.joinNoResponsibleFailed({ number, groupName })
+                        : MESSAGES.joinNoResponsibleApproved({ number, groupName }),
                     [resolvedJid],
                 );
                 return;
@@ -607,7 +608,7 @@ export class MessageHandler {
 
             const mentionsText = responsibleAdmins.map((a) => `@${a.split('@')[0]}`).join(' ');
             await this.sendLog(
-                `📥 Pedido de entrada pendente em *${groupName}* — @${resolvedJid.split('@')[0]}. ${mentionsText}, dá uma olhada quando puder.`,
+                MESSAGES.joinPendingNotice({ groupName, number: resolvedJid.split('@')[0], mentionsText }),
                 [...responsibleAdmins, resolvedJid],
             );
         } catch (err) {
@@ -641,9 +642,9 @@ export class MessageHandler {
 
         if (responsibleAdmins.length) {
             const mentionsText = responsibleAdmins.map((a) => `@${a.split('@')[0]}`).join(' ');
-            await this.sendLog(`📣 Bot respondeu uma pergunta em *${groupName}*: "${snippet}". ${mentionsText}, dá uma olhada se precisar.`, responsibleAdmins);
+            await this.sendLog(MESSAGES.botMentionAnsweredLogWithAdmins({ groupName, snippet, mentionsText }), responsibleAdmins);
         } else {
-            await this.sendLog(`📣 Bot respondeu uma pergunta em *${groupName}*: "${snippet}".`);
+            await this.sendLog(MESSAGES.botMentionAnsweredLog({ groupName, snippet }));
         }
     }
 
@@ -799,7 +800,7 @@ export class MessageHandler {
                     await this.sock.updateProfilePicture(gid, logoBuffer);
                     logger.info({ groupId: gid }, '[checkAndApplyGroupPhotos] logo aplicado (grupo sem foto)');
                     this.notAuthorizedPhotoGroups.delete(gid);
-                    await this.sendLog(`🖼️ Logo da comunidade aplicada automaticamente no grupo *${(groups[gid] as GroupMetadata)?.subject || gid}* (estava sem foto).`).catch(() => {});
+                    await this.sendLog(MESSAGES.photoAppliedLog({ groupName: (groups[gid] as GroupMetadata)?.subject || gid })).catch(() => {});
                 } catch (err) {
                     if (err instanceof Error && err.message === 'not-authorized') {
                         this.notAuthorizedPhotoGroups.set(gid, Date.now());
@@ -853,7 +854,7 @@ export class MessageHandler {
 
         const jid = msg.key.remoteJid!;
         if (!this.aiModerationService.isConfigured()) {
-            await this.replySafe(jid, '❌ Moderação por IA não está configurada (falta GEMINI_API_KEY no servidor).');
+            await this.replySafe(jid, MESSAGES.moderarNotConfigured);
             return;
         }
 
@@ -863,7 +864,7 @@ export class MessageHandler {
         if (maybeId !== null) {
             const resolved = await this.communityGroupService.getJidByShortId(maybeId);
             if (!resolved) {
-                await this.replySafe(jid, `❌ Nenhum grupo com o ID ${maybeId}. Use $asb grupos pra ver a lista.`);
+                await this.replySafe(jid, MESSAGES.groupIdNotFound({ id: maybeId }));
                 return;
             }
             targetGroupJid = resolved;
@@ -878,12 +879,12 @@ export class MessageHandler {
             // runAiModerationCycle já mandou o motivo real pro grupo de admins — aqui só
             // garante que nada dos passos seguintes (sucesso, reagendamento) rode em cima
             // de uma falha.
-            await this.replySafe(jid, '❌ O ciclo de moderação falhou — veja o motivo no grupo de admins. Nada foi reagendado.');
+            await this.replySafe(jid, MESSAGES.moderarCycleFailed);
             return;
         }
 
-        await this.replySafe(jid, `✅ Ciclo de moderação por IA concluído agora (${targetLabel}). Próximo automático em 1h a partir deste.`);
-        await this.sendLog(`🤖 Ciclo de moderação por IA rodado manualmente via $asb moderar (${targetLabel}) — próximo automático reagendado pra daqui 1h.`);
+        await this.replySafe(jid, MESSAGES.moderarConfirmPublic({ targetLabel }));
+        await this.sendLog(MESSAGES.moderarLog({ targetLabel }));
     }
 
     /**
@@ -1586,7 +1587,7 @@ export class MessageHandler {
             const status = result?.[0]?.status;
 
             if (status === '200') {
-                await this.sendLog(`✅ @${number} foi readicionado(a) ao grupo *${metadata.subject}* automaticamente — ${contextLabel}.`, [userJid]);
+                await this.sendLog(MESSAGES.reAddSuccessLog({ number, groupName: metadata.subject, contextLabel }), [userJid]);
             } else {
                 let inviteLink = '';
                 try {
@@ -1597,11 +1598,11 @@ export class MessageHandler {
                 // Manda o link direto pro privado da pessoa — ela consegue entrar
                 // sozinha, sem depender de um admin encaminhar manualmente.
                 if (inviteLink) {
-                    await this.sendSafe(userJid, { text: `Você foi readicionado(a) ao grupo *${metadata.subject}*, mas precisa entrar manualmente.${inviteLink}` });
+                    await this.sendSafe(userJid, { text: MESSAGES.reAddManualDm({ groupName: metadata.subject, inviteLink }) });
                 }
 
                 await this.sendRetryableLog(
-                    `⚠️ @${number} não pôde ser readicionado(a) ao grupo *${metadata.subject}* (${contextLabel}) — WhatsApp negou.${inviteLink}`,
+                    MESSAGES.reAddDeniedRetry({ number, groupName: metadata.subject, contextLabel, inviteLink }),
                     () => this.tryReAddToGroup(userJid, groupJid, contextLabel),
                     [userJid],
                 );
@@ -1609,7 +1610,7 @@ export class MessageHandler {
         } catch (err) {
             logger.error({ err, userJid, groupJid }, '[tryReAddToGroup] erro tentando readicionar');
             await this.sendRetryableLog(
-                `⚠️ Não foi possível readicionar @${number} automaticamente ao grupo *${metadata.subject}* (${contextLabel}) — motivo: ${this.describeError(err)}.`,
+                MESSAGES.reAddErrorRetry({ number, groupName: metadata.subject, contextLabel, errorDetail: this.describeError(err) }),
                 () => this.tryReAddToGroup(userJid, groupJid, contextLabel),
                 [userJid],
             ).catch(() => {});
@@ -1899,7 +1900,7 @@ export class MessageHandler {
                         });
                     } else if (emoji === '❌') {
                         await this.pendingAiBanService.resolve(pendingAiBan.id, 'DISMISSED');
-                        await this.sendLog(`✅ Proposta de banimento por IA dispensada — @${pendingAiBan.userJid.split('@')[0]} não foi banido(a).`);
+                        await this.sendLog(MESSAGES.pendingAiBanDismissedLog({ number: pendingAiBan.userJid.split('@')[0] }));
                     }
                     continue;
                 }
@@ -1953,7 +1954,7 @@ export class MessageHandler {
                 if (adminAction) {
                     const reactorResolved = await resolvePnJid(this.sock, reactorRaw);
                     if (await this.isAdminOfAdminGroup(reactorRaw, reactorResolved)) {
-                        await this.sendLog('❌ Reação sozinha não reverte — responda esta mensagem com o motivo, embasado nas regras.');
+                        await this.sendLog(MESSAGES.adminActionReactionOnlyLog);
                     }
                     continue;
                 }
@@ -2101,7 +2102,7 @@ export class MessageHandler {
                 });
             } else if (intent === 'reject') {
                 await this.pendingAiBanService.resolve(pendingAiBan.id, 'DISMISSED');
-                await this.sendLog(`✅ Proposta de banimento por IA dispensada — @${pendingAiBan.userJid.split('@')[0]} não foi banido(a).`);
+                await this.sendLog(MESSAGES.pendingAiBanDismissedLog({ number: pendingAiBan.userJid.split('@')[0] }));
             }
             return true;
         }
@@ -2249,7 +2250,7 @@ export class MessageHandler {
         const jid = msg.key.remoteJid!;
 
         if (!jid.endsWith('@g.us')) {
-            await this.replySafe(jid, '❌ Este comando só funciona em grupos.');
+            await this.replySafe(jid, MESSAGES.assumirOnlyInGroup);
             return false;
         }
 
@@ -2257,7 +2258,7 @@ export class MessageHandler {
         try {
             metadata = await this.sock.groupMetadata(jid);
         } catch {
-            await this.replySafe(jid, '❌ Erro ao verificar permissões. Tente novamente.');
+            await this.replySafe(jid, MESSAGES.isAuthorizedMetadataError);
             return false;
         }
 
@@ -2265,13 +2266,13 @@ export class MessageHandler {
         const senderParticipant = findParticipant(metadata, senderRaw);
 
         if (!isGroupAdmin(senderParticipant)) {
-            await this.replySafe(jid, '❌ Você precisa ser admin do grupo para usar este comando.');
+            await this.replySafe(jid, MESSAGES.isAuthorizedNotGroupAdmin);
             return false;
         }
 
         const senderJid = await resolvePnJid(this.sock, senderRaw, metadata);
         if (!(await this.isMemberOfAdminGroup(senderRaw, senderJid))) {
-            await this.replySafe(jid, '❌ Você precisa estar no grupo de administração para usar este comando.');
+            await this.replySafe(jid, MESSAGES.assumirNotInAdminGroup);
             return false;
         }
 
@@ -2339,8 +2340,8 @@ export class MessageHandler {
      * responsável) e "dica" (informativo, ex: dica mensal, estatística).
      */
     private async sendRecurringNotice(category: 'alerta' | 'dica', text: string, mentions?: string[]): Promise<void> {
-        const prefix = category === 'alerta' ? '⚠️ *Alerta*' : '💡 *Dica*';
-        await this.sendLog(`${prefix}\n${text}`, mentions);
+        const prefix = category === 'alerta' ? MESSAGES.recurringNoticeAlertPrefix : MESSAGES.recurringNoticeTipPrefix;
+        await this.sendLog(MESSAGES.recurringNotice({ prefix, text }), mentions);
     }
 
     /**
@@ -2352,7 +2353,7 @@ export class MessageHandler {
      */
     private async sendDebugLog(text: string): Promise<void> {
         if (!botConfig.debugGroupJid) return;
-        await this.sendSafe(botConfig.debugGroupJid, { text: `🛠️ ${text}` });
+        await this.sendSafe(botConfig.debugGroupJid, { text: MESSAGES.debugLogText({ text }) });
     }
 
     // Ações automáticas que falharam mas podem ser tentadas de novo — reagir
@@ -2364,7 +2365,7 @@ export class MessageHandler {
     private static readonly RETRY_EMOJI = '🔁';
 
     private async sendRetryableLog(text: string, retryAction: () => Promise<void>, mentions?: string[]): Promise<void> {
-        const key = await this.sendLog(`${text}\n\nReaja com 🔁 ou responda "tentar" pra tentar de novo.`, mentions);
+        const key = await this.sendLog(MESSAGES.retryableNotice({ text }), mentions);
         if (key?.id) this.retryableActions.set(key.id, retryAction);
     }
 
