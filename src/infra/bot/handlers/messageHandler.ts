@@ -1776,7 +1776,7 @@ export class MessageHandler {
                         const groupLabel = update.subject || gid;
                         const frozenDescription = lock.frozenDescription;
                         await this.sendRetryableLog(
-                            `⚠️ Grupo *${groupLabel}* está travado (rejeitado anteriormente) e a descrição foi alterada de novo, mas não foi possível reverter automaticamente — motivo: ${this.describeError(revertError)}. Trava até ${lock.lockedUntil.toLocaleString('pt-BR')}.`,
+                            MESSAGES.descLockRevertFailedRetry({ groupLabel, lockedUntil: lock.lockedUntil.toLocaleString('pt-BR'), errorDetail: this.describeError(revertError) }),
                             () => this.runRetryable(
                                 async () => {
                                     this.recentSelfDescriptionUpdate.set(gid, Date.now());
@@ -1784,8 +1784,8 @@ export class MessageHandler {
                                     this.descriptionCache.set(gid, frozenDescription ?? undefined);
                                 },
                                 {
-                                    success: `✅ Descrição do grupo *${groupLabel}* revertida com sucesso (retentativa).`,
-                                    failure: (reason) => `⚠️ Grupo *${groupLabel}* segue travado sem conseguir reverter a descrição — motivo: ${reason}.`,
+                                    success: MESSAGES.descLockRevertRetrySuccess({ groupLabel }),
+                                    failure: (errorDetail) => MESSAGES.descLockRevertRetryFailure({ groupLabel, errorDetail }),
                                 },
                             ),
                         );
@@ -1794,7 +1794,7 @@ export class MessageHandler {
 
                     this.descriptionCache.set(gid, lock.frozenDescription ?? undefined);
                     await this.sendLog(
-                        `🔒 Grupo *${update.subject || gid}* está com a descrição travada (rejeitada anteriormente) — mudança revertida automaticamente. Trava até ${lock.lockedUntil.toLocaleString('pt-BR')}.`,
+                        MESSAGES.descLockRevertedLog({ groupLabel: update.subject || gid, lockedUntil: lock.lockedUntil.toLocaleString('pt-BR') }),
                     );
                     continue;
                 }
@@ -1829,18 +1829,12 @@ export class MessageHandler {
             groupName = (await this.sock.groupMetadata(groupJid)).subject;
         } catch { /* usa o jid mesmo se falhar */ }
 
-        const text = [
-            `📝 *Mudança de descrição detectada* — ${groupName}`,
-            proposedBy ? `Por: @${proposedBy.split('@')[0]}` : '',
-            '',
-            '*Antes:*',
-            oldDescription || '_(vazia)_',
-            '',
-            '*Depois:*',
-            newDescription || '_(vazia)_',
-            '',
-            'Reaja ✅/❌ ou responda "sim"/"não". Se a maioria rejeitar, a versão antiga volta e o grupo fica travado por 7 dias.',
-        ].filter(Boolean).join('\n');
+        const text = MESSAGES.descriptionVoteText({
+            groupName,
+            proposedByLine: proposedBy ? `Por: @${proposedBy.split('@')[0]}` : '',
+            oldDescription: oldDescription || '_(vazia)_',
+            newDescription: newDescription || '_(vazia)_',
+        });
 
         const sent = await this.sock.sendMessage(adminGroupJid, {
             text,
@@ -2208,7 +2202,7 @@ export class MessageHandler {
         if (approvals >= majority) {
             await this.descriptionChangeService.resolve(change.id, 'APPROVED');
             this.descriptionVotes.delete(change.voteMessageId);
-            await this.sendLog(`✅ Mudança de descrição aprovada pela maioria — mantida.`);
+            await this.sendLog(MESSAGES.descriptionApproved);
         } else if (rejections >= majority) {
             await this.descriptionChangeService.resolve(change.id, 'REJECTED');
             await this.descriptionChangeService.setLock(change.groupJid, change.oldDescription ?? undefined);
@@ -2218,9 +2212,7 @@ export class MessageHandler {
                 logger.warn({ err }, '[tallyDescriptionVote] falha ao restaurar descrição rejeitada');
             });
             this.descriptionCache.set(change.groupJid, change.oldDescription ?? undefined);
-            await this.sendLog(
-                `❌ Mudança de descrição rejeitada pela maioria — restaurada a versão anterior. Grupo travado por 7 dias.`,
-            );
+            await this.sendLog(MESSAGES.descriptionRejected);
         }
         // senão, segue pendente aguardando mais votos
     }

@@ -112,6 +112,30 @@ export const MESSAGES = {
     ruleProposalRejected: (p: { draftedText: string }) =>
         `❌ Proposta de regra rejeitada pela maioria: "${p.draftedText}".`,
 
+    // ===== Mudança de descrição (handleGroupsUpdate / openDescriptionVote / tallyDescriptionVote) =====
+    descLockRevertFailedRetry: (p: { groupLabel: string; lockedUntil: string; errorDetail: string }) =>
+        `⚠️ Grupo *${p.groupLabel}* está travado (rejeitado anteriormente) e a descrição foi alterada de novo, mas não foi possível reverter automaticamente — motivo: ${p.errorDetail}. Trava até ${p.lockedUntil}.`,
+    descLockRevertRetrySuccess: (p: { groupLabel: string }) =>
+        `✅ Descrição do grupo *${p.groupLabel}* revertida com sucesso (retentativa).`,
+    descLockRevertRetryFailure: (p: { groupLabel: string; errorDetail: string }) =>
+        `⚠️ Grupo *${p.groupLabel}* segue travado sem conseguir reverter a descrição — motivo: ${p.errorDetail}.`,
+    descLockRevertedLog: (p: { groupLabel: string; lockedUntil: string }) =>
+        `🔒 Grupo *${p.groupLabel}* está com a descrição travada (rejeitada anteriormente) — mudança revertida automaticamente. Trava até ${p.lockedUntil}.`,
+    descriptionVoteText: (p: { groupName: string; proposedByLine: string; oldDescription: string; newDescription: string }) => [
+        `📝 *Mudança de descrição detectada* — ${p.groupName}`,
+        p.proposedByLine,
+        '',
+        '*Antes:*',
+        p.oldDescription,
+        '',
+        '*Depois:*',
+        p.newDescription,
+        '',
+        'Reaja ✅/❌ ou responda "sim"/"não". Se a maioria rejeitar, a versão antiga volta e o grupo fica travado por 7 dias.',
+    ].filter(Boolean).join('\n'),
+    descriptionApproved: '✅ Mudança de descrição aprovada pela maioria — mantida.',
+    descriptionRejected: '❌ Mudança de descrição rejeitada pela maioria — restaurada a versão anterior. Grupo travado por 7 dias.',
+
     // ===== Pipeline de AdminAction (recordAdminAction / revisão / ratificação) =====
     adminActionNotice: (p: { noticeText: string }) =>
         `${p.noticeText}\n\nAdmin de comunidade: responda esta mensagem com o motivo (embasado nas regras) pra reverter.`,
