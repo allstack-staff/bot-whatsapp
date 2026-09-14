@@ -25,6 +25,7 @@ import { GroupAlertStateService } from '../services/groupAlertStateService';
 import { NameBlacklistService } from '../services/nameBlacklistService';
 import { BotMentionAiService } from '../services/botMentionAiService';
 import { AdminRemovalService } from '../services/adminRemovalService';
+import { MESSAGES } from '../messages';
 import { logger } from '../utils/logger';
 import { findParticipant, isGroupAdmin, resolvePnJid } from '../utils/jid';
 import { humanBulkActionDelay, humanReplyDelay } from '../utils/delay';
@@ -396,7 +397,7 @@ export class MessageHandler {
                     const retryAction = () => this.runRetryable(
                         async () => { await this.sock.groupParticipantsUpdate(id, [participantId], 'remove'); },
                         {
-                            success: `✅ @${number} removido(a) do grupo com sucesso (retentativa).`,
+                            success: `✅ @${number} removido(a) do grupo com sucesso.`,
                             failure: (reason) => `⚠️ @${number} reentrou com banimento ativo (${banTypeLabel}${expires} — Motivo: ${ban.reason}) mas não foi possível removê-lo(a) automaticamente — motivo: ${reason}.`,
                         },
                         [resolvedJid],
@@ -550,7 +551,7 @@ export class MessageHandler {
                     const retryAction = () => this.runRetryable(
                         async () => { await this.sock.groupRequestParticipantsUpdate(id, [participant], 'reject'); },
                         {
-                            success: `✅ Pedido de entrada de @${number} rejeitado com sucesso (retentativa).`,
+                            success: `✅ Pedido de entrada de @${number} rejeitado com sucesso.`,
                             failure: (reason) => `⚠️ @${number} pediu entrada com banimento ${banTypeLabel} ativo (Motivo: ${ban.reason}) mas não foi possível rejeitar automaticamente — motivo: ${reason}.`,
                         },
                         [resolvedJid],
@@ -772,7 +773,7 @@ export class MessageHandler {
                             () => this.runRetryable(
                                 async () => { await this.sock.updateProfilePicture(gid, logoBuffer); },
                                 {
-                                    success: `✅ Logo aplicada com sucesso no grupo *${groupLabel}* (retentativa).`,
+                                    success: `✅ Logo aplicada com sucesso no grupo *${groupLabel}*.`,
                                     failure: (reason) => `⚠️ Não foi possível aplicar a logo automaticamente no grupo *${groupLabel}* — motivo: ${reason}.`,
                                 },
                             ),
@@ -901,13 +902,13 @@ export class MessageHandler {
                     const mentionList = actionable.map((a) => `@${a.id.split('@')[0]}`).join(', ');
                     await this.sendRecurringNotice(
                         'alerta',
-                        `@${number} está banido de comunidade e ainda está no grupo *${groupLabel}*, mas o bot não é admin lá — não consigo remover. ${mentionList}, remova manualmente.`,
+                        MESSAGES.sweepBanNotAdminWithActionable({ number, groupLabel, mentionList }),
                         [targetJid, ...actionable.map((a) => a.id)],
                     );
                 } else {
                     await this.sendRecurringNotice(
                         'alerta',
-                        `@${number} está banido de comunidade e ainda está no grupo *${groupLabel}*, mas o bot não é admin lá e nenhum admin desse grupo está no grupo de admins pra marcar — remova manualmente.`,
+                        MESSAGES.sweepBanNotAdminNoActionable({ number, groupLabel }),
                         [targetJid],
                     );
                 }
@@ -917,12 +918,12 @@ export class MessageHandler {
             await humanBulkActionDelay();
             await this.sock.groupParticipantsUpdate(gid, [p.id], 'remove').catch(async (err: any) => {
                 await this.sendRetryableLog(
-                    `⚠️ @${number} está banido de comunidade mas não foi possível removê-lo(a) do grupo *${groupLabel}* automaticamente — motivo: ${this.describeError(err)}.`,
+                    MESSAGES.sweepBanRemoveFailedRetry({ number, groupLabel, errorDetail: this.describeError(err) }),
                     () => this.runRetryable(
                         async () => { await this.sock.groupParticipantsUpdate(gid, [p.id], 'remove'); },
                         {
-                            success: `✅ @${number} removido(a) do grupo *${groupLabel}* com sucesso (retentativa).`,
-                            failure: (r) => `⚠️ @${number} segue no grupo *${groupLabel}* sem conseguir remover — motivo: ${r}.`,
+                            success: MESSAGES.sweepBanRemoveRetrySuccess({ number, groupLabel }),
+                            failure: (errorDetail) => MESSAGES.sweepBanRemoveRetryFailure({ number, groupLabel, errorDetail }),
                         },
                         [targetJid],
                     ),
@@ -1288,7 +1289,7 @@ export class MessageHandler {
                     () => this.runRetryable(
                         async () => { await this.sock.groupParticipantsUpdate(groupJid, [targetParticipant.id], 'remove'); },
                         {
-                            success: `✅ @${number} removido(a) do grupo *${groupLabel}* com sucesso (retentativa).`,
+                            success: `✅ @${number} removido(a) do grupo *${groupLabel}* com sucesso.`,
                             failure: (r) => `⚠️ IA baniu @${number} mas não foi possível removê-lo(a) do grupo *${groupLabel}* automaticamente — motivo: ${r}.`,
                         },
                         [resolvedJid],
@@ -1313,8 +1314,9 @@ export class MessageHandler {
         }
 
         // Aviso público e resumido no próprio grupo — quem estava lá vê que
-        // houve uma punição, sem precisar ir atrás no grupo de admins.
-        await this.replySafe(groupJid, `🚫 *Banido*\nUsuário: @${number}\nTipo: Comunidade\nMotivo: ${reason}`);
+        // houve uma punição, sem precisar ir atrás no grupo de admins. Prefixo
+        // "[IA]" deixa claro que foi decisão automatizada, não de um admin.
+        await this.replySafe(groupJid, MESSAGES.aiCommunityBanConfirmPublic({ number, reason }));
 
         await this.notifyRevertiblePunishment(
             { userJid: resolvedJid, groupJid, banType: 'COMUNIDADE', reason, source: 'ia' },
@@ -3534,7 +3536,7 @@ export class MessageHandler {
         const { jid: targetRaw, fromQuoted } = this.getTargetJid(msg);
 
         if (!targetRaw) {
-            await this.replySafe(jid, '❌ Marque o usuário ou responda a mensagem dele. Ex: $asb ban @user permanente motivo');
+            await this.replySafe(jid, MESSAGES.banNoTarget);
             return;
         }
 
@@ -3542,20 +3544,20 @@ export class MessageHandler {
 
         // Não permite banir admins
         if (isGroupAdmin(targetParticipant)) {
-            await this.replySafe(jid, '❌ Não é possível banir um admin do grupo.');
+            await this.replySafe(jid, MESSAGES.banTargetIsAdmin);
             return;
         }
 
         const targetJid = await resolvePnJid(this.sock, targetRaw, metadata);
 
         if (targetJid === this.getBotJid()) {
-            await this.replySafe(jid, '❌ Não é possível banir a própria conta do bot.');
+            await this.replySafe(jid, MESSAGES.banTargetIsBot);
             return;
         }
 
         const pendingRatification = await this.adminActionService.findPendingRatificationByTarget(targetJid);
         if (pendingRatification) {
-            await this.replySafe(jid, `❌ @${targetJid.split('@')[0]} tem uma decisão em votação de ratificação — vote nela (✅/❌ com motivo) em vez de tomar uma nova ação. Aguarde a votação concluir.`);
+            await this.replySafe(jid, MESSAGES.pendingRatificationBlock({ number: targetJid.split('@')[0] }));
             return;
         }
 
@@ -3604,7 +3606,8 @@ export class MessageHandler {
         // Resposta no grupo
         const escopoLabel = banType === 'COMUNIDADE' ? 'removido de todos os grupos' : 'removido do grupo';
         const expiresLabel = expiresAt ? `\nExpira: ${expiresAt.toLocaleString('pt-BR')}` : '';
-        await this.replySafe(jid, `🚫 *Banido*\nUsuário: @${targetJid.split('@')[0]}\nTipo: ${this.resolveBanTypeLabel(banType)}${expiresLabel}\nMotivo: ${reason}`);
+        const typeLabel = this.resolveBanTypeLabel(banType);
+        await this.replySafe(jid, MESSAGES.banConfirmPublic({ number: targetJid.split('@')[0], typeLabel, expiresLabel, reason }));
 
         // Log no grupo admin — vira o aviso revisável (ver recordAdminAction)
         await this.recordAdminAction({
@@ -3612,14 +3615,14 @@ export class MessageHandler {
             actionType: 'ban',
             groupJid: jid,
             targetJid,
-            description: `baniu @${targetJid.split('@')[0]} (${this.resolveBanTypeLabel(banType)}) em *${metadata.subject}* — motivo: ${reason}`,
+            description: MESSAGES.banAdminActionDescription({ number: targetJid.split('@')[0], typeLabel, groupName: metadata.subject, reason }),
             beforeState: JSON.stringify({
                 banType,
                 reason,
                 expiresAt: expiresAt ? expiresAt.toISOString() : null,
                 displayName: targetParticipant?.notify || targetParticipant?.name || undefined,
             }),
-            noticeText: `🚫 Membro @${targetJid.split('@')[0]} banido — ${this.resolveBanTypeLabel(banType)}${expiresLabel} — ${escopoLabel} — Motivo: ${reason}`,
+            noticeText: MESSAGES.banAdminActionNotice({ number: targetJid.split('@')[0], typeLabel, expiresLabel, escopoLabel, reason }),
             mentions: [targetJid],
         });
 
@@ -3646,13 +3649,13 @@ export class MessageHandler {
         } else if (args[0]) {
             const rawNumber = args[0].replace(/\D/g, '');
             if (rawNumber.length < 10) {
-                await this.replySafe(jid, '❌ Número inválido. Use o DDI + DDD + número. Ex: 5541995850310');
+                await this.replySafe(jid, MESSAGES.unbanInvalidNumber);
                 return;
             }
             userJid = `${rawNumber}@s.whatsapp.net`;
             reasonArgs = args.slice(1);
         } else {
-            await this.replySafe(jid, '❌ Marque a pessoa, responda a mensagem dela, ou use: $asb unban 5541995850310');
+            await this.replySafe(jid, MESSAGES.unbanNoTarget);
             return;
         }
 
@@ -3661,7 +3664,7 @@ export class MessageHandler {
         const senderJid = await resolvePnJid(this.sock, senderRaw);
 
         if (!reason && !(await this.isAdminOfAdminGroup(senderRaw, senderJid))) {
-            await this.replySafe(jid, '❌ Motivo obrigatório. Ex: $asb unban @user reavaliado, sem novas violações\n(admin de comunidade não precisa informar motivo)');
+            await this.replySafe(jid, MESSAGES.unbanReasonRequired);
             return;
         }
 
@@ -3673,10 +3676,10 @@ export class MessageHandler {
 
         if (count > 0) {
             const reasonLabel = reason ? `\nMotivo: ${reason}` : '';
-            await this.replySafe(jid, `✅ Usuário @${number} foi desbanido (${count} registro(s) removido(s)).${reasonLabel}`);
+            await this.replySafe(jid, MESSAGES.unbanConfirmPublic({ number, count, reasonLabel }));
 
             await this.sendLog(
-                `✅ Membro @${number} desbanido — ${count} registro(s) removido(s).${reasonLabel}`,
+                MESSAGES.unbanLog({ number, count, reasonLabel }),
                 [userJid],
             );
 
@@ -3696,7 +3699,7 @@ export class MessageHandler {
                 await this.tryReAddToGroup(userJid, groupJid, 'foi desbanido(a)');
             }
         } else {
-            await this.replySafe(jid, `❌ Nenhum banimento encontrado para @${number}.`);
+            await this.replySafe(jid, MESSAGES.unbanNotFound({ number }));
         }
 
         logger.info({ userJid, count }, 'User unbanned');
@@ -3709,22 +3712,23 @@ export class MessageHandler {
         const bans = await this.banService.getBans();
 
         if (bans.length === 0) {
-            await this.replySafe(jid, '📋 Nenhum usuário banido no momento.');
+            await this.replySafe(jid, MESSAGES.bansEmpty);
             return;
         }
 
         const lines = bans.map((b, i) => {
             const number = b.userJid.split('@')[0];
-            const name = b.displayName ? ` (${b.displayName})` : '';
-            const expires = b.expiresAt ? ` (expira: ${new Date(b.expiresAt).toLocaleString('pt-BR')})` : '';
-            return `${i + 1}. ${number}${name} — ${b.banType}${expires}\n   Motivo: ${b.reason}`;
+            const nameSuffix = b.displayName ? ` (${b.displayName})` : '';
+            const expiresSuffix = b.expiresAt ? ` (expira: ${new Date(b.expiresAt).toLocaleString('pt-BR')})` : '';
+            return MESSAGES.bansLine({ index: i + 1, number, nameSuffix, banType: b.banType, expiresSuffix, reason: b.reason });
         });
 
-        const text = `📋 *Usuários Banidos (${bans.length})*\n\n${lines.join('\n')}`;
+        const header = MESSAGES.bansHeader({ count: bans.length });
+        const text = `${header}${lines.join('\n')}`;
 
         if (text.length > 4000) {
             const chunks: string[] = [];
-            let current = `📋 *Usuários Banidos (${bans.length})*\n\n`;
+            let current = header;
             for (const line of lines) {
                 if (current.length + line.length > 4000) {
                     chunks.push(current);
@@ -3783,7 +3787,7 @@ export class MessageHandler {
         const { jid: targetRaw } = this.getTargetJid(msg);
 
         if (!targetRaw || args.length < 2) {
-            await this.replySafe(jid, '❌ Use: $asb banedit @user [tipo|tempo] [valor]\nOu responda a mensagem + $asb banedit tipo permanente\nEx: $asb banedit @user tipo permanente\nEx: $asb banedit @user tempo 7d');
+            await this.replySafe(jid, MESSAGES.baneditUsage);
             return;
         }
 
@@ -3795,7 +3799,7 @@ export class MessageHandler {
             const banType = this.resolveBanType(value.toLowerCase());
             const validTypes = ['PERMANENTE', 'TEMPORARIO', 'COMUNIDADE'];
             if (!validTypes.includes(banType)) {
-                await this.replySafe(jid, '❌ Tipo inválido. Use: permanente, temporario, comunidade');
+                await this.replySafe(jid, MESSAGES.baneditInvalidType);
                 return;
             }
 
@@ -3804,17 +3808,19 @@ export class MessageHandler {
                 await this.sweepCommunityBan(targetJid, { excludeGroupJid: jid });
             }
             await this.reactSafe(jid, msg.key, '✅');
-            await this.replySafe(jid, `✅ Banimento de @${targetJid.split('@')[0]} alterado para *${this.resolveBanTypeLabel(banType)}*.`);
+            const number = targetJid.split('@')[0];
+            const typeLabel = this.resolveBanTypeLabel(banType);
+            await this.replySafe(jid, MESSAGES.baneditTypeChangedPublic({ number, typeLabel }));
 
             await this.sendLog(
-                `🔄 Banimento de @${targetJid.split('@')[0]} alterado para ${this.resolveBanTypeLabel(banType)}.`,
+                MESSAGES.baneditTypeChangedLog({ number, typeLabel }),
                 [targetJid],
             );
 
         } else if (field === 'tempo') {
             const ms = parseDurationMs(value);
             if (ms === null) {
-                await this.replySafe(jid, '❌ Formato inválido. Use: 7d (dias), 12h (horas), 30m (minutos)');
+                await this.replySafe(jid, MESSAGES.baneditInvalidDuration);
                 return;
             }
 
@@ -3822,14 +3828,15 @@ export class MessageHandler {
             await this.banService.updateExpiresAt(targetJid, jid, expiresAt);
 
             await this.reactSafe(jid, msg.key, '✅');
-            await this.replySafe(jid, `✅ Banimento de @${targetJid.split('@')[0]} atualizado — expira em ${value}.`);
+            const number = targetJid.split('@')[0];
+            await this.replySafe(jid, MESSAGES.baneditDurationChangedPublic({ number, value }));
 
             await this.sendLog(
-                `🔄 Banimento de @${targetJid.split('@')[0]} — expira em ${value}.`,
+                MESSAGES.baneditDurationChangedLog({ number, value }),
                 [targetJid],
             );
         } else {
-            await this.replySafe(jid, '❌ Campo inválido. Use: tipo ou tempo.');
+            await this.replySafe(jid, MESSAGES.baneditInvalidField);
         }
     }
 
@@ -3847,7 +3854,7 @@ export class MessageHandler {
         const { jid: targetRaw, fromQuoted } = this.getTargetJid(msg);
 
         if (!targetRaw) {
-            await this.replySafe(jid, '❌ Marque a pessoa ou responda a mensagem dela. Ex: $asb advertir @user flood no grupo');
+            await this.replySafe(jid, MESSAGES.advertirNoTarget);
             return;
         }
 
@@ -3855,7 +3862,7 @@ export class MessageHandler {
 
         const pendingRatification = await this.adminActionService.findPendingRatificationByTarget(targetJid);
         if (pendingRatification) {
-            await this.replySafe(jid, `❌ @${targetJid.split('@')[0]} tem uma decisão em votação de ratificação — vote nela (✅/❌ com motivo) em vez de tomar uma nova ação. Aguarde a votação concluir.`);
+            await this.replySafe(jid, MESSAGES.pendingRatificationBlock({ number: targetJid.split('@')[0] }));
             return;
         }
 
@@ -3870,16 +3877,17 @@ export class MessageHandler {
         const count = await this.warningService.countThisMonth(targetJid, jid);
 
         await this.reactSafe(jid, msg.key, '⚠️');
-        await this.replySafe(jid, `⚠️ @${targetJid.split('@')[0]} advertido (${count}/3 esse mês).\nMotivo: ${reason}`);
+        const number = targetJid.split('@')[0];
+        await this.replySafe(jid, MESSAGES.advertirConfirmPublic({ number, count, reason }));
 
         await this.recordAdminAction({
             actorJid: issuedBy,
             actionType: 'advertir',
             groupJid: jid,
             targetJid,
-            description: `advertiu @${targetJid.split('@')[0]} em *${metadata.subject}* — motivo: ${reason}`,
+            description: MESSAGES.advertirAdminActionDescription({ number, groupName: metadata.subject, reason }),
             beforeState: JSON.stringify({ reason }),
-            noticeText: `⚠️ @${targetJid.split('@')[0]} recebeu advertência (${count}/3 esse mês) — Motivo: ${reason}`,
+            noticeText: MESSAGES.advertirAdminActionNotice({ number, count, reason }),
             mentions: [targetJid],
         });
 
@@ -3910,7 +3918,7 @@ export class MessageHandler {
         } else {
             banType = 'PERMANENTE';
             durationLabel = 'permanente';
-            tierNote = '\n⚠️ Essa é a 3ª vez (ou mais) que essa pessoa é punida por acúmulo de advertências nesse grupo — avaliem se deve virar banimento de comunidade (use $asb banedit @user tipo comunidade se decidirem).';
+            tierNote = MESSAGES.warningPunishmentTierNote;
         }
 
         const reason = `Acúmulo de 3 ou mais advertências no mês (${tier}ª punição nesse grupo)`;
@@ -3935,11 +3943,11 @@ export class MessageHandler {
         if (!this.isBotAdminOfGroup(metadata)) {
             await this.sendRecurringNotice(
                 'alerta',
-                `@${number} atingiu 3 advertências no mês em *${metadata.subject || groupJid}* (banimento ${durationLabel} registrado), mas o bot não é admin desse grupo — não consegui remover. Promova o bot a admin, ou remova manualmente.`,
+                MESSAGES.warningPunishmentNotAdminAlert({ number, groupName: metadata.subject || groupJid, durationLabel }),
                 [targetJid],
             );
             await this.notifyRevertiblePunishment({ userJid: targetJid, groupJid, banType, reason, source: 'advertencias' },
-                `🚫 @${number} banido automaticamente por acúmulo de advertências (3/mês) — ${durationLabel}, mas o bot não é admin do grupo e não conseguiu remover.${tierNote}`,
+                MESSAGES.warningPunishmentNotAdminHeadline({ number, durationLabel, tierNote }),
             );
             return;
         }
@@ -3956,12 +3964,12 @@ export class MessageHandler {
                 });
             if (removeFailed) {
                 await this.sendRetryableLog(
-                    `⚠️ @${number} atingiu 3 advertências no mês (banimento ${durationLabel} aplicado) mas não foi possível removê-lo(a) do grupo automaticamente — motivo: ${this.describeError(removeError)}.`,
+                    MESSAGES.warningPunishmentRemoveFailedRetry({ number, durationLabel, errorDetail: this.describeError(removeError) }),
                     () => this.runRetryable(
                         async () => { await this.sock.groupParticipantsUpdate(groupJid, [targetParticipant.id], 'remove'); },
                         {
-                            success: `✅ @${number} removido(a) do grupo com sucesso (retentativa).`,
-                            failure: (reason) => `⚠️ @${number} segue no grupo apesar do banimento por advertências — motivo: ${reason}.`,
+                            success: MESSAGES.warningPunishmentRemoveRetrySuccess({ number }),
+                            failure: (errorDetail) => MESSAGES.warningPunishmentRemoveRetryFailure({ number, errorDetail }),
                         },
                         [targetJid],
                     ),
@@ -3973,11 +3981,11 @@ export class MessageHandler {
         // Só anuncia "banido" no próprio grupo quando a remoção de fato
         // aconteceu — nunca claim de sucesso sem confirmação.
         if (!removeFailed) {
-            await this.replySafe(groupJid, `🚫 @${number} atingiu 3 advertências no mês e foi banido automaticamente (${durationLabel}).`);
+            await this.replySafe(groupJid, MESSAGES.warningPunishmentConfirmPublic({ number, durationLabel }));
         }
 
         await this.notifyRevertiblePunishment({ userJid: targetJid, groupJid, banType, reason, source: 'advertencias' },
-            `🚫 @${number} banido automaticamente por acúmulo de advertências (3/mês) — ${durationLabel}.${tierNote}`,
+            MESSAGES.warningPunishmentHeadline({ number, durationLabel, tierNote }),
         );
     }
 
@@ -3993,7 +4001,7 @@ export class MessageHandler {
     ): Promise<void> {
         const punishment = await this.automatedPunishmentService.create(data);
         const messageKey = await this.sendLog(
-            `${headline}\n\nReaja ❌ pra desfazer, ou responda esta mensagem com o motivo pra desfazer com justificativa.`,
+            MESSAGES.revertiblePunishmentNotice({ headline }),
             [data.userJid],
         );
         if (messageKey?.id) {
@@ -4016,7 +4024,7 @@ export class MessageHandler {
         const reasonLabel = revertReason ? `\nMotivo do admin: ${revertReason}` : '';
 
         await this.sendLog(
-            `🔄 ${sourceLabel} identificou um comportamento e puniu @${number}, mas o admin @${admin} revisou e reverteu a medida.${reasonLabel}`,
+            MESSAGES.revertAutomatedPunishmentLog({ number, admin, sourceLabel, reasonLabel }),
             [punishment.userJid],
         );
     }
