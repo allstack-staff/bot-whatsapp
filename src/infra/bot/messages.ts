@@ -20,6 +20,34 @@ export const MESSAGES = {
     memberTip: (p: { tip: string; rulesUrl: string }) =>
         `💡 *Dica*\n\n${p.tip}\n\nRegras completas: ${p.rulesUrl}`,
 
+    // ===== $asb propor =====
+    proporWrongGroup: '❌ Esse comando só pode ser usado no grupo de administração.',
+    proporNotConfigured: '❌ Redação de regras por IA não está configurada (falta GEMINI_API_KEY no servidor).',
+    proporNoIdea: (p: { usage: string }) =>
+        `❌ Descreva a ideia da regra. Uso: ${p.usage}\nEx: $asb propor proibir gente pedindo doação de dinheiro nos grupos`,
+    proporDraftFailed: '❌ Não foi possível redigir a proposta agora. Tente de novo em instantes.',
+    proporInsufficientDetail: (p: { feedback: string; usage: string }) =>
+        `❌ ${p.feedback}\nDetalhe melhor e tente de novo. Uso: ${p.usage}`,
+    proporConflictNote: (p: { conflictNote: string }) => `\n⚠️ Possível conflito: ${p.conflictNote}`,
+    proporPublishNotConfigured: '❌ Publicação automática não está configurada (falta GITHUB_RULES_TOKEN) — decisão monocrática exige publicar na hora, então não dá pra seguir sem isso. Publique manualmente ou peça pra configurar o token.',
+    proporPublishFailed: (p: { errorDetail: string }) => `❌ Não foi possível publicar agora — motivo: ${p.errorDetail}.`,
+    proporLiveVoteOpen: (p: { ruleNumber: number; number: string; draftedText: string; punishmentLabel: string; conflictBlock: string }) =>
+        `📋 *Regra ${p.ruleNumber} publicada* — decisão monocrática de @${p.number}, já em vigor.\n\n"${p.draftedText}"\nPunição: *${p.punishmentLabel}*${p.conflictBlock}\n\nOutros admins de comunidade: reaja ✅ manter, ❌ reverter, 🔧 ajustar (ou responda "manter"/"reverter"/"ajustar"). Admin comum também pode votar, mas quem decide é a turma de admin de comunidade.`,
+    proporLiveVoteOpenFailed: '❌ Regra publicada, mas não foi possível abrir a votação de ratificação — abra manualmente uma discussão sobre ela no grupo de admins.',
+    proporPendingVoteOpen: (p: { number: string; draftedText: string; punishmentLabel: string; conflictBlock: string }) =>
+        `📋 *Proposta de nova regra* (sugerida por @${p.number}, redigida por IA)\n\n"${p.draftedText}"\nPunição: *${p.punishmentLabel}*${p.conflictBlock}\n\nReaja ✅/❌ ou responda "sim"/"não" pra aprovar/rejeitar. Só votos de admins de comunidade contam.`,
+    proporPendingVoteOpenNoPublishWarning: (p: { baseText: string }) =>
+        `${p.baseText}\n\n⚠️ Aviso: publicação automática não está configurada ainda (falta GITHUB_RULES_TOKEN) — mesmo aprovada, alguém vai precisar publicar manualmente.`,
+    proporPendingVoteFailed: '❌ Não foi possível postar a proposta pra votação.',
+
+    // ===== Votação de proposta de regra — admin comum (tallyRuleProposalVote) =====
+    ruleProposalApprovedPublished: (p: { draftedText: string }) =>
+        `✅ Regra aprovada pela maioria e publicada em docs/regras.md: "${p.draftedText}".`,
+    ruleProposalPublishFailed: (p: { draftedText: string; punishment: string; errorDetail: string }) =>
+        `⚠️ Regra aprovada mas não foi possível publicar automaticamente — motivo: ${p.errorDetail}. Publique manualmente: "${p.draftedText}" (${p.punishment}).`,
+    ruleProposalRejected: (p: { draftedText: string }) =>
+        `❌ Proposta de regra rejeitada pela maioria: "${p.draftedText}".`,
+
     // ===== Pipeline de AdminAction (recordAdminAction / revisão / ratificação) =====
     adminActionNotice: (p: { noticeText: string }) =>
         `${p.noticeText}\n\nAdmin de comunidade: responda esta mensagem com o motivo (embasado nas regras) pra reverter.`,

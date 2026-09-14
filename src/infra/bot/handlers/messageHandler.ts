@@ -2174,16 +2174,16 @@ export class MessageHandler {
             try {
                 await this.githubRulesPublishService.publishNewRule(proposal.draftedText, proposal.punishment);
                 await this.ruleProposalService.resolve(proposal.id, 'APPROVED');
-                await this.sendLog(`✅ Regra aprovada pela maioria e publicada em docs/regras.md: "${proposal.draftedText}".`);
+                await this.sendLog(MESSAGES.ruleProposalApprovedPublished({ draftedText: proposal.draftedText }));
             } catch (err) {
                 await this.ruleProposalService.resolve(proposal.id, 'PUBLISH_FAILED');
                 logger.error({ err }, '[tallyRuleProposalVote] falha ao publicar regra aprovada');
-                await this.sendLog(`⚠️ Regra aprovada mas não foi possível publicar automaticamente — motivo: ${this.describeError(err)}. Publique manualmente: "${proposal.draftedText}" (${proposal.punishment}).`);
+                await this.sendLog(MESSAGES.ruleProposalPublishFailed({ draftedText: proposal.draftedText, punishment: proposal.punishment, errorDetail: this.describeError(err) }));
             }
         } else if (rejections >= majority) {
             this.ruleProposalVotes.delete(proposal.voteMessageId);
             await this.ruleProposalService.resolve(proposal.id, 'REJECTED');
-            await this.sendLog(`❌ Proposta de regra rejeitada pela maioria: "${proposal.draftedText}".`);
+            await this.sendLog(MESSAGES.ruleProposalRejected({ draftedText: proposal.draftedText }));
         }
         // senão, segue pendente aguardando mais votos
     }
@@ -3004,12 +3004,12 @@ export class MessageHandler {
         const jid = msg.key.remoteJid!;
         const logJid = await this.getLogJid();
         if (!logJid || jid !== logJid) {
-            await this.replySafe(jid, '❌ Esse comando só pode ser usado no grupo de administração.');
+            await this.replySafe(jid, MESSAGES.proporWrongGroup);
             return;
         }
 
         if (!this.ruleDraftingService.isConfigured()) {
-            await this.replySafe(jid, '❌ Redação de regras por IA não está configurada (falta GEMINI_API_KEY no servidor).');
+            await this.replySafe(jid, MESSAGES.proporNotConfigured);
             return;
         }
 
@@ -3017,7 +3017,7 @@ export class MessageHandler {
         const rawIdea = this.stripLeadingTokens(rawText, 2).trim(); // "$asb propor "
         if (!rawIdea) {
             const usage = botConfig.commands.list.propor?.usage ?? '$asb propor <ideia da regra>';
-            await this.replySafe(jid, `❌ Descreva a ideia da regra. Uso: ${usage}\nEx: $asb propor proibir gente pedindo doação de dinheiro nos grupos`);
+            await this.replySafe(jid, MESSAGES.proporNoIdea({ usage }));
             return;
         }
 
@@ -3026,18 +3026,18 @@ export class MessageHandler {
 
         const draft = await this.ruleDraftingService.draft(rawIdea);
         if (!draft) {
-            await this.replySafe(jid, '❌ Não foi possível redigir a proposta agora. Tente de novo em instantes.');
+            await this.replySafe(jid, MESSAGES.proporDraftFailed);
             return;
         }
 
         if (!draft.sufficient) {
             const usage = botConfig.commands.list.propor?.usage ?? '$asb propor <ideia da regra>';
-            await this.replySafe(jid, `❌ ${draft.detailFeedback}\nDetalhe melhor e tente de novo. Uso: ${usage}`);
+            await this.replySafe(jid, MESSAGES.proporInsufficientDetail({ feedback: draft.detailFeedback!, usage }));
             return;
         }
 
         const punishmentLabel = draft.punishment === 'BANIMENTO' ? 'Banimento da comunidade' : 'Advertência';
-        const conflictBlock = draft.conflictNote ? `\n⚠️ Possível conflito: ${draft.conflictNote}` : '';
+        const conflictBlock = draft.conflictNote ? MESSAGES.proporConflictNote({ conflictNote: draft.conflictNote }) : '';
         const number = senderJid.split('@')[0];
         const draftedText = draft.draftedText!;
         const punishment = draft.punishment!;
@@ -3046,7 +3046,7 @@ export class MessageHandler {
 
         if (isCommunityAdminProposer) {
             if (!this.githubRulesPublishService.isConfigured()) {
-                await this.replySafe(jid, '❌ Publicação automática não está configurada (falta GITHUB_RULES_TOKEN) — decisão monocrática exige publicar na hora, então não dá pra seguir sem isso. Publique manualmente ou peça pra configurar o token.');
+                await this.replySafe(jid, MESSAGES.proporPublishNotConfigured);
                 return;
             }
 
@@ -3055,16 +3055,16 @@ export class MessageHandler {
                 ruleNumber = await this.githubRulesPublishService.publishNewRule(draftedText, punishment);
             } catch (err) {
                 logger.error({ err }, '[proporCommand] falha ao publicar regra (decisão monocrática)');
-                await this.replySafe(jid, `❌ Não foi possível publicar agora — motivo: ${this.describeError(err)}.`);
+                await this.replySafe(jid, MESSAGES.proporPublishFailed({ errorDetail: this.describeError(err) }));
                 return;
             }
 
             await this.reactSafe(jid, msg.key, '✅');
 
-            const text = `📋 *Regra ${ruleNumber} publicada* — decisão monocrática de @${number}, já em vigor.\n\n"${draftedText}"\nPunição: *${punishmentLabel}*${conflictBlock}\n\nOutros admins de comunidade: reaja ✅ manter, ❌ reverter, 🔧 ajustar (ou responda "manter"/"reverter"/"ajustar"). Admin comum também pode votar, mas quem decide é a turma de admin de comunidade.`;
+            const text = MESSAGES.proporLiveVoteOpen({ ruleNumber, number, draftedText, punishmentLabel, conflictBlock });
             const sent = await this.sendLog(text, [senderJid]);
             if (!sent?.id) {
-                await this.replySafe(jid, '❌ Regra publicada, mas não foi possível abrir a votação de ratificação — abra manualmente uma discussão sobre ela no grupo de admins.');
+                await this.replySafe(jid, MESSAGES.proporLiveVoteOpenFailed);
                 return;
             }
 
@@ -3081,15 +3081,15 @@ export class MessageHandler {
         }
 
         // Admin comum: vota antes de publicar (fluxo original).
-        const text = `📋 *Proposta de nova regra* (sugerida por @${number}, redigida por IA)\n\n"${draftedText}"\nPunição: *${punishmentLabel}*${conflictBlock}\n\nReaja ✅/❌ ou responda "sim"/"não" pra aprovar/rejeitar. Só votos de admins de comunidade contam.`;
+        const text = MESSAGES.proporPendingVoteOpen({ number, draftedText, punishmentLabel, conflictBlock });
 
         if (!this.githubRulesPublishService.isConfigured()) {
-            await this.replySafe(jid, `${text}\n\n⚠️ Aviso: publicação automática não está configurada ainda (falta GITHUB_RULES_TOKEN) — mesmo aprovada, alguém vai precisar publicar manualmente.`);
+            await this.replySafe(jid, MESSAGES.proporPendingVoteOpenNoPublishWarning({ baseText: text }));
         }
 
         const sent = await this.sendLog(text, [senderJid]);
         if (!sent?.id) {
-            await this.replySafe(jid, '❌ Não foi possível postar a proposta pra votação.');
+            await this.replySafe(jid, MESSAGES.proporPendingVoteFailed);
             return;
         }
 
