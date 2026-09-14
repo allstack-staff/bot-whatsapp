@@ -1088,10 +1088,16 @@ export class MessageHandler {
         // julgar "quase não participa e ainda divulga" (agravante nas regras).
         const batch: {
             groupJid: string;
-            messages: { sender: string; text: string; participationCount: number }[];
+            messages: { sender: string; text: string; participationCount: number; recentWarnings?: string[] }[];
             extraRules: string[];
         }[] = [];
         const countCache = new Map<string, number>();
+        // Advertências recentes (qualquer grupo, mês corrente) por remetente —
+        // sinal central pro julgamento de "flood de comunidade" (ver regras.md):
+        // se já foi avisada antes pela mesma divulgação e continuou, não é mais
+        // engano pontual. Cacheado por remetente porque o mesmo sender costuma
+        // aparecer em várias mensagens/grupos no mesmo ciclo.
+        const recentWarningsCache = new Map<string, string[]>();
         // groupJid -> sender -> WAMessageKey[] das mensagens dele nesse ciclo —
         // usado só se a violação virar banimento, pra apagar as mensagens dela.
         const keysBySenderByGroup = new Map<string, Map<string, WAMessageKey[]>>();
@@ -1099,7 +1105,7 @@ export class MessageHandler {
         for (const [groupJid, messages] of pendingByGroup.entries()) {
             if (!messages.length) continue;
 
-            const enriched: { sender: string; text: string; participationCount: number }[] = [];
+            const enriched: { sender: string; text: string; participationCount: number; recentWarnings?: string[] }[] = [];
             const senderKeys = new Map<string, WAMessageKey[]>();
             for (const m of messages) {
                 const cacheKey = `${m.sender}|${groupJid}`;
@@ -1108,7 +1114,14 @@ export class MessageHandler {
                     count = await this.memberActivityService.getCount(m.sender, groupJid);
                     countCache.set(cacheKey, count);
                 }
-                enriched.push({ sender: m.sender, text: m.text, participationCount: count });
+
+                let recentWarnings = recentWarningsCache.get(m.sender);
+                if (recentWarnings === undefined) {
+                    recentWarnings = await this.warningService.getRecentReasonsAnyGroup(m.sender);
+                    recentWarningsCache.set(m.sender, recentWarnings);
+                }
+
+                enriched.push({ sender: m.sender, text: m.text, participationCount: count, recentWarnings });
 
                 if (m.messageKey) {
                     const arr = senderKeys.get(m.sender) ?? [];

@@ -32,6 +32,10 @@ Qualquer ação administrativa — `$asb ban`, `$asb advertir`, remover/promover
 - **Motivo não embasado**: a reversão **não é aplicada**, o admin recebe no privado a explicação da IA sobre o que faltou, e a ação original permanece.
 - **Fundador**: única exceção — pode embasar como qualquer outro admin, mas se preferir, a decisão dele vale mesmo que a IA não considere embasada (não entra em ratificação também). É a válvula de escape pra quando a IA erra o julgamento ou o caso é urgente demais pra esperar.
 
+## Votação em propostas
+
+Admin de comunidade é **obrigado a votar** em toda proposta submetida à votação (mudança de descrição, proposta de regra via `$asb propor`, remoção de admin, etc.) — não é opcional, é parte do cargo. Votar contra (divergência) exige **apresentar o motivo, bem elaborado** — um voto de rejeição sem justificativa não ajuda ninguém a entender o que precisa mudar na proposta.
+
 ## Conduta proibida
 
 1. **Usar o cargo pra benefício próprio ou de terceiros** — favorecer, proteger de punição, ou dar tratamento diferente a alguém por relação pessoal.

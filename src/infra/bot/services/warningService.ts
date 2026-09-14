@@ -26,6 +26,26 @@ export class WarningService {
         return prisma.warning.findMany({ where: { userJid, groupJid }, orderBy: { createdAt: 'desc' } });
     }
 
+    /**
+     * Advertências desse usuário no mês corrente, em QUALQUER grupo da
+     * comunidade (não só um) — usado pra dar à moderação por IA o histórico
+     * de repetição entre grupos (ex: já foi advertido por divulgação em outro
+     * grupo essa semana), sinal central pro julgamento de "flood de
+     * comunidade" (ver regras.md).
+     */
+    async getRecentReasonsAnyGroup(userJid: string, limit = 5): Promise<string[]> {
+        const startOfMonth = new Date();
+        startOfMonth.setDate(1);
+        startOfMonth.setHours(0, 0, 0, 0);
+
+        const warnings = await prisma.warning.findMany({
+            where: { userJid, createdAt: { gte: startOfMonth } },
+            orderBy: { createdAt: 'desc' },
+            take: limit,
+        });
+        return warnings.map((w) => w.reason);
+    }
+
     /** Remove a advertência mais recente desse usuário nesse grupo — usado ao reverter um $asb advertir. */
     async removeLast(userJid: string, groupJid: string): Promise<void> {
         const last = await prisma.warning.findFirst({ where: { userJid, groupJid }, orderBy: { createdAt: 'desc' } });

@@ -41,14 +41,15 @@ Se você é admin, veja também o [Código de Conduta dos Admins](conduta-admins
 14. **Sem golpe financeiro, esquema de pirâmide, "investimento garantido" ou promoção de criptomoeda duvidosa.** — **Banimento imediato** da comunidade.
 15. **Não se passe por admin, por outro membro, ou pela própria comunidade** (perfil falso, nome/foto copiados, etc). — **Banimento imediato** da comunidade.
 16. **Não peça nem ofereça pra fazer o trabalho de outra pessoa por completo** (prova, entrevista técnica, trabalho de faculdade) — orientar e ensinar está sempre liberado, fazer no lugar da pessoa não. — **Advertência** (reincidência ou fins claramente fraudulentos viram banimento).
+17. **Divulgação em vários grupos com intenção de flood.** Divulgar o mesmo conteúdo em vários grupos é permitido, mesmo em vários de uma vez, desde que de boa-fé — errar a mão num grupo ou outro por avaliação equivocada de relevância não é violação. Vira **flood de comunidade** quando: **(a)** a divulgação tem intenção comercial ou de ganho financeiro pra quem manda (link de afiliado/indicação com rastreamento, venda de produto/serviço, curso/mentoria/consultoria paga) — nesse caso conta como flood **mesmo que os grupos escolhidos pareçam bem direcionados ao tema**, boa-fé não isenta divulgação comercial; **(b)** os grupos escolhidos não têm nenhuma relação perceptível com o conteúdo; ou **(c)** a pessoa já foi advertida antes pela mesma divulgação e continuou de qualquer forma. — **Banimento imediato de comunidade.**
 
 ## Classificação de punição (resumo)
 
 | Punição | Quando se aplica |
 |---|---|
-| **Banimento imediato de comunidade** | Discriminação/racismo, conteúdo explícito, atos ilícitos (pirataria, exploits/malware, pedir ajuda pra cometer crime), apostas/jogos de azar, bots não autorizados, comprovadamente prejudicar alguém, doxxing/vazar dados de terceiros, golpe financeiro/pirâmide/cripto duvidosa, se passar por outra pessoa/admin/pela comunidade. Participação baixa **não** é agravante que gera banimento — divulgação é sempre remoção + advertência (abaixo), não importa quanto a pessoa participa. |
+| **Banimento imediato de comunidade** | Discriminação/racismo, conteúdo explícito, atos ilícitos (pirataria, exploits/malware, pedir ajuda pra cometer crime), apostas/jogos de azar, bots não autorizados, comprovadamente prejudicar alguém, doxxing/vazar dados de terceiros, golpe financeiro/pirâmide/cripto duvidosa, se passar por outra pessoa/admin/pela comunidade, divulgação em vários grupos com intenção de flood (regra 17 — comercial, mal direcionada, ou repetida após advertência). Participação baixa **não** é agravante que gera banimento — divulgação pontual num grupo só é sempre remoção + advertência (abaixo), não importa quanto a pessoa participa. |
 | **Advertência** (3 no mês = banimento automático escalando por reincidência) | Incomodar no privado sem autorização, pressão/cobrança na mentoria, proselitismo, pedir pra fazer o trabalho de outra pessoa por completo, desrespeito leve/pontual. |
-| **Remoção da publicação + advertência** | Divulgação fora do assunto do grupo (regra 0) e publicação fora de contexto do grupo (regra 8) — a mensagem é apagada automaticamente pelo bot, sempre junto com a advertência. |
+| **Remoção da publicação + advertência** | Divulgação fora do assunto do grupo (regra 0) e publicação fora de contexto do grupo (regra 8), quando **não** se encaixa em flood de comunidade (regra 17) — a mensagem é apagada automaticamente pelo bot, sempre junto com a advertência. |
 
 ## Sobre moderação automatizada
 

@@ -52,7 +52,7 @@ export interface ModerationViolation {
 
 export interface ModerationGroupBatch {
     groupJid: string;
-    messages: { sender: string; text: string; participationCount: number }[];
+    messages: { sender: string; text: string; participationCount: number; recentWarnings?: string[] }[];
     extraRules?: string[];
 }
 
@@ -73,8 +73,8 @@ export class AiModerationService {
      * precisa, só que numa fração do tamanho.
      */
     private dedupeMessages(
-        messages: { sender: string; text: string; participationCount: number }[],
-    ): { sender: string; text: string; participationCount: number }[] {
+        messages: { sender: string; text: string; participationCount: number; recentWarnings?: string[] }[],
+    ): { sender: string; text: string; participationCount: number; recentWarnings?: string[] }[] {
         const counts = new Map<string, number>();
         for (const m of messages) {
             const key = m.sender + '|' + m.text;
@@ -82,7 +82,7 @@ export class AiModerationService {
         }
 
         const seen = new Set<string>();
-        const result: { sender: string; text: string; participationCount: number }[] = [];
+        const result: { sender: string; text: string; participationCount: number; recentWarnings?: string[] }[] = [];
         for (const m of messages) {
             const key = m.sender + '|' + m.text;
             if (seen.has(key)) continue;
@@ -91,6 +91,7 @@ export class AiModerationService {
             result.push({
                 sender: m.sender,
                 participationCount: m.participationCount,
+                recentWarnings: m.recentWarnings,
                 text: count > 1 ? `${m.text} [repetida ${count}x]` : m.text,
             });
         }
@@ -115,7 +116,12 @@ export class AiModerationService {
         const sections = groups
             .map((g) => {
                 const numbered = this.dedupeMessages(g.messages)
-                    .map((m, i) => `${i + 1}. [${m.sender}] (participação: ${m.participationCount} msg(s) neste grupo): ${m.text.replace(/\n/g, ' ').slice(0, 500)}`)
+                    .map((m, i) => {
+                        const warningsNote = m.recentWarnings?.length
+                            ? ` (advertências este mês, em qualquer grupo: ${m.recentWarnings.map((w) => `"${w}"`).join('; ')})`
+                            : '';
+                        return `${i + 1}. [${m.sender}] (participação: ${m.participationCount} msg(s) neste grupo)${warningsNote}: ${m.text.replace(/\n/g, ' ').slice(0, 500)}`;
+                    })
                     .join('\n');
                 const extraRulesBlock = g.extraRules?.length
                     ? `Regras específicas deste grupo (além das gerais acima, aprovadas internamente):\n${g.extraRules.map((r) => `- ${r}`).join('\n')}\n\n`
@@ -126,7 +132,7 @@ export class AiModerationService {
 
         const rulesSummary = await this.communityRulesService.getRules();
 
-        const prompt = `Você é um moderador de uma comunidade de mentoria em programação no WhatsApp, responsável por vários grupos ao mesmo tempo. Regras gerais da comunidade, incluindo qual punição cada uma gera — use exatamente a classificação descrita (banimento imediato de comunidade vira action "banir_comunidade"; qualquer coisa marcada como advertência vira action "advertir"; regras que não geram punição automática, ignore):\n${rulesSummary}\n\nMensagens novas de cada grupo desde a última checagem, separadas por "=== Grupo <jid> ===" — alguns grupos também trazem regras específicas próprias (além das gerais; em caso de conflito, as gerais prevalecem). Formato de mensagem: "N. [remetente] (participação: X msg(s) neste grupo): texto" — participação é o total de mensagens que esse remetente já mandou nesse grupo, incluindo esta:\n\n${sections}\n\nPra cada violação, classifique também a "category" (uma destas, a que melhor descrever): discriminacao, conteudo_explicito, ato_ilicito, apostas, bot_nao_autorizado, prejudicou_pessoa, doxxing, golpe_financeiro, impersonation, divulgacao_fora_contexto, incomodar_privado, pressao_mentoria, proselitismo, fazer_trabalho_alheio, flood, desrespeito_grave, outro. IMPORTANTE sobre divulgação: conteúdo relevante ao tema do grupo (projeto próprio, pedido de feedback técnico, pergunta) NÃO é violação nenhuma, participação alta ou baixa — participação da pessoa nunca muda se algo é violação nem a punição, só o conteúdo em si importa.\n\nResponda APENAS com um JSON válido, sem nenhum texto antes ou depois, no formato:\n{"violations": [{"group": "<jid exatamente como no cabeçalho \\"=== Grupo ... ===\\">", "sender": "<remetente exatamente como veio entre colchetes>", "reason": "<motivo curto em português>", "action": "advertir" ou "banir_comunidade", "category": "<uma das categorias acima>"}]}\nSe nenhuma mensagem de nenhum grupo violar as regras, responda {"violations": []}.`;
+        const prompt = `Você é um moderador de uma comunidade de mentoria em programação no WhatsApp, responsável por vários grupos ao mesmo tempo. Regras gerais da comunidade, incluindo qual punição cada uma gera — use exatamente a classificação descrita (banimento imediato de comunidade vira action "banir_comunidade"; qualquer coisa marcada como advertência vira action "advertir"; regras que não geram punição automática, ignore):\n${rulesSummary}\n\nMensagens novas de cada grupo desde a última checagem, separadas por "=== Grupo <jid> ===" — alguns grupos também trazem regras específicas próprias (além das gerais; em caso de conflito, as gerais prevalecem). Formato de mensagem: "N. [remetente] (participação: X msg(s) neste grupo) (advertências este mês: ...): texto" — participação é o total de mensagens que esse remetente já mandou nesse grupo, incluindo esta; as advertências (quando aparecem) são de QUALQUER grupo da comunidade nesse mês, não só deste.\n\nIMPORTANTE sobre flood de comunidade (mesma pessoa divulgando em vários grupos deste lote — repare no mesmo remetente aparecendo em mais de uma seção "=== Grupo ... ==="): divulgação em vários grupos é permitida quando de boa-fé e a maioria dos grupos escolhidos tem alguma lógica com o conteúdo, mesmo que erre a mão em um ou outro. Vira flood de comunidade (banimento imediato) quando: (a) a divulgação tem intenção comercial ou de ganho financeiro pra quem manda (link de afiliado/indicação com rastreamento, venda de produto/serviço, curso/mentoria/consultoria paga) — nesse caso conta como flood mesmo que os grupos escolhidos pareçam bem direcionados, boa-fé não isenta divulgação comercial; ou (b) os grupos escolhidos não têm nenhuma relação perceptível com o conteúdo; ou (c) as advertências recentes mostram que essa mesma divulgação já tinha sido avisada antes e a pessoa continuou de qualquer forma.\n\nPra cada violação, classifique também a "category" (uma destas, a que melhor descrever): discriminacao, conteudo_explicito, ato_ilicito, apostas, bot_nao_autorizado, prejudicou_pessoa, doxxing, golpe_financeiro, impersonation, divulgacao_fora_contexto, incomodar_privado, pressao_mentoria, proselitismo, fazer_trabalho_alheio, flood, desrespeito_grave, outro. Flood de comunidade (critério acima) usa a categoria "flood". IMPORTANTE sobre divulgação comum (um grupo só, sem intenção comercial): conteúdo relevante ao tema do grupo (projeto próprio, pedido de feedback técnico, pergunta) NÃO é violação nenhuma, participação alta ou baixa — participação da pessoa nunca muda se algo é violação nem a punição, só o conteúdo em si importa.\n\nResponda APENAS com um JSON válido, sem nenhum texto antes ou depois, no formato:\n{"violations": [{"group": "<jid exatamente como no cabeçalho \\"=== Grupo ... ===\\">", "sender": "<remetente exatamente como veio entre colchetes>", "reason": "<motivo curto em português>", "action": "advertir" ou "banir_comunidade", "category": "<uma das categorias acima>"}]}\nSe nenhuma mensagem de nenhum grupo violar as regras, responda {"violations": []}.`;
 
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${this.apiKey}`;
         const res = await fetch(url, {
