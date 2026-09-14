@@ -2496,7 +2496,7 @@ export class MessageHandler {
         const jid = msg.key.remoteJid!;
 
         if (!jid.endsWith('@g.us')) {
-            await this.sock.sendMessage(jid, { text: '❌ Este comando só funciona em grupos.' }).catch(() => {});
+            await this.sock.sendMessage(jid, { text: MESSAGES.homeOnlyInGroup }).catch(() => {});
             return;
         }
 
@@ -2505,7 +2505,7 @@ export class MessageHandler {
             metadata = await this.sock.groupMetadata(jid);
         } catch (err) {
             logger.error({ err }, '[homeCommand] failed to fetch group metadata');
-            await this.replySafe(jid, '❌ Erro ao buscar dados do grupo. Tente novamente.');
+            await this.replySafe(jid, MESSAGES.homeMetadataError);
             return;
         }
 
@@ -2513,7 +2513,7 @@ export class MessageHandler {
         const senderParticipant = findParticipant(metadata, senderRaw);
 
         if (!isGroupAdmin(senderParticipant)) {
-            await this.replySafe(jid, '❌ Apenas admins do grupo podem registrar o grupo de admins.');
+            await this.replySafe(jid, MESSAGES.homeNotGroupAdmin);
             return;
         }
 
@@ -2525,9 +2525,9 @@ export class MessageHandler {
         if (communityJid) {
             await this.adminService.setCommunityJid(jid, communityJid);
             this.communityGroupIdsCache = undefined; // força recalcular já, sem esperar o cache expirar
-            await this.replySafe(jid, `✅ Grupo registrado como admin/log.\nID: \`${jid}\`\n🏘️ Community detectada — ações em massa (regras, foto, $asb ban comunidade, etc.) ficam restritas só aos grupos dela.`);
+            await this.replySafe(jid, MESSAGES.homeRegisteredWithCommunity({ jid }));
         } else {
-            await this.replySafe(jid, `✅ Grupo registrado como admin/log.\nID: \`${jid}\`\n⚠️ Esse grupo não está vinculado a nenhuma Community do WhatsApp — ações em massa só funcionam se \`COMMUNITY_JID\` estiver configurado manualmente no servidor.`);
+            await this.replySafe(jid, MESSAGES.homeRegisteredNoCommunity({ jid }));
         }
 
         logger.info({ groupJid: jid, communityJid }, 'Admin group registered');
@@ -2548,12 +2548,7 @@ export class MessageHandler {
         const bans = await this.banService.getBans();
         const activeBans = bans.filter((b) => !b.expiresAt || new Date(b.expiresAt) > new Date());
 
-        const text = [
-            '🤖 *Status do bot*',
-            `Número conectado: ${botNumber}`,
-            `Grupos de admin registrados: ${adminGroups.length}`,
-            `Banimentos ativos: ${activeBans.length} (histórico total: ${bans.length})`,
-        ].join('\n');
+        const text = MESSAGES.statusText({ botNumber, adminGroupCount: adminGroups.length, activeBanCount: activeBans.length, totalBanCount: bans.length });
 
         await this.replySafe(jid, text);
     }
@@ -2567,17 +2562,7 @@ export class MessageHandler {
         const jid = msg.key.remoteJid!;
         const prefix = `${botConfig.commands.prefix}${botConfig.commands.parent} `;
 
-        const text = [
-            '🤖 *Comandos principais*',
-            '',
-            `${prefix}home — registra este grupo como grupo de administração`,
-            `${prefix}ban @user [permanente|temporario|comunidade] [motivo] — bane alguém (ou responda a mensagem dela)`,
-            `${prefix}unban @user — remove o banimento (menção, reply, ou número)`,
-            `${prefix}bans — lista quem está banido`,
-            '',
-            `📖 Guia completo com todos os comandos e como o banimento funciona:`,
-            botConfig.docsUrl,
-        ].join('\n');
+        const text = MESSAGES.helpText({ prefix, docsUrl: botConfig.docsUrl });
 
         await this.replySafe(jid, text);
     }
@@ -2599,7 +2584,7 @@ export class MessageHandler {
             groups = await this.getAllGroupsCached();
         } catch (err) {
             logger.warn({ err }, '[regrasCommand] falha ao listar grupos');
-            await this.replySafe(jid, '❌ Erro ao listar os grupos. Tente novamente.');
+            await this.replySafe(jid, MESSAGES.regrasListError);
             return;
         }
 
@@ -2616,9 +2601,10 @@ export class MessageHandler {
                 continue;
             }
 
+            const rulesSuffix = MESSAGES.regrasDescriptionSuffix({ rulesUrl });
             const newDesc = currentDesc
-                ? `${currentDesc}\n\n📋 Regras: ${rulesUrl}`
-                : `📋 Regras: ${rulesUrl}`;
+                ? `${currentDesc}\n\n${rulesSuffix}`
+                : rulesSuffix;
 
             await humanBulkActionDelay();
             try {
@@ -2631,8 +2617,8 @@ export class MessageHandler {
         }
 
         await this.reactSafe(jid, msg.key, '✅');
-        await this.replySafe(jid, `✅ Link das regras aplicado em ${updated} grupo(s) (${skipped} já tinham o link).`);
-        await this.sendLog(`📋 $asb regras rodado — ${updated} grupo(s) atualizado(s), ${skipped} já tinham o link.`);
+        await this.replySafe(jid, MESSAGES.regrasConfirmPublic({ updated, skipped }));
+        await this.sendLog(MESSAGES.regrasLog({ updated, skipped }));
     }
 
     /** Acha o grupo "Avisos" que o WhatsApp cria automaticamente pra toda Community. */
@@ -2675,8 +2661,8 @@ export class MessageHandler {
 
         const senderRaw = msg.key.participant || msg.key.remoteJid!;
         const number = senderRaw.split('@')[0];
-        await this.sendSafe(senderRaw, { text: 'O grupo de Avisos só recebe publicação automática do bot. Sua mensagem foi removida — peça pra alguém rodar $asb avisar no grupo de administração.' });
-        await this.sendLog(`🔒 Mensagem manual de @${number} apagada no grupo de Avisos — só o bot publica lá.`, [senderRaw]);
+        await this.sendSafe(senderRaw, { text: MESSAGES.avisosLockDm });
+        await this.sendLog(MESSAGES.avisosLockLog({ number }), [senderRaw]);
         return true;
     }
 
@@ -2696,7 +2682,7 @@ export class MessageHandler {
             groups = await this.getAllGroupsCached();
         } catch (err) {
             logger.warn({ err }, '[gruposCommand] falha ao listar grupos');
-            await this.replySafe(jid, '❌ Erro ao listar os grupos. Tente novamente.');
+            await this.replySafe(jid, MESSAGES.gruposListError);
             return;
         }
 
@@ -2708,7 +2694,7 @@ export class MessageHandler {
         const entries = (await this.communityGroupService.getAll()).filter((e) => communityGroupIds.has(e.groupJid));
 
         if (!entries.length) {
-            await this.replySafe(jid, '❌ Nenhum grupo da comunidade encontrado ainda.');
+            await this.replySafe(jid, MESSAGES.gruposEmpty);
             return;
         }
 
@@ -2716,7 +2702,7 @@ export class MessageHandler {
         await this.reactSafe(jid, msg.key, '✅');
         await this.replySafe(
             jid,
-            `📋 *Grupos da comunidade* (${entries.length})\n${list}\n\nUse o número pra referenciar o grupo, ex: $asb responsavel ${entries[0].shortId} @admin ou $asb assumir ${entries[0].shortId}`,
+            MESSAGES.gruposList({ count: entries.length, list, exampleShortId: entries[0].shortId }),
         );
     }
 
@@ -2734,13 +2720,13 @@ export class MessageHandler {
 
         const maybeId = args[0] && /^\d+$/.test(args[0]) ? parseInt(args[0], 10) : null;
         if (maybeId === null) {
-            await this.replySafe(jid, '❌ Informe o ID do grupo (veja $asb grupos). Ex: $asb convidar 3 @pessoa (ou $asb convidar 3 5541995850310)');
+            await this.replySafe(jid, MESSAGES.convidarNoId);
             return;
         }
 
         const targetGroupJid = await this.communityGroupService.getJidByShortId(maybeId);
         if (!targetGroupJid) {
-            await this.replySafe(jid, `❌ Nenhum grupo com o ID ${maybeId}. Use $asb grupos pra ver a lista.`);
+            await this.replySafe(jid, MESSAGES.groupIdNotFound({ id: maybeId }));
             return;
         }
 
@@ -2753,12 +2739,12 @@ export class MessageHandler {
         } else if (args[1]) {
             const rawNumber = args[1].replace(/\D/g, '');
             if (rawNumber.length < 10) {
-                await this.replySafe(jid, '❌ Número inválido. Use o DDI + DDD + número. Ex: 5541995850310');
+                await this.replySafe(jid, MESSAGES.convidarInvalidNumber);
                 return;
             }
             userJid = `${rawNumber}@s.whatsapp.net`;
         } else {
-            await this.replySafe(jid, '❌ Marque a pessoa, responda a mensagem dela, ou informe o número. Ex: $asb convidar 3 @pessoa');
+            await this.replySafe(jid, MESSAGES.convidarNoTarget);
             return;
         }
 
@@ -2766,14 +2752,14 @@ export class MessageHandler {
         try {
             metadata = await this.sock.groupMetadata(targetGroupJid);
         } catch {
-            await this.replySafe(jid, '❌ Não foi possível acessar o grupo. Tente novamente.');
+            await this.replySafe(jid, MESSAGES.convidarGroupAccessError);
             return;
         }
 
         const number = userJid.split('@')[0];
 
         if (findParticipant(metadata, userJid)) {
-            await this.replySafe(jid, `❌ @${number} já está no grupo *${metadata.subject}*.`);
+            await this.replySafe(jid, MESSAGES.convidarAlreadyMember({ number, groupName: metadata.subject }));
             return;
         }
 
@@ -2786,18 +2772,18 @@ export class MessageHandler {
         }
 
         if (!inviteLink) {
-            await this.replySafe(jid, '❌ Não foi possível gerar o link de convite. Tente novamente.');
+            await this.replySafe(jid, MESSAGES.convidarLinkFailed);
             return;
         }
 
-        await this.sendSafe(userJid, { text: `Você foi convidado(a) pro grupo *${metadata.subject}* da All Stack Community.\nLink de convite: ${inviteLink}` });
+        await this.sendSafe(userJid, { text: MESSAGES.convidarDm({ groupName: metadata.subject, inviteLink }) });
 
         await this.reactSafe(jid, msg.key, '✅');
-        await this.replySafe(jid, `✅ Convite enviado por DM pra @${number} — grupo *${metadata.subject}*.`);
+        await this.replySafe(jid, MESSAGES.convidarConfirmPublic({ number, groupName: metadata.subject }));
 
         const logJid = await this.getLogJid();
         if (logJid && logJid !== jid) {
-            await this.sendLog(`✉️ @${number} recebeu convite por DM pro grupo *${metadata.subject}*.`, [userJid]);
+            await this.sendLog(MESSAGES.convidarLog({ number, groupName: metadata.subject }), [userJid]);
         }
     }
 
@@ -2826,26 +2812,26 @@ export class MessageHandler {
         const jid = msg.key.remoteJid!;
         const logJid = await this.getLogJid();
         if (!logJid || jid !== logJid) {
-            await this.replySafe(jid, '❌ Esse comando só pode ser usado no grupo de administração — o anúncio é publicado no grupo de destino, não onde você digita.');
+            await this.replySafe(jid, MESSAGES.anunciarWrongGroup);
             return;
         }
 
         const maybeId = args[0] && /^\d+$/.test(args[0]) ? parseInt(args[0], 10) : null;
         if (maybeId === null) {
-            await this.replySafe(jid, '❌ Use: $asb anunciar <id> <mensagem>\nVeja o ID do grupo com $asb grupos.\nEx: $asb anunciar 3 *Aviso importante*\nManutenção programada às 20h.');
+            await this.replySafe(jid, MESSAGES.anunciarUsage);
             return;
         }
 
         const targetGroupJid = await this.communityGroupService.getJidByShortId(maybeId);
         if (!targetGroupJid) {
-            await this.replySafe(jid, `❌ Nenhum grupo com o ID ${maybeId}. Use $asb grupos pra ver a lista.`);
+            await this.replySafe(jid, MESSAGES.groupIdNotFound({ id: maybeId }));
             return;
         }
 
         const rawText: string = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
         const announcement = this.stripLeadingTokens(rawText, 3).trim(); // "$asb anunciar <id> "
         if (!announcement) {
-            await this.replySafe(jid, '❌ Faltou a mensagem do anúncio. Use: $asb anunciar <id> <mensagem>');
+            await this.replySafe(jid, MESSAGES.anunciarNoMessage);
             return;
         }
 
@@ -2854,15 +2840,15 @@ export class MessageHandler {
             metadata = await this.sock.groupMetadata(targetGroupJid);
         } catch (err) {
             logger.warn({ err, targetGroupJid }, '[anunciarCommand] falha ao buscar metadados do grupo de destino');
-            await this.replySafe(jid, `❌ Não foi possível acessar o grupo de destino — motivo: ${this.describeError(err)}. Confira se o bot ainda está nele.`);
+            await this.replySafe(jid, MESSAGES.anunciarTargetAccessError({ errorDetail: this.describeError(err) }));
             return;
         }
 
         const allParticipantJids = metadata.participants.map((p) => p.id);
         await this.sendSafe(targetGroupJid, { text: announcement, mentions: allParticipantJids });
 
-        await this.replySafe(jid, `✅ Anúncio publicado no grupo *${metadata.subject}*.`);
-        await this.sendLog(`📣 Anúncio publicado em *${metadata.subject}* via $asb anunciar.`);
+        await this.replySafe(jid, MESSAGES.anunciarConfirmPublic({ groupName: metadata.subject }));
+        await this.sendLog(MESSAGES.anunciarLog({ groupName: metadata.subject }));
     }
 
     /**
@@ -2877,20 +2863,20 @@ export class MessageHandler {
         const jid = msg.key.remoteJid!;
         const logJid = await this.getLogJid();
         if (!logJid || jid !== logJid) {
-            await this.replySafe(jid, '❌ Esse comando só pode ser usado no grupo de administração.');
+            await this.replySafe(jid, MESSAGES.proporWrongGroup);
             return;
         }
 
         const rawText: string = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
         const announcement = this.stripLeadingTokens(rawText, 2).trim(); // "$asb avisar "
         if (!announcement) {
-            await this.replySafe(jid, '❌ Escreva a mensagem. Ex: $asb avisar Novo grupo *Java Devs* foi criado!');
+            await this.replySafe(jid, MESSAGES.avisarNoMessage);
             return;
         }
 
         const avisosJid = await this.findCommunityAnnounceGroupJid();
         if (!avisosJid) {
-            await this.replySafe(jid, '❌ Grupo de Avisos não encontrado.');
+            await this.replySafe(jid, MESSAGES.avisarNoAnnounceGroup);
             return;
         }
 
@@ -2905,8 +2891,8 @@ export class MessageHandler {
         await this.sendSafe(avisosJid, { text: announcement, mentions });
 
         await this.reactSafe(jid, msg.key, '✅');
-        await this.replySafe(jid, '✅ Aviso publicado no grupo de Avisos.');
-        await this.sendLog(`📢 Aviso publicado no grupo de Avisos via $asb avisar: "${announcement}"`);
+        await this.replySafe(jid, MESSAGES.avisarConfirmPublic);
+        await this.sendLog(MESSAGES.avisarLog({ announcement }));
     }
 
     /**

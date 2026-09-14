@@ -57,6 +57,85 @@ export const MESSAGES = {
     // ===== Compartilhada entre vários comandos que aceitam ID curto de grupo =====
     groupIdNotFound: (p: { id: number }) => `❌ Nenhum grupo com o ID ${p.id}. Use $asb grupos pra ver a lista.`,
 
+    // ===== $asb home =====
+    homeOnlyInGroup: '❌ Este comando só funciona em grupos.',
+    homeMetadataError: '❌ Erro ao buscar dados do grupo. Tente novamente.',
+    homeNotGroupAdmin: '❌ Apenas admins do grupo podem registrar o grupo de admins.',
+    homeRegisteredWithCommunity: (p: { jid: string }) =>
+        `✅ Grupo registrado como admin/log.\nID: \`${p.jid}\`\n🏘️ Community detectada — ações em massa (regras, foto, $asb ban comunidade, etc.) ficam restritas só aos grupos dela.`,
+    homeRegisteredNoCommunity: (p: { jid: string }) =>
+        `✅ Grupo registrado como admin/log.\nID: \`${p.jid}\`\n⚠️ Esse grupo não está vinculado a nenhuma Community do WhatsApp — ações em massa só funcionam se \`COMMUNITY_JID\` estiver configurado manualmente no servidor.`,
+
+    // ===== $asb status =====
+    statusText: (p: { botNumber: string; adminGroupCount: number; activeBanCount: number; totalBanCount: number }) => [
+        '🤖 *Status do bot*',
+        `Número conectado: ${p.botNumber}`,
+        `Grupos de admin registrados: ${p.adminGroupCount}`,
+        `Banimentos ativos: ${p.activeBanCount} (histórico total: ${p.totalBanCount})`,
+    ].join('\n'),
+
+    // ===== $asb ajuda =====
+    helpText: (p: { prefix: string; docsUrl: string }) => [
+        '🤖 *Comandos principais*',
+        '',
+        `${p.prefix}home — registra este grupo como grupo de administração`,
+        `${p.prefix}ban @user [permanente|temporario|comunidade] [motivo] — bane alguém (ou responda a mensagem dela)`,
+        `${p.prefix}unban @user — remove o banimento (menção, reply, ou número)`,
+        `${p.prefix}bans — lista quem está banido`,
+        '',
+        `📖 Guia completo com todos os comandos e como o banimento funciona:`,
+        p.docsUrl,
+    ].join('\n'),
+
+    // ===== $asb regras =====
+    regrasListError: '❌ Erro ao listar os grupos. Tente novamente.',
+    regrasDescriptionSuffix: (p: { rulesUrl: string }) => `📋 Regras: ${p.rulesUrl}`,
+    regrasConfirmPublic: (p: { updated: number; skipped: number }) =>
+        `✅ Link das regras aplicado em ${p.updated} grupo(s) (${p.skipped} já tinham o link).`,
+    regrasLog: (p: { updated: number; skipped: number }) =>
+        `📋 $asb regras rodado — ${p.updated} grupo(s) atualizado(s), ${p.skipped} já tinham o link.`,
+
+    // ===== Trava do grupo de Avisos (enforceAnnounceGroupLock) =====
+    avisosLockDm: 'O grupo de Avisos só recebe publicação automática do bot. Sua mensagem foi removida — peça pra alguém rodar $asb avisar no grupo de administração.',
+    avisosLockLog: (p: { number: string }) =>
+        `🔒 Mensagem manual de @${p.number} apagada no grupo de Avisos — só o bot publica lá.`,
+
+    // ===== $asb grupos =====
+    gruposListError: '❌ Erro ao listar os grupos. Tente novamente.',
+    gruposEmpty: '❌ Nenhum grupo da comunidade encontrado ainda.',
+    gruposList: (p: { count: number; list: string; exampleShortId: number }) =>
+        `📋 *Grupos da comunidade* (${p.count})\n${p.list}\n\nUse o número pra referenciar o grupo, ex: $asb responsavel ${p.exampleShortId} @admin ou $asb assumir ${p.exampleShortId}`,
+
+    // ===== $asb convidar =====
+    convidarNoId: '❌ Informe o ID do grupo (veja $asb grupos). Ex: $asb convidar 3 @pessoa (ou $asb convidar 3 5541995850310)',
+    convidarInvalidNumber: '❌ Número inválido. Use o DDI + DDD + número. Ex: 5541995850310',
+    convidarNoTarget: '❌ Marque a pessoa, responda a mensagem dela, ou informe o número. Ex: $asb convidar 3 @pessoa',
+    convidarGroupAccessError: '❌ Não foi possível acessar o grupo. Tente novamente.',
+    convidarAlreadyMember: (p: { number: string; groupName: string }) =>
+        `❌ @${p.number} já está no grupo *${p.groupName}*.`,
+    convidarLinkFailed: '❌ Não foi possível gerar o link de convite. Tente novamente.',
+    convidarDm: (p: { groupName: string; inviteLink: string }) =>
+        `Você foi convidado(a) pro grupo *${p.groupName}* da All Stack Community.\nLink de convite: ${p.inviteLink}`,
+    convidarConfirmPublic: (p: { number: string; groupName: string }) =>
+        `✅ Convite enviado por DM pra @${p.number} — grupo *${p.groupName}*.`,
+    convidarLog: (p: { number: string; groupName: string }) =>
+        `✉️ @${p.number} recebeu convite por DM pro grupo *${p.groupName}*.`,
+
+    // ===== $asb anunciar =====
+    anunciarWrongGroup: '❌ Esse comando só pode ser usado no grupo de administração — o anúncio é publicado no grupo de destino, não onde você digita.',
+    anunciarUsage: '❌ Use: $asb anunciar <id> <mensagem>\nVeja o ID do grupo com $asb grupos.\nEx: $asb anunciar 3 *Aviso importante*\nManutenção programada às 20h.',
+    anunciarNoMessage: '❌ Faltou a mensagem do anúncio. Use: $asb anunciar <id> <mensagem>',
+    anunciarTargetAccessError: (p: { errorDetail: string }) =>
+        `❌ Não foi possível acessar o grupo de destino — motivo: ${p.errorDetail}. Confira se o bot ainda está nele.`,
+    anunciarConfirmPublic: (p: { groupName: string }) => `✅ Anúncio publicado no grupo *${p.groupName}*.`,
+    anunciarLog: (p: { groupName: string }) => `📣 Anúncio publicado em *${p.groupName}* via $asb anunciar.`,
+
+    // ===== $asb avisar =====
+    avisarNoMessage: '❌ Escreva a mensagem. Ex: $asb avisar Novo grupo *Java Devs* foi criado!',
+    avisarNoAnnounceGroup: '❌ Grupo de Avisos não encontrado.',
+    avisarConfirmPublic: '✅ Aviso publicado no grupo de Avisos.',
+    avisarLog: (p: { announcement: string }) => `📢 Aviso publicado no grupo de Avisos via $asb avisar: "${p.announcement}"`,
+
     // ===== $asb assumir =====
     assumirOnlyInGroup: '❌ Este comando só funciona em grupos.',
     assumirNotInAdminGroup: '❌ Você precisa estar no grupo de administração para usar este comando.',
