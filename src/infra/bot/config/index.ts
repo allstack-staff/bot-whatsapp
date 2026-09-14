@@ -106,6 +106,10 @@ export const botConfig = {
                 description: 'Gerencia padrões de nome (prefixo/sufixo) banidos automaticamente ao entrar em qualquer grupo — só admin de comunidade',
                 usage: '$asb blacklist adicionar|remover|listar ...',
             },
+            revogar: {
+                description: 'Abre votação pra remover um admin de comunidade — aprovada, sai do grupo de admins e perde admin em todos os grupos da comunidade',
+                usage: '$asb revogar @admin [motivo]',
+            },
         },
     },
     features: {

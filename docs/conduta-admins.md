@@ -55,7 +55,7 @@ Admin de comunidade é **obrigado a votar** em toda proposta submetida à votaç
 
 - Violar qualquer item deste código de conduta, ou as [regras da comunidade](regras.html) — mesmo critério aplicado a qualquer membro, com o mesmo rigor (ou maior, dado o cargo de confiança).
 - Inatividade prolongada sem aviso, a critério dos demais admins de comunidade.
-- Maioria dos admins de comunidade vota pela remoção, discutido no grupo de admins (mesmo mecanismo usado pra aprovar mudança de descrição: votação por reação ✅/❌).
+- Maioria dos admins de comunidade vota pela remoção, discutido no grupo de admins (mesmo mecanismo usado pra aprovar mudança de descrição: votação por reação ✅/❌) — abra a votação com [`$asb revogar`](comandos.html#asb-revogar). Só depois de aprovada é que a pessoa sai do grupo de admins e perde o cargo de admin em todos os grupos da comunidade — nada muda enquanto a votação está em aberto.
 - Perder o cargo de "admin responsável por um grupo" não afeta necessariamente o de "admin de comunidade", e vice-versa — são avaliados separadamente, já que são papéis distintos (veja [Governança](governanca.html#cargos-e-responsabilidades)).
 
 ## Teste de conhecimento

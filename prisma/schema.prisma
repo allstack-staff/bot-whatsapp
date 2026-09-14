@@ -255,3 +255,24 @@ model NameBlacklistPattern {
     addedBy   String
     createdAt DateTime @default(now())
 }
+
+// Votação prévia pra remover um admin de comunidade ($asb revogar) — diferente
+// do padrão "decisão monocrática + ratificação" usado em ban/advertir/propor,
+// aqui a votação por maioria acontece ANTES de qualquer ação (conduta-admins.md:
+// "maioria dos admins de comunidade vota pela remoção"). Aprovada, a execução
+// tira a pessoa do grupo de admins e do cargo de admin em todo grupo da
+// comunidade onde ela estava.
+model AdminRemoval {
+    id            String    @id @default(cuid())
+    targetJid     String
+    requestedBy   String
+    reason        String?
+    status        String    @default("PENDING") // PENDING | APPROVED | REJECTED
+    voteMessageId String?
+    voteGroupJid  String?
+    createdAt     DateTime  @default(now())
+    resolvedAt    DateTime?
+
+    @@index([targetJid])
+    @@index([voteMessageId])
+}

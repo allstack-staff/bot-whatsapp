@@ -352,6 +352,26 @@ $asb convidar 3 @5541988887777
 ```
 → manda por DM pra @5541988887777: `Você foi convidado(a) pro grupo *Java Developers* da All Stack Community.\nLink de convite: https://chat.whatsapp.com/...` e responde no grupo de admins: `✅ Convite enviado por DM pra @5541988887777 — grupo *Java Developers*.`
 
+### `$asb revogar`
+
+Abre uma votação pra remover um admin de comunidade — diferente de `$asb ban`/`$asb advertir`, **nada é aplicado até a maioria aprovar** (segue a governança: [Código de Conduta dos Admins](conduta-admins.html#quando-um-admin-pode-perder-o-privilégio)). Roda **do grupo de administração**.
+
+```
+$asb revogar @admin [motivo]
+```
+
+- Alvo precisa já ser admin de comunidade (admin do próprio grupo de administração) — senão o comando recusa, não tem o que revogar.
+- Só admin de comunidade vota (mesmo critério do `$asb propor` e da votação de descrição); a própria pessoa alvo não vota na sua remoção.
+- Reaja ✅ (remover) ou ❌ (manter) na mensagem da votação, ou responda "sim"/"não".
+
+**Comportamento:** posta a proposta no grupo de admins com motivo e quem pediu, e reage 🗳️ no comando original. Aprovada pela maioria: a pessoa sai do grupo de admins, perde o cargo de admin em **todos** os grupos da comunidade onde era admin, e deixa de ser "admin responsável" de qualquer grupo — tudo espaçado (não é instantâneo em massa) pra não parecer uma rajada de mudanças de cargo do mesmo número. Rejeitada pela maioria: nada muda, só o aviso no grupo de admins confirmando que o cargo foi mantido. Só existe uma votação de remoção por vez para a mesma pessoa.
+
+Exemplo:
+```
+$asb revogar @5541988887777 inatividade e descumprimento reiterado das regras
+```
+→ posta no grupo de admins: `🗳️ *Proposta de remoção de admin* — @5541988887777\nPor: @[quem pediu]\nMotivo: inatividade e descumprimento reiterado das regras\n\nSe aprovada pela maioria dos admins de comunidade, a pessoa sai do grupo de admins e perde o cargo de admin em todos os grupos da comunidade.\nReaja ✅ (remover) ou ❌ (manter) — ou responda "sim"/"não".`
+
 ### Aprovação automática de mudança de descrição
 
 Isso não é um comando — é automático. Sempre que um admin edita a descrição de um grupo pelo próprio WhatsApp (fora do `$asb regras`), o bot detecta e posta a mudança (antes/depois) **no grupo de admins**, pedindo votação: **✅/❌**, ou responder "sim"/"não". Só voto de **admin de comunidade** conta — mesmo critério do `$asb propor`, não qualquer membro do grupo de admins.

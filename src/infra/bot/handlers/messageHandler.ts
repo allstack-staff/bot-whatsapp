@@ -24,6 +24,7 @@ import { GroundingService } from '../services/groundingService';
 import { GroupAlertStateService } from '../services/groupAlertStateService';
 import { NameBlacklistService } from '../services/nameBlacklistService';
 import { BotMentionAiService } from '../services/botMentionAiService';
+import { AdminRemovalService } from '../services/adminRemovalService';
 import { logger } from '../utils/logger';
 import { findParticipant, isGroupAdmin, resolvePnJid } from '../utils/jid';
 import { humanBulkActionDelay, humanReplyDelay } from '../utils/delay';
@@ -53,6 +54,7 @@ export class MessageHandler {
     private groupAlertStateService: GroupAlertStateService;
     private nameBlacklistService: NameBlacklistService;
     private botMentionAiService: BotMentionAiService;
+    private adminRemovalService: AdminRemovalService;
 
     // Rastro (em memória) dos comandos digitados pro bot e das respostas dele em
     // cada grupo, só pra viabilizar o $clear. Não precisa sobreviver a um restart.
@@ -90,6 +92,9 @@ export class MessageHandler {
     // qualquer membro do grupo de admins pode votar/opinar, mas só o voto de
     // quem é admin de comunidade conta pra maioria (isCommunityAdmin).
     private ruleRatificationVotes: Map<string, Map<string, { intent: 'manter' | 'reverter' | 'ajustar'; isCommunityAdmin: boolean }>> = new Map();
+    // Votação prévia de remoção de admin ($asb revogar) — mesmo padrão de voto
+    // por reação/texto das outras votações, mas o alvo é um AdminRemoval.
+    private adminRemovalVotes: Map<string, Map<string, 'approve' | 'reject'>> = new Map();
     // Aviso único de número par de admins de comunidade — evita repetir todo
     // ciclo enquanto a situação não mudar (ver checkGovernanceCompliance).
     private governanceOddAdminWarned = false;
@@ -130,6 +135,7 @@ export class MessageHandler {
         this.groupAlertStateService = new GroupAlertStateService();
         this.nameBlacklistService = new NameBlacklistService();
         this.botMentionAiService = new BotMentionAiService();
+        this.adminRemovalService = new AdminRemovalService();
     }
 
     private commands: Record<string, (msg: any, args: string[]) => Promise<void>> = {
@@ -154,6 +160,7 @@ export class MessageHandler {
         responsavel: (msg: any, args: string[]) => this.responsavelCommand(msg, args),
         promover: (msg: any) => this.promoverCommand(msg),
         convidar: (msg: any, args: string[]) => this.convidarCommand(msg, args),
+        revogar: (msg: any, args: string[]) => this.revogarCommand(msg, args),
     };
 
     private trackGroupMessage(jid: string | undefined, key: WAMessageKey | undefined): void {
@@ -1083,7 +1090,7 @@ export class MessageHandler {
         let communityAdminCount = 0;
         try {
             const meta = await this.sock.groupMetadata(logJid);
-            communityAdminCount = meta.participants.filter((p) => isGroupAdmin(p)).length;
+            communityAdminCount = this.getCommunityAdminCount(meta);
         } catch {
             return;
         }
@@ -1121,7 +1128,7 @@ export class MessageHandler {
         let communityAdminCount = 0;
         try {
             const meta = await this.sock.groupMetadata(logJid);
-            communityAdminCount = meta.participants.filter((p) => isGroupAdmin(p)).length;
+            communityAdminCount = this.getCommunityAdminCount(meta);
         } catch {
             return;
         }
@@ -1914,6 +1921,26 @@ export class MessageHandler {
                     this.ruleRatificationVotes.set(key.id, votes);
 
                     await this.tallyRuleRatification(liveRuleProposal, votes);
+                    continue;
+                }
+
+                const adminRemoval = await this.adminRemovalService.findPendingByVoteMessageId(key.id);
+                if (adminRemoval) {
+                    const reactorResolved = await resolvePnJid(this.sock, reactorRaw);
+                    if (reactorResolved === adminRemoval.targetJid) continue; // não vota na própria remoção
+                    if (!(await this.isAdminOfAdminGroup(reactorRaw, reactorResolved))) continue;
+
+                    const votes = this.adminRemovalVotes.get(key.id) ?? new Map<string, 'approve' | 'reject'>();
+                    if (emoji === '✅') {
+                        votes.set(reactorRaw, 'approve');
+                    } else if (emoji === '❌') {
+                        votes.set(reactorRaw, 'reject');
+                    } else {
+                        votes.delete(reactorRaw);
+                    }
+                    this.adminRemovalVotes.set(key.id, votes);
+
+                    await this.tallyAdminRemovalVote(adminRemoval, votes);
                 }
             } catch (err) {
                 logger.warn({ err }, '[handleReaction] erro processando reação de votação');
@@ -2028,6 +2055,18 @@ export class MessageHandler {
             return true;
         }
 
+        const adminRemoval = await this.adminRemovalService.findPendingByVoteMessageId(stanzaId);
+        if (adminRemoval) {
+            const intent = this.parseVoteIntent(text);
+            if (intent && senderJid !== adminRemoval.targetJid && (await this.isAdminOfAdminGroup(senderRaw, senderJid))) {
+                const votes = this.adminRemovalVotes.get(stanzaId) ?? new Map<string, 'approve' | 'reject'>();
+                votes.set(senderRaw, intent);
+                this.adminRemovalVotes.set(stanzaId, votes);
+                await this.tallyAdminRemovalVote(adminRemoval, votes);
+            }
+            return true;
+        }
+
         return false;
     }
 
@@ -2038,7 +2077,7 @@ export class MessageHandler {
         let communityAdminCount = 0;
         try {
             const meta = await this.sock.groupMetadata(logJid);
-            communityAdminCount = meta.participants.filter((p) => isGroupAdmin(p)).length;
+            communityAdminCount = this.getCommunityAdminCount(meta);
         } catch {
             return; // sem saber o total, não arrisca decidir
         }
@@ -2074,7 +2113,7 @@ export class MessageHandler {
         let communityAdminCount = 0;
         try {
             const meta = await this.sock.groupMetadata(change.voteGroupJid);
-            communityAdminCount = meta.participants.filter((p) => isGroupAdmin(p)).length;
+            communityAdminCount = this.getCommunityAdminCount(meta);
         } catch {
             return; // sem saber o total, não arrisca decidir
         }
@@ -2314,6 +2353,19 @@ export class MessageHandler {
         const botJid = this.getBotJid();
         if (!metadata || !botJid) return false;
         return isGroupAdmin(findParticipant(metadata, botJid));
+    }
+
+    /**
+     * Conta quantos admins de comunidade existem, a partir dos participantes
+     * admin do grupo de admins — sempre excluindo o bot, que costuma ser
+     * admin desse grupo pra poder gerenciá-lo, mas não é um "admin de
+     * comunidade" de verdade. Usado em toda votação por maioria (ratificação,
+     * proposta de regra, mudança de descrição) e na checagem de número ímpar.
+     */
+    private getCommunityAdminCount(meta: GroupMetadata): number {
+        const botJid = this.getBotJid();
+        const botParticipant = botJid ? findParticipant(meta, botJid) : undefined;
+        return meta.participants.filter((p) => isGroupAdmin(p) && p !== botParticipant).length;
     }
 
     // Traduz erros conhecidos (confirmados em produção) pra uma frase que faz
@@ -3067,28 +3119,40 @@ export class MessageHandler {
     }
 
     /**
-     * Marca um admin como responsável por um grupo. Sem argumento numérico,
-     * usa o grupo atual (comportamento original). Com um ID no início (veja
-     * $asb grupos), referencia outro grupo — dá pra rodar isso do grupo de admins
-     * sem precisar entrar no grupo alvo.
+     * Marca um ou mais admins como responsáveis por um ou mais grupos. Sem
+     * argumento numérico, usa o grupo atual (comportamento original). Com um
+     * ou mais IDs no início (veja $asb grupos), referencia outros grupos —
+     * dá pra rodar isso do grupo de admins sem precisar entrar nos grupos alvo.
      */
     private async responsavelCommand(msg: any, args: string[]): Promise<void> {
         if (!(await this.isAuthorized(msg))) return;
 
         const currentJid = msg.key.remoteJid!;
 
-        let targetGroupJid = currentJid;
-        const maybeId = args[0] && /^\d+$/.test(args[0]) ? parseInt(args[0], 10) : null;
-        if (maybeId !== null) {
-            const resolved = await this.communityGroupService.getJidByShortId(maybeId);
-            if (!resolved) {
-                await this.replySafe(currentJid, `❌ Nenhum grupo com o ID ${maybeId}. Use $asb grupos pra ver a lista.`);
-                return;
-            }
-            targetGroupJid = resolved;
+        // IDs curtos consecutivos no início dos argumentos viram a lista de
+        // grupos alvo — para no primeiro token que não for puramente numérico
+        // (a menção da pessoa, ex: "@5541988887777", já não bate no regex).
+        const groupShortIds: number[] = [];
+        let argIndex = 0;
+        while (args[argIndex] && /^\d+$/.test(args[argIndex])) {
+            groupShortIds.push(parseInt(args[argIndex], 10));
+            argIndex++;
         }
 
-        const metadata = await this.sock.groupMetadata(targetGroupJid);
+        let targetGroupJids: string[];
+        if (groupShortIds.length) {
+            targetGroupJids = [];
+            for (const id of groupShortIds) {
+                const resolved = await this.communityGroupService.getJidByShortId(id);
+                if (!resolved) {
+                    await this.replySafe(currentJid, `❌ Nenhum grupo com o ID ${id}. Use $asb grupos pra ver a lista.`);
+                    return;
+                }
+                targetGroupJids.push(resolved);
+            }
+        } else {
+            targetGroupJids = [currentJid];
+        }
 
         // Aceita mais de uma pessoa marcada de uma vez (um grupo pode ter
         // vários admins responsáveis — o modelo já suporta isso, só faltava
@@ -3101,50 +3165,248 @@ export class MessageHandler {
         })();
 
         if (!targetsRaw.length) {
-            await this.replySafe(currentJid, '❌ Marque a pessoa (ou várias) ou responda a mensagem dela. Ex: $asb responsavel @admin1 @admin2 (ou $asb responsavel <id> @admin a partir do grupo de admins — veja $asb grupos)');
+            await this.replySafe(currentJid, '❌ Marque a pessoa (ou várias) ou responda a mensagem dela. Ex: $asb responsavel @admin1 @admin2 (ou $asb responsavel <id1> <id2> @admin a partir do grupo de admins — veja $asb grupos)');
             return;
         }
 
-        // Só quem já é admin do grupo alvo no WhatsApp pode virar responsável —
-        // filtra em vez de aceitar qualquer marcação. Isso também é o que
-        // protege contra um "@todos" (marca-todos do WhatsApp) varrendo o
-        // grupo inteiro: cada participante comum marcado é ignorado, não vira
-        // responsável só por ter sido incluído na marcação em massa.
         const botJid = this.getBotJid();
-        const targetJids: string[] = [];
-        const skippedNumbers: string[] = [];
+        const resolvedTargets: string[] = [];
         for (const raw of targetsRaw) {
-            const resolved = await resolvePnJid(this.sock, raw, metadata);
-            if (resolved === botJid) continue;
-            const participant = findParticipant(metadata, resolved);
-            if (participant && isGroupAdmin(participant)) {
-                targetJids.push(resolved);
+            const resolved = await resolvePnJid(this.sock, raw);
+            if (resolved !== botJid) resolvedTargets.push(resolved);
+        }
+
+        if (!resolvedTargets.length) {
+            await this.replySafe(currentJid, '❌ Nenhuma pessoa válida marcada.');
+            return;
+        }
+
+        // Só quem já é admin do grupo alvo no WhatsApp pode virar responsável
+        // dele — filtra em vez de aceitar qualquer marcação. Isso também é o
+        // que protege contra um "@todos" (marca-todos do WhatsApp) varrendo o
+        // grupo inteiro: cada participante comum marcado é ignorado, não vira
+        // responsável só por ter sido incluído na marcação em massa. Checado
+        // por grupo, já que a mesma pessoa pode ser admin de um grupo alvo e
+        // não de outro.
+        const summaries: string[] = [];
+        const allAssigned = new Set<string>();
+        for (const groupJid of targetGroupJids) {
+            let metadata: GroupMetadata;
+            try {
+                metadata = await this.sock.groupMetadata(groupJid);
+            } catch (err) {
+                logger.warn({ err, groupJid }, '[responsavelCommand] falha ao buscar metadados do grupo');
+                summaries.push(`❌ Não consegui buscar os dados do grupo ${groupJid}.`);
+                continue;
+            }
+
+            const assigned: string[] = [];
+            const skipped: string[] = [];
+            for (const targetJid of resolvedTargets) {
+                const participant = findParticipant(metadata, targetJid);
+                if (participant && isGroupAdmin(participant)) {
+                    await this.adminResponsibilityService.assign(targetJid, groupJid);
+                    assigned.push(targetJid.split('@')[0]);
+                    allAssigned.add(targetJid);
+                } else {
+                    skipped.push(targetJid.split('@')[0]);
+                }
+            }
+
+            if (assigned.length) {
+                const assignedList = assigned.map((n) => `@${n}`).join(', ');
+                const skippedNote = skipped.length
+                    ? ` (ignorado(s) por não ser admin do grupo: ${skipped.map((n) => `@${n}`).join(', ')})`
+                    : '';
+                summaries.push(`*${metadata.subject}*: ${assignedList} ${assigned.length > 1 ? 'agora são responsáveis' : 'agora é responsável'}.${skippedNote}`);
             } else {
-                skippedNumbers.push(resolved.split('@')[0]);
+                summaries.push(`*${metadata.subject}*: ninguém marcado é admin desse grupo — nenhuma alteração.`);
             }
         }
 
-        if (!targetJids.length) {
-            await this.replySafe(currentJid, `❌ Nenhuma das pessoas marcadas é admin do grupo *${metadata.subject}* no WhatsApp — só quem já é admin lá pode virar responsável.`);
+        if (!allAssigned.size) {
+            await this.replySafe(currentJid, `❌ ${summaries.join('\n')}`);
             return;
         }
 
-        for (const targetJid of targetJids) {
-            await this.adminResponsibilityService.assign(targetJid, targetGroupJid);
-        }
-
-        const numbers = targetJids.map((j) => j.split('@')[0]);
-        const mentionList = numbers.map((n) => `@${n}`).join(', ');
-        const skippedNote = skippedNumbers.length
-            ? ` (ignorado(s) por não ser admin do grupo: ${skippedNumbers.map((n) => `@${n}`).join(', ')})`
-            : '';
+        const summaryText = summaries.join('\n');
         await this.reactSafe(currentJid, msg.key, '✅');
-        await this.replySafe(currentJid, `✅ ${mentionList} ${targetJids.length > 1 ? 'agora são responsáveis' : 'agora é responsável'} pelo grupo *${metadata.subject}*.${skippedNote}`);
+        await this.replySafe(currentJid, `✅ ${summaryText}`);
 
         const logJid = await this.getLogJid();
         if (logJid && logJid !== currentJid) {
-            await this.sendLog(`👤 ${mentionList} marcado(s) como responsável(is) pelo grupo *${metadata.subject}*.`, targetJids);
+            await this.sendLog(`👤 Responsável(is) atualizado(s):\n${summaryText}`, [...allAssigned]);
         }
+    }
+
+    /**
+     * Abre uma votação pra remover um admin de comunidade — segue a governança
+     * (conduta-admins.md: "maioria dos admins de comunidade vota pela remoção"),
+     * então diferente de ban/advertir/propor, aqui NADA é aplicado até a
+     * maioria aprovar. Aprovada, executeAdminRemoval faz a remoção de verdade.
+     */
+    private async revogarCommand(msg: any, args: string[]): Promise<void> {
+        if (!(await this.isAuthorized(msg))) return;
+
+        const currentJid = msg.key.remoteJid!;
+        const logJid = await this.getLogJid();
+        if (!logJid) {
+            await this.replySafe(currentJid, '❌ Nenhum grupo de admins registrado. Use $asb home no grupo de admins primeiro.');
+            return;
+        }
+
+        const { jid: targetRaw, fromQuoted } = this.getTargetJid(msg);
+        if (!targetRaw) {
+            await this.replySafe(currentJid, '❌ Marque a pessoa ou responda a mensagem dela. Ex: $asb revogar @admin motivo');
+            return;
+        }
+
+        const adminMeta = await this.sock.groupMetadata(logJid);
+        const targetJid = await resolvePnJid(this.sock, targetRaw, adminMeta);
+
+        if (targetJid === this.getBotJid()) {
+            await this.replySafe(currentJid, '❌ Não dá pra revogar o próprio bot.');
+            return;
+        }
+
+        if (!(await this.isAdminOfAdminGroup(targetRaw, targetJid))) {
+            await this.replySafe(currentJid, '❌ Essa pessoa não é admin de comunidade — nada pra revogar.');
+            return;
+        }
+
+        const existing = await this.adminRemovalService.findActivePendingForTarget(targetJid);
+        if (existing) {
+            await this.replySafe(currentJid, '❌ Já existe uma votação de remoção em andamento pra essa pessoa.');
+            return;
+        }
+
+        const mentionedJid = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid;
+        const mentionOffset = (!fromQuoted && mentionedJid?.length) ? 1 : 0;
+        const reason = args.slice(mentionOffset).join(' ') || 'Não informado';
+
+        const requestedBy = await resolvePnJid(this.sock, msg.key.participant! || msg.key.remoteJid!, adminMeta);
+        const number = targetJid.split('@')[0];
+
+        const text = [
+            `🗳️ *Proposta de remoção de admin* — @${number}`,
+            `Por: @${requestedBy.split('@')[0]}`,
+            `Motivo: ${reason}`,
+            '',
+            'Se aprovada pela maioria dos admins de comunidade, a pessoa sai do grupo de admins e perde o cargo de admin em todos os grupos da comunidade.',
+            'Reaja ✅ (remover) ou ❌ (manter) — ou responda "sim"/"não".',
+        ].join('\n');
+
+        const sent = await this.sock.sendMessage(logJid, {
+            text,
+            mentions: [targetJid, requestedBy],
+        }).catch((err) => {
+            logger.warn({ err }, '[revogarCommand] falha ao postar votação');
+            return undefined;
+        });
+
+        if (!sent?.key?.id) {
+            await this.replySafe(currentJid, '❌ Não foi possível abrir a votação. Tente novamente.');
+            return;
+        }
+        this.trackGroupMessage(logJid, sent.key);
+
+        await this.adminRemovalService.createPending({
+            targetJid,
+            requestedBy,
+            reason,
+            voteMessageId: sent.key.id,
+            voteGroupJid: logJid,
+        });
+
+        await this.reactSafe(currentJid, msg.key, '🗳️');
+        if (logJid !== currentJid) {
+            await this.replySafe(currentJid, `🗳️ Votação de remoção aberta no grupo de admins pra @${number}.`);
+        }
+    }
+
+    /** Conta os votos de remoção de admin — maioria decide antes de qualquer ação (ver revogarCommand). */
+    private async tallyAdminRemovalVote(removal: any, votes: Map<string, 'approve' | 'reject'>): Promise<void> {
+        if (!removal.voteGroupJid) return;
+
+        let communityAdminCount = 0;
+        try {
+            const meta = await this.sock.groupMetadata(removal.voteGroupJid);
+            communityAdminCount = this.getCommunityAdminCount(meta);
+        } catch {
+            return;
+        }
+        if (!communityAdminCount) return;
+
+        const majority = Math.floor(communityAdminCount / 2) + 1;
+        const approvals = [...votes.values()].filter((v) => v === 'approve').length;
+        const rejections = [...votes.values()].filter((v) => v === 'reject').length;
+
+        if (approvals >= majority) {
+            this.adminRemovalVotes.delete(removal.voteMessageId);
+            await this.adminRemovalService.resolve(removal.id, 'APPROVED');
+            await this.executeAdminRemoval(removal.targetJid);
+        } else if (rejections >= majority) {
+            this.adminRemovalVotes.delete(removal.voteMessageId);
+            await this.adminRemovalService.resolve(removal.id, 'REJECTED');
+            await this.sendLog(`✅ Remoção de @${removal.targetJid.split('@')[0]} rejeitada pela maioria — cargo de admin mantido.`);
+        }
+        // senão, segue pendente aguardando mais votos
+    }
+
+    /**
+     * Execução de verdade de uma remoção de admin aprovada — sai do grupo de
+     * admins, perde admin em todo grupo da comunidade onde estava, e limpa
+     * qualquer "admin responsável" que essa pessoa tinha. Espaça cada ação com
+     * humanBulkActionDelay, mesmo padrão de sweepCommunityBan, pra não parecer
+     * uma rajada de mudanças de cargo do mesmo número.
+     */
+    private async executeAdminRemoval(targetJid: string): Promise<void> {
+        const number = targetJid.split('@')[0];
+        const logJid = await this.getLogJid();
+
+        if (logJid) {
+            try {
+                const adminMeta = await this.sock.groupMetadata(logJid);
+                const p = findParticipant(adminMeta, targetJid);
+                if (p) {
+                    await humanBulkActionDelay();
+                    await this.sock.groupParticipantsUpdate(logJid, [p.id], 'remove').catch((err: any) => {
+                        logger.warn({ err, targetJid }, '[executeAdminRemoval] falha ao remover do grupo de admins');
+                    });
+                }
+            } catch (err) {
+                logger.warn({ err, targetJid }, '[executeAdminRemoval] falha ao buscar metadados do grupo de admins');
+            }
+        }
+
+        const allGroups = await this.getAllGroupsCached().catch((err) => {
+            logger.warn({ err }, '[executeAdminRemoval] falha ao listar grupos');
+            return {} as Record<string, GroupMetadata>;
+        });
+        const communityGroupIds = await this.getCommunityGroupIds();
+        const demotedFrom: string[] = [];
+
+        for (const [gid, meta] of Object.entries(allGroups)) {
+            if (!communityGroupIds.has(gid)) continue;
+            const p = findParticipant(meta as GroupMetadata, targetJid);
+            if (!p || !isGroupAdmin(p)) continue;
+
+            await humanBulkActionDelay();
+            await this.sock.groupParticipantsUpdate(gid, [p.id], 'demote').catch((err: any) => {
+                logger.warn({ err, gid, targetJid }, '[executeAdminRemoval] falha ao rebaixar');
+            });
+            demotedFrom.push((meta as GroupMetadata).subject || gid);
+        }
+
+        const responsibleGroups = await this.adminResponsibilityService.getGroupsFor(targetJid);
+        for (const gid of responsibleGroups) {
+            await this.adminResponsibilityService.unassign(targetJid, gid);
+        }
+
+        const demotedList = demotedFrom.length
+            ? demotedFrom.join(', ')
+            : 'nenhum outro grupo (já não era admin em mais nenhum além do de admins)';
+        await this.sendLog(`✅ @${number} removido(a) do grupo de admins e rebaixado(a) em: ${demotedList}.`);
     }
 
     /**
@@ -3710,11 +3972,7 @@ export class MessageHandler {
         let communityAdminCount = 0;
         try {
             const meta = await this.sock.groupMetadata(logJid);
-            const botJid = this.getBotJid();
-            const botParticipant = botJid ? findParticipant(meta, botJid) : undefined;
-            communityAdminCount = meta.participants.filter(
-                (p) => isGroupAdmin(p) && p !== botParticipant,
-            ).length;
+            communityAdminCount = this.getCommunityAdminCount(meta);
         } catch (err) {
             logger.warn({ err }, '[checkGovernanceCompliance] falha ao buscar metadados do grupo de admins');
             return;
