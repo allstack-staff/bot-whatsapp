@@ -867,14 +867,55 @@ export class MessageHandler {
         const communityGroupIds = await this.getCommunityGroupIds();
         const number = targetJid.split('@')[0];
 
+        // Pra grupo onde o bot não é admin, usado pra achar quem é admin de
+        // verdade lá E também está no grupo de admins (alguém com poder real
+        // de agir, não só qualquer admin de um grupo qualquer da comunidade).
+        const logJid = await this.getLogJid();
+        const adminGroupMeta = logJid ? await this.sock.groupMetadata(logJid).catch(() => undefined) : undefined;
+
         for (const [gid, meta] of Object.entries(allGroups)) {
             if (!communityGroupIds.has(gid) || gid === opts.excludeGroupJid) continue;
-            const p = findParticipant(meta as GroupMetadata, targetJid);
+            const groupMeta = meta as GroupMetadata;
+            const p = findParticipant(groupMeta, targetJid);
             if (!p) continue;
+
+            const groupLabel = groupMeta.subject || gid;
+
+            // Sem o bot ser admin aqui, nem tenta remover — cai num retry que
+            // nunca vai funcionar (a causa não se resolve sozinha, mesmo
+            // padrão de isBotAdminOfGroup usado em outros lugares). Em vez
+            // disso, acha quem pode agir de verdade e marca a pessoa.
+            if (!this.isBotAdminOfGroup(groupMeta)) {
+                const localAdmins = groupMeta.participants.filter((participant) => isGroupAdmin(participant));
+                const actionable = adminGroupMeta
+                    ? localAdmins.filter((admin) => findParticipant(adminGroupMeta, admin.id))
+                    : [];
+
+                // Um alerta de texto no grupo de admins não é uma ação de
+                // participante (não é o que dispara detecção de bot da Meta),
+                // mas ainda assim espaça — evita várias mensagens seguidas de
+                // uma vez se a pessoa estiver em vários grupos sem o bot admin.
+                await humanReplyDelay();
+
+                if (actionable.length) {
+                    const mentionList = actionable.map((a) => `@${a.id.split('@')[0]}`).join(', ');
+                    await this.sendRecurringNotice(
+                        'alerta',
+                        `@${number} está banido de comunidade e ainda está no grupo *${groupLabel}*, mas o bot não é admin lá — não consigo remover. ${mentionList}, remova manualmente.`,
+                        [targetJid, ...actionable.map((a) => a.id)],
+                    );
+                } else {
+                    await this.sendRecurringNotice(
+                        'alerta',
+                        `@${number} está banido de comunidade e ainda está no grupo *${groupLabel}*, mas o bot não é admin lá e nenhum admin desse grupo está no grupo de admins pra marcar — remova manualmente.`,
+                        [targetJid],
+                    );
+                }
+                continue;
+            }
 
             await humanBulkActionDelay();
             await this.sock.groupParticipantsUpdate(gid, [p.id], 'remove').catch(async (err: any) => {
-                const groupLabel = (meta as GroupMetadata).subject || gid;
                 await this.sendRetryableLog(
                     `⚠️ @${number} está banido de comunidade mas não foi possível removê-lo(a) do grupo *${groupLabel}* automaticamente — motivo: ${this.describeError(err)}.`,
                     () => this.runRetryable(

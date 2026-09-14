@@ -70,7 +70,7 @@ $asb ban @user [permanente|temporario|comunidade] [duracao] [motivo]
 - Motivo é opcional (todas as palavras depois do tipo/duração) — padrão "Não informado". Não precisa de aspas pra motivo com várias palavras.
 - Não é possível banir um admin do grupo.
 
-**Comportamento:** reage ✅ na mensagem do comando, responde com o resumo do banimento (incluindo quando expira, se for `temporario`) **no grupo onde rodou**, e manda uma cópia da mesma mensagem pro **grupo de admins**. Se o tipo for `comunidade`, remove a pessoa de todos os grupos que o bot administra (com pausa entre cada remoção).
+**Comportamento:** reage ✅ na mensagem do comando, responde com o resumo do banimento (incluindo quando expira, se for `temporario`) **no grupo onde rodou**, e manda uma cópia da mesma mensagem pro **grupo de admins**. Se o tipo for `comunidade`, remove a pessoa de todos os grupos que o bot administra (com pausa entre cada remoção). Num grupo da comunidade onde o bot **não** é admin e a pessoa ainda está: o bot não tenta remover (ia falhar sempre) — em vez disso, cruza quem é admin *daquele grupo* no WhatsApp com quem também está no grupo de admins, e marca essa pessoa no grupo de admins pra remover manualmente. Sem ninguém nessa interseção, avisa mesmo assim, sem marcar ninguém específico.
 
 Exemplos:
 ```
