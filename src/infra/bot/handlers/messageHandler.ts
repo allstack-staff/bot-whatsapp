@@ -3672,7 +3672,11 @@ export class MessageHandler {
         let communityAdminCount = 0;
         try {
             const meta = await this.sock.groupMetadata(logJid);
-            communityAdminCount = meta.participants.filter((p) => isGroupAdmin(p)).length;
+            const botJid = this.getBotJid();
+            const botParticipant = botJid ? findParticipant(meta, botJid) : undefined;
+            communityAdminCount = meta.participants.filter(
+                (p) => isGroupAdmin(p) && p !== botParticipant,
+            ).length;
         } catch (err) {
             logger.warn({ err }, '[checkGovernanceCompliance] falha ao buscar metadados do grupo de admins');
             return;
@@ -3712,15 +3716,10 @@ export class MessageHandler {
         }
 
         const communityGroupIds = await this.getCommunityGroupIds();
-        const logJid = await this.getLogJid();
-        let mentions: string[] | undefined;
-        if (logJid) {
-            try {
-                const meta = await this.sock.groupMetadata(logJid);
-                mentions = meta.participants.map((p) => p.id);
-            } catch { /* segue sem marcar ninguém */ }
-        }
 
+        // Manda no máximo um alerta por ciclo (não um por grupo pendente) —
+        // vários grupos sem responsável ao mesmo tempo não devem virar uma
+        // rajada de mensagens seguidas no grupo de admins.
         for (const [gid, meta] of Object.entries(groups)) {
             if (!communityGroupIds.has(gid)) continue;
 
@@ -3734,12 +3733,22 @@ export class MessageHandler {
             );
             if (!shouldSend) continue;
 
+            const logJid = await this.getLogJid();
+            let mentions: string[] | undefined;
+            if (logJid) {
+                try {
+                    const logMeta = await this.sock.groupMetadata(logJid);
+                    mentions = logMeta.participants.map((p) => p.id);
+                } catch { /* segue sem marcar ninguém */ }
+            }
+
             await this.sendRecurringNotice(
                 'alerta',
                 `Grupo *${(meta as GroupMetadata).subject || gid}* não tem admin responsável definido. Pedidos de entrada estão sendo aceitos automaticamente enquanto isso. Defina um com \`$asb responsavel\`.`,
                 mentions,
             );
             await this.groupAlertStateService.markSent(gid, MessageHandler.UNASSIGNED_GROUP_ALERT_TYPE);
+            return;
         }
     }
 
