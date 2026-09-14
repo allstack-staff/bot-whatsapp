@@ -16,8 +16,8 @@ Regras adicionais pra quem administra a comunidade — somam-se às [regras da c
 
 ## Responsabilidades
 
-1. **Admin de comunidade**: moderar qualquer grupo, revisar decisões da moderação por IA (reagir ❌ quando errada), votar em mudanças de descrição e em propostas de regra (`$asb propor`), participar do recrutamento e remoção de outros admins.
-2. **Admin responsável por um grupo**: ser o primeiro ponto de contato daquele grupo — avaliar pedidos de entrada roteados pelo bot, zelar pelas regras específicas do grupo (se houver), manter a descrição do grupo com o link das regras.
+1. <a id="admin-de-comunidade"></a>**Admin de comunidade**: moderar qualquer grupo, revisar decisões da moderação por IA (reagir ❌ quando errada), votar em mudanças de descrição e em propostas de regra (`$asb propor`), participar do recrutamento e remoção de outros admins.
+2. <a id="admin-comum"></a>**Admin responsável por um grupo** (admin comum): ser o primeiro ponto de contato daquele grupo — avaliar pedidos de entrada roteados pelo bot, zelar pelas regras específicas do grupo (se houver), manter a descrição do grupo com o link das regras.
 3. Todo admin, independente do papel: conhecer as regras da comunidade e, se responsável por um grupo, as regras específicas dele. Usar `$asb ajuda` ou esta documentação sempre que precisar confirmar algo antes de agir.
 
 ## Número de admins de comunidade
