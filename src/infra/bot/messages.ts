@@ -335,6 +335,12 @@ export const MESSAGES = {
     adminActionOverturned: (p: { description: string }) =>
         `❌ Decisão derrubada pela maioria dos admins de comunidade — "${p.description}" volta a valer.`,
 
+    // ===== Proposta de registrar remoção manual como banimento (proposeManualBanRegistration) =====
+    manualBanProposal: (p: { number: string; groupName: string }) =>
+        `💡 @${p.number} foi removido(a) manualmente pelo WhatsApp em *${p.groupName}* — isso sozinho não impede a pessoa de voltar, porque não ficou registrado como banimento. Quer que eu registre oficialmente (temporário, 7 dias, válido só nesse grupo)? Responda esta mensagem com o motivo pra confirmar.`,
+    manualBanRegisteredLog: (p: { number: string; groupName: string; reason: string }) =>
+        `✅ @${p.number} registrado(a) como banido(a) (temporário, 7 dias, válido só em *${p.groupName}*) — Motivo: ${p.reason}`,
+
     // ===== Ratificação de regra publicada ($asb propor, admin de comunidade) =====
     ruleRatified: (p: { ruleNumber: number; draftedText: string }) =>
         `✅ Regra ${p.ruleNumber} ratificada pela maioria dos admins de comunidade — mantida: "${p.draftedText}".`,

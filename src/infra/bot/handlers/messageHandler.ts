@@ -98,6 +98,11 @@ export class MessageHandler {
     // Votação prévia de remoção de admin ($asb revogar) — mesmo padrão de voto
     // por reação/texto das outras votações, mas o alvo é um AdminRemoval.
     private adminRemovalVotes: Map<string, Map<string, 'approve' | 'reject'>> = new Map();
+    // Proposta de registrar como banimento de verdade uma remoção manual
+    // (fora do bot) — ver proposeManualBanRegistration/recordHumanAdminAction.
+    // Em memória de propósito: perder isso num restart só significa que a
+    // proposta não é mais respondível, o admin ainda pode rodar $asb ban.
+    private pendingManualBanProposals: Map<string, { targetJid: string; groupJid: string; groupLabel: string }> = new Map();
     // Aviso único de número par de admins de comunidade — evita repetir todo
     // ciclo enquanto a situação não mudar (ver checkGovernanceCompliance).
     private governanceOddAdminWarned = false;
@@ -478,9 +483,33 @@ export class MessageHandler {
                     noticeText: `👤 @${authorNumber} ${verbMap[action]} @${number} em *${groupLabel}* — ação direta pelo WhatsApp, fora do bot.`,
                     mentions: [authorResolved, targetJid],
                 });
+
+                if (action === 'remove') {
+                    await this.proposeManualBanRegistration(targetJid, groupJid, groupLabel);
+                }
             } catch (err) {
                 logger.warn({ err, participant, action }, '[recordHumanAdminAction] falha ao registrar ação administrativa');
             }
+        }
+    }
+
+    /**
+     * Remover alguém direto pelo WhatsApp não cria banimento nenhum — a
+     * pessoa pode voltar a qualquer momento, porque não fica "na memória" do
+     * bot (nada bloqueia reentrada, nem a moderação sistemática por IA some
+     * de aviso). Em vez de só deixar isso implícito, propõe ativamente
+     * registrar como banimento de verdade e pede confirmação por texto (o
+     * motivo da confirmação já vira o motivo do banimento). Silêncio = não
+     * registra nada, sem repetir a proposta.
+     */
+    private async proposeManualBanRegistration(targetJid: string, groupJid: string, groupLabel: string): Promise<void> {
+        const existing = await this.banService.getActiveBan(targetJid, groupJid);
+        if (existing) return; // já banido nesse grupo (ex: $asb ban rodado logo depois) — nada a propor
+
+        const number = targetJid.split('@')[0];
+        const key = await this.sendLog(MESSAGES.manualBanProposal({ number, groupName: groupLabel }), [targetJid]);
+        if (key?.id) {
+            this.pendingManualBanProposals.set(key.id, { targetJid, groupJid, groupLabel });
         }
     }
 
@@ -2070,6 +2099,24 @@ export class MessageHandler {
      * que não é conteúdo de membro, não deve ir pra fila de moderação).
      */
     private async handleTextVoteReply(stanzaId: string, text: string, senderRaw: string, senderJid: string): Promise<boolean> {
+        const manualBanProposal = this.pendingManualBanProposals.get(stanzaId);
+        if (manualBanProposal) {
+            if (text.trim() && (await this.isMemberOfAdminGroup(senderRaw, senderJid))) {
+                this.pendingManualBanProposals.delete(stanzaId);
+                const { targetJid, groupJid, groupLabel } = manualBanProposal;
+                await this.banService.ban({
+                    userJid: targetJid,
+                    groupJid,
+                    banType: 'TEMPORARIO' as any,
+                    reason: text.trim(),
+                    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                    bannedBy: senderJid,
+                });
+                await this.sendLog(MESSAGES.manualBanRegisteredLog({ number: targetJid.split('@')[0], groupName: groupLabel, reason: text.trim() }), [targetJid]);
+            }
+            return true;
+        }
+
         const retry = this.retryableActions.get(stanzaId);
         if (retry) {
             if (this.isRetryIntent(text) && (await this.isMemberOfAdminGroup(senderRaw, senderJid))) {
