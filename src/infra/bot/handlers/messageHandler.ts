@@ -2699,7 +2699,22 @@ export class MessageHandler {
             return;
         }
 
-        const list = entries.map((e) => `${e.shortId}. ${e.subject || e.groupJid}`).join('\n');
+        // Negrito + responsável junto do nome — dá pra ver o estado de todo
+        // mundo numa passada só, sem precisar rodar $asb responsavel de novo
+        // pra cada grupo só pra conferir.
+        const lines: string[] = [];
+        for (const e of entries) {
+            const responsibleAdmins = await this.adminResponsibilityService.getResponsibleAdmins(e.groupJid);
+            const name = e.subject || e.groupJid;
+            lines.push(MESSAGES.gruposLine({
+                shortId: e.shortId,
+                name,
+                hasResponsible: responsibleAdmins.length > 0,
+                responsibleNumbers: responsibleAdmins.map((a) => a.split('@')[0]),
+            }));
+        }
+        const list = lines.join('\n');
+
         await this.reactSafe(jid, msg.key, '✅');
         await this.replySafe(
             jid,
@@ -3188,32 +3203,15 @@ export class MessageHandler {
     private async responsavelCommand(msg: any, args: string[]): Promise<void> {
         if (!(await this.isAuthorized(msg))) return;
 
+        if (args[0]?.toLowerCase() === 'remover') {
+            await this.responsavelRemoverCommand(msg, args.slice(1));
+            return;
+        }
+
         const currentJid = msg.key.remoteJid!;
 
-        // IDs curtos consecutivos no início dos argumentos viram a lista de
-        // grupos alvo — para no primeiro token que não for puramente numérico
-        // (a menção da pessoa, ex: "@5541988887777", já não bate no regex).
-        const groupShortIds: number[] = [];
-        let argIndex = 0;
-        while (args[argIndex] && /^\d+$/.test(args[argIndex])) {
-            groupShortIds.push(parseInt(args[argIndex], 10));
-            argIndex++;
-        }
-
-        let targetGroupJids: string[];
-        if (groupShortIds.length) {
-            targetGroupJids = [];
-            for (const id of groupShortIds) {
-                const resolved = await this.communityGroupService.getJidByShortId(id);
-                if (!resolved) {
-                    await this.replySafe(currentJid, MESSAGES.groupIdNotFound({ id }));
-                    return;
-                }
-                targetGroupJids.push(resolved);
-            }
-        } else {
-            targetGroupJids = [currentJid];
-        }
+        const targetGroupJids = await this.resolveLeadingGroupShortIds(args, currentJid);
+        if (!targetGroupJids) return;
 
         // Aceita mais de uma pessoa marcada de uma vez (um grupo pode ter
         // vários admins responsáveis — o modelo já suporta isso, só faltava
@@ -3297,6 +3295,109 @@ export class MessageHandler {
         const logJid = await this.getLogJid();
         if (logJid && logJid !== currentJid) {
             await this.sendLog(MESSAGES.responsavelLog({ summaryText }), [...allAssigned]);
+        }
+    }
+
+    /**
+     * IDs curtos consecutivos no início dos argumentos viram a lista de
+     * grupos alvo — para no primeiro token que não for puramente numérico.
+     * Sem nenhum, usa o grupo atual. Já responde e retorna null em caso de
+     * ID inválido, pra quem chamou só precisar checar o retorno.
+     */
+    private async resolveLeadingGroupShortIds(args: string[], currentJid: string): Promise<string[] | null> {
+        const groupShortIds: number[] = [];
+        let argIndex = 0;
+        while (args[argIndex] && /^\d+$/.test(args[argIndex])) {
+            groupShortIds.push(parseInt(args[argIndex], 10));
+            argIndex++;
+        }
+
+        if (!groupShortIds.length) return [currentJid];
+
+        const groupJids: string[] = [];
+        for (const id of groupShortIds) {
+            const resolved = await this.communityGroupService.getJidByShortId(id);
+            if (!resolved) {
+                await this.replySafe(currentJid, MESSAGES.groupIdNotFound({ id }));
+                return null;
+            }
+            groupJids.push(resolved);
+        }
+        return groupJids;
+    }
+
+    /** `$asb responsavel remover [id...] @admin1 @admin2` — desfaz a marcação de um ou mais grupos. */
+    private async responsavelRemoverCommand(msg: any, args: string[]): Promise<void> {
+        const currentJid = msg.key.remoteJid!;
+
+        const targetGroupJids = await this.resolveLeadingGroupShortIds(args, currentJid);
+        if (!targetGroupJids) return;
+
+        const mentioned: string[] = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+        const targetsRaw = mentioned.length ? mentioned : (() => {
+            const { jid } = this.getTargetJid(msg);
+            return jid ? [jid] : [];
+        })();
+
+        if (!targetsRaw.length) {
+            await this.replySafe(currentJid, MESSAGES.responsavelNoTarget);
+            return;
+        }
+
+        const botJid = this.getBotJid();
+        const resolvedTargets: string[] = [];
+        for (const raw of targetsRaw) {
+            const resolved = await resolvePnJid(this.sock, raw);
+            if (resolved !== botJid) resolvedTargets.push(resolved);
+        }
+
+        if (!resolvedTargets.length) {
+            await this.replySafe(currentJid, MESSAGES.responsavelNoValidTarget);
+            return;
+        }
+
+        const summaries: string[] = [];
+        const allRemoved = new Set<string>();
+        for (const groupJid of targetGroupJids) {
+            let groupName = groupJid;
+            try { groupName = (await this.sock.groupMetadata(groupJid)).subject; } catch { /* usa o jid mesmo */ }
+
+            const currentlyResponsible = new Set(await this.adminResponsibilityService.getResponsibleAdmins(groupJid));
+            const removed: string[] = [];
+            const notAssigned: string[] = [];
+            for (const targetJid of resolvedTargets) {
+                if (currentlyResponsible.has(targetJid)) {
+                    await this.adminResponsibilityService.unassign(targetJid, groupJid);
+                    removed.push(targetJid.split('@')[0]);
+                    allRemoved.add(targetJid);
+                } else {
+                    notAssigned.push(targetJid.split('@')[0]);
+                }
+            }
+
+            if (removed.length) {
+                const removedList = removed.map((n) => `@${n}`).join(', ');
+                const notAssignedNote = notAssigned.length
+                    ? MESSAGES.responsavelRemoverNotAssignedNote({ notAssignedList: notAssigned.map((n) => `@${n}`).join(', ') })
+                    : '';
+                summaries.push(MESSAGES.responsavelRemoverGroupSummary({ groupName, removedList, plural: removed.length > 1, notAssignedNote }));
+            } else {
+                summaries.push(MESSAGES.responsavelRemoverGroupSummaryNone({ groupName }));
+            }
+        }
+
+        if (!allRemoved.size) {
+            await this.replySafe(currentJid, MESSAGES.responsavelFailure({ summaries: summaries.join('\n') }));
+            return;
+        }
+
+        const summaryText = summaries.join('\n');
+        await this.reactSafe(currentJid, msg.key, '✅');
+        await this.replySafe(currentJid, MESSAGES.responsavelSuccess({ summaryText }));
+
+        const logJid = await this.getLogJid();
+        if (logJid && logJid !== currentJid) {
+            await this.sendLog(MESSAGES.responsavelRemoverLog({ summaryText }), [...allRemoved]);
         }
     }
 

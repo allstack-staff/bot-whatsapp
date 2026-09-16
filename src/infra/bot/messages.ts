@@ -162,7 +162,11 @@ export const MESSAGES = {
     gruposListError: '❌ Erro ao listar os grupos. Tente novamente.',
     gruposEmpty: '❌ Nenhum grupo da comunidade encontrado ainda.',
     gruposList: (p: { count: number; list: string; exampleShortId: number }) =>
-        `📋 *Grupos da comunidade* (${p.count})\n${p.list}\n\nUse o número pra referenciar o grupo, ex: $asb responsavel ${p.exampleShortId} @admin ou $asb assumir ${p.exampleShortId}`,
+        `📋 *Grupos da comunidade* (${p.count}) — em negrito, quem já tem responsável\n${p.list}\n\nUse o número pra referenciar o grupo, ex: $asb responsavel ${p.exampleShortId} @admin ou $asb assumir ${p.exampleShortId}`,
+    gruposLine: (p: { shortId: number; name: string; hasResponsible: boolean; responsibleNumbers: string[] }) =>
+        p.hasResponsible
+            ? `${p.shortId}. *${p.name}* — responsável: ${p.responsibleNumbers.map((n) => `@${n}`).join(', ')}`
+            : `${p.shortId}. ${p.name}`,
 
     // ===== $asb convidar =====
     convidarNoId: '❌ Informe o ID do grupo (veja $asb grupos). Ex: $asb convidar 3 @pessoa (ou $asb convidar 3 5541995850310)',
@@ -226,6 +230,12 @@ export const MESSAGES = {
     responsavelFailure: (p: { summaries: string }) => `❌ ${p.summaries}`,
     responsavelSuccess: (p: { summaryText: string }) => `✅ ${p.summaryText}`,
     responsavelLog: (p: { summaryText: string }) => `👤 Responsável(is) atualizado(s):\n${p.summaryText}`,
+    responsavelRemoverNotAssignedNote: (p: { notAssignedList: string }) => ` (${p.notAssignedList} não estava(m) marcado(s) nesse grupo)`,
+    responsavelRemoverGroupSummary: (p: { groupName: string; removedList: string; plural: boolean; notAssignedNote: string }) =>
+        `*${p.groupName}*: ${p.removedList} ${p.plural ? 'não são mais responsáveis' : 'não é mais responsável'}.${p.notAssignedNote}`,
+    responsavelRemoverGroupSummaryNone: (p: { groupName: string }) =>
+        `*${p.groupName}*: ninguém marcado estava definido como responsável nesse grupo.`,
+    responsavelRemoverLog: (p: { summaryText: string }) => `👤 Responsável(is) removido(s):\n${p.summaryText}`,
 
     // ===== $asb revogar =====
     revogarNoAdminGroup: '❌ Nenhum grupo de admins registrado. Use $asb home no grupo de admins primeiro.',
