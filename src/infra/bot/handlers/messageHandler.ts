@@ -1453,6 +1453,22 @@ export class MessageHandler {
             throw err; // propaga — quem chamou (ex: $moderar) precisa saber que falhou, não fingir sucesso
         }
 
+        // Resumo técnico de todo ciclo (mesmo sem violação nenhuma) — sem isso,
+        // um caso em que a IA avaliou e não pegou nada (falso negativo) fica
+        // indistinguível de um caso em que a mensagem nunca chegou a ser
+        // avaliada. Só no grupo de debugging, não polui o grupo de admins.
+        const groupSummaries = await Promise.all(batch.map(async (b) => {
+            let groupLabel = b.groupJid;
+            try { groupLabel = (await this.sock.groupMetadata(b.groupJid)).subject; } catch { /* usa o jid mesmo */ }
+            return `${groupLabel}: ${b.messages.length} msg(s)`;
+        }));
+        await this.sendDebugLog(MESSAGES.aiModerationCycleSummaryDebug({
+            groupCount: batch.length,
+            messageCount: batch.reduce((sum, b) => sum + b.messages.length, 0),
+            violationCount: violations.length,
+            groupSummaries: groupSummaries.join('\n'),
+        })).catch(() => {});
+
         // Só consome depois de uma resposta válida (mesmo sem violações).
         for (const { groupJid } of batch) {
             await this.pendingModerationService.clearGroup(groupJid);

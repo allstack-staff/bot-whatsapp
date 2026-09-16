@@ -362,6 +362,8 @@ export const MESSAGES = {
         `⚠️ Não foi possível concluir o ciclo de moderação por IA — motivo: ${p.errorDetail}. As mensagens continuam na fila pro próximo ciclo.`,
     aiModerationCycleFailedDebug: (p: { detail: string }) =>
         `[runAiModerationCycle] evaluateBatch falhou:\n${p.detail}`,
+    aiModerationCycleSummaryDebug: (p: { groupCount: number; messageCount: number; violationCount: number; groupSummaries: string }) =>
+        `[runAiModerationCycle] ciclo concluído — ${p.groupCount} grupo(s), ${p.messageCount} mensagem(ns), ${p.violationCount} violação(ões) encontrada(s).\n${p.groupSummaries}`,
     aiRemovedPublicationNote: ' (publicação removida)',
     aiRemovedPublicationNoteNotAdmin: ' (bot não é admin desse grupo — publicação não removida)',
     aiWarningIssuedLog: (p: { number: string; groupName: string; removedNote: string; count: number; reason: string }) =>
