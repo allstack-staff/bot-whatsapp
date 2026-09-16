@@ -28,6 +28,8 @@ O número de admins de comunidade deve ser sempre **ímpar** — garante critér
 
 Qualquer ação administrativa — `$asb ban`, `$asb advertir`, remover/promover/rebaixar alguém direto pelo WhatsApp, ou rejeitar um pedido de entrada — gera um aviso no grupo de admins. Um admin de comunidade pode reverter, mas **sempre com motivo em texto, nunca só reagindo**: é esse texto que a IA avalia como embasado ou não nas regras antes de aplicar a reversão de verdade.
 
+Remoção direta pelo WhatsApp tem uma diferença importante: ela **não** registra banimento nenhum sozinha — a pessoa pode voltar livremente, porque não fica "na memória" do bot. Por isso, logo depois do aviso de revisão, o bot também propõe registrar oficialmente como banimento, pedindo confirmação por texto — veja [Proposta de registrar remoção manual como banimento](comandos.html#proposta-de-registrar-remoção-manual-como-banimento).
+
 - **Motivo embasado** (a IA concorda que se sustenta numa regra real): a reversão é aplicada na hora — é uma **decisão monocrática**, então também abre uma votação de ratificação entre os *outros* admins de comunidade (✅ ratifica, ❌ derruba). Enquanto não houver maioria nem pra um lado nem pro outro, a decisão de quem reverteu continua valendo. Maioria ❌ desfaz a reversão (a ação original volta a valer).
 - **Motivo não embasado**: a reversão **não é aplicada**, o admin recebe no privado a explicação da IA sobre o que faltou, e a ação original permanece.
 - **Fundador**: única exceção — pode embasar como qualquer outro admin, mas se preferir, a decisão dele vale mesmo que a IA não considere embasada (não entra em ratificação também). É a válvula de escape pra quando a IA erra o julgamento ou o caso é urgente demais pra esperar.

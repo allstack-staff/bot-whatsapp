@@ -237,7 +237,7 @@ $asb regras
 
 ### `$asb grupos`
 
-Lista os grupos da All Stack Community com um **ID curto e estável** (1, 2, 3...) — pra referenciar um grupo em `$asb responsavel` sem precisar colar o JID nem entrar nele. Atualiza a lista (nomes/novos grupos) toda vez que roda.
+Lista os grupos da All Stack Community com um **ID curto e estável** (1, 2, 3...) — pra referenciar um grupo em `$asb responsavel` sem precisar colar o JID nem entrar nele. Atualiza a lista (nomes/novos grupos) toda vez que roda. Grupos que já têm admin responsável definido aparecem em **negrito**, com o(s) responsável(is) listado(s) na frente — dá pra ver o estado de todos os grupos numa passada só, sem precisar checar um por um.
 
 ```
 $asb grupos
@@ -251,9 +251,9 @@ $asb grupos
 ```
 →
 ```
-📋 Grupos da comunidade (4)
+📋 Grupos da comunidade (4) — em negrito, quem já tem responsável
 1. SysAdmins
-2. DevOps
+2. *DevOps* — responsável: @5541988887777
 3. Java Developers
 4. AllStack - Web Development
 
@@ -316,6 +316,24 @@ Exemplo (do grupo de admins, referenciando pelo ID visto em `$asb grupos`):
 $asb responsavel 3 @5541988887777
 ```
 → marca a pessoa como responsável pelo grupo 3 (`Java Developers`, no exemplo acima), sem precisar sair do grupo de admins.
+
+**Sintaxe passo a passo** (pra quem estiver com dificuldade): sempre é `prefixo + flag + parâmetros`. Prefixo é sempre `$asb`. A flag aqui é `responsavel`. Os parâmetros são, nessa ordem, o(s) ID(s) de grupo (opcional) e a(s) menção(ões). Errar a ordem ou esquecer a palavra `responsavel` (ex: digitar só `$asb 3 @pessoa`) não funciona — o bot não adivinha qual flag você quis dizer.
+
+#### `$asb responsavel remover`
+
+Desfaz a marcação — o inverso do comando acima. Mesma sintaxe, só troca o que vem depois do ID:
+
+```
+$asb responsavel remover [id] @admin1 [@admin2 ...]
+```
+
+Exemplo:
+```
+$asb responsavel remover 3 @5541988887777
+```
+→ `✅ *Java Developers*: @5541988887777 não é mais responsável.`
+
+Se a pessoa marcada não estava definida como responsável naquele grupo, o comando avisa isso em vez de fingir que removeu algo.
 
 ### `$asb promover`
 
@@ -504,6 +522,10 @@ Não é um comando (é o ciclo de hora em hora, ou o disparo manual via `$asb mo
 
 **Se a chamada à IA falhar** (chave inválida, erro HTTP, etc.): o grupo de admins recebe o aviso de sempre, curto ("não foi possível concluir, motivo X"); o grupo técnico de debugging (se `DEBUG_GROUP_JID` configurado) recebe o mesmo erro com detalhe técnico completo (mensagem + stack trace) — separa o aviso que um admin lê do que serve pra investigar de verdade. Qualquer erro inesperado processando uma mensagem (não só moderação) também vai pro grupo de debugging da mesma forma.
 
+**Todo ciclo (mesmo sem violação nenhuma)** manda um resumo técnico pro grupo de debugging — quantos grupos e mensagens foram avaliados e quantas violações a IA encontrou. Existe justamente pra diferenciar "a IA avaliou e não flagrou nada" de "a mensagem nunca chegou a ser avaliada" quando alguém pergunta depois "por que isso não foi pego?" — sem esse registro, as duas situações são indistinguíveis depois do fato.
+
+**Sobre flood de comunidade (regra 17) especificamente:** intenção comercial (link de afiliado/indicação com rastreamento, "análise grátis" com link de captura, curso/consultoria paga) já conta como violação **numa única mensagem, em um grupo só** — não precisa da pessoa ter divulgado em vários grupos pra isso valer. O padrão "mesma pessoa em vários grupos" só é o critério usado quando a intenção comercial não é óbvia, mas os grupos escolhidos não têm relação com o conteúdo.
+
 ### Desfazer uma punição automática
 
 Também não é um comando (é uma reação a uma mensagem existente). Toda vez que a moderação por IA bane alguém, ou que o acúmulo de advertências dispara um banimento automático, o aviso no grupo de admins vem com a opção de desfazer:
@@ -523,6 +545,12 @@ Também não é um comando. Toda ação administrativa gera um aviso revisável 
 **Comportamento:** motivo embasado → reverte na hora e abre uma segunda votação (✅/❌ ou "sim"/"não") entre os *outros* admins de comunidade, pra ratificar ou derrubar essa decisão — enquanto não bate maioria de nenhum dos dois lados, a reversão continua valendo; maioria ❌ desfaz a reversão (a ação original volta a valer). Motivo não embasado → nada é revertido, e quem tentou recebe a explicação da IA no privado. O fundador (`FOUNDER_JID`) é a única exceção: a decisão dele vale mesmo sem embasamento aprovado, e não entra em votação de ratificação.
 
 **Enquanto essa votação de ratificação está rolando, `$asb ban`/`$asb advertir` (manual ou por IA) contra a mesma pessoa é bloqueado** — o bot recusa e pede pra votar na ratificação em vez de tomar uma ação nova. Só volta a liberar depois que a votação resolver.
+
+### Proposta de registrar remoção manual como banimento
+
+Também não é um comando. Remover alguém direto pelo WhatsApp (sem usar `$asb ban`) já gera o aviso revisável acima, mas **sozinho isso não impede a pessoa de voltar** — nada fica registrado como banimento de verdade, então não bloqueia reentrada nem entra na moderação sistemática. Logo depois desse aviso, o bot manda uma segunda mensagem perguntando se quer registrar oficialmente.
+
+**Comportamento:** responda essa segunda mensagem com o motivo (qualquer admin do grupo de administração pode confirmar, não só quem removeu) e o bot registra um banimento `temporario` de 7 dias, válido só naquele grupo, com esse motivo. Não responder = nada é registrado, e a proposta não é repetida. Se um `$asb ban` já tiver sido rodado pra essa pessoa nesse grupo antes da proposta, ela nem aparece (não tem o que propor de novo).
 
 ### Readição automática ao expirar um banimento temporário
 
