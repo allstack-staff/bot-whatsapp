@@ -3295,10 +3295,15 @@ export class MessageHandler {
             return;
         }
 
+        // Resolve contra os metadados do grupo ONDE O COMANDO FOI DIGITADO —
+        // sem isso, uma marcação em massa (@todos) resolve cada LID só pelo
+        // cache próprio do Baileys, que não necessariamente conhece todo
+        // participante ainda, e vários acabavam silenciosamente sem resolver.
+        const currentMetadataForMentions = await this.sock.groupMetadata(currentJid).catch(() => undefined);
         const botJid = this.getBotJid();
         const resolvedTargets: string[] = [];
         for (const raw of targetsRaw) {
-            const resolved = await resolvePnJid(this.sock, raw);
+            const resolved = await resolvePnJid(this.sock, raw, currentMetadataForMentions);
             if (resolved !== botJid) resolvedTargets.push(resolved);
         }
 
@@ -3411,10 +3416,14 @@ export class MessageHandler {
             return;
         }
 
+        // Mesma correção do fluxo de atribuir: resolve contra os metadados do
+        // grupo onde o comando foi digitado, senão @todos perde gente por
+        // LID sem cache.
+        const currentMetadataForMentions = await this.sock.groupMetadata(currentJid).catch(() => undefined);
         const botJid = this.getBotJid();
         const resolvedTargets: string[] = [];
         for (const raw of targetsRaw) {
-            const resolved = await resolvePnJid(this.sock, raw);
+            const resolved = await resolvePnJid(this.sock, raw, currentMetadataForMentions);
             if (resolved !== botJid) resolvedTargets.push(resolved);
         }
 
