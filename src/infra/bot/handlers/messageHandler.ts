@@ -299,7 +299,11 @@ export class MessageHandler {
                         if (mentionedResolved === this.getBotJid()) isBotMentionOrReply = true;
                     }
 
-                    if (!isBotMentionOrReply && stanzaId) {
+                    // Responder uma mensagem do bot só conta como "falar com o bot" se
+                    // não tiver marcado mais ninguém junto — do contrário é alguém
+                    // citando o alerta do bot pra chamar uma pessoa específica (ex:
+                    // "@Fulano dá uma olhada nisso"), não uma pergunta pro bot.
+                    if (!isBotMentionOrReply && stanzaId && !mentionedJid?.length) {
                         const trackedKeys = this.groupMessageLog.get(remoteJid) ?? [];
                         if (trackedKeys.some((k) => k.id === stanzaId)) isBotMentionOrReply = true;
                     }
