@@ -26,4 +26,12 @@ export class GroupAlertStateService {
             create: { groupJid, alertType, lastSentAt: new Date() },
         });
     }
+
+    /** null = nunca mandado — usado pra escolher quem avisar primeiro num rodízio justo entre vários pendentes. */
+    async getLastSentAt(groupJid: string, alertType: string): Promise<Date | null> {
+        const state = await prisma.groupAlertState.findUnique({
+            where: { groupJid_alertType: { groupJid, alertType } },
+        });
+        return state?.lastSentAt ?? null;
+    }
 }

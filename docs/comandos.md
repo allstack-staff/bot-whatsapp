@@ -566,7 +566,7 @@ Também não é um comando. Se alguém marca o bot, ou responde qualquer mensage
 
 ### Grupo sem admin responsável
 
-Também não é um comando. A cada ciclo horário, o bot confere se algum grupo da comunidade está sem `$asb responsavel` definido — se estiver, avisa (categoria alerta, marcando todo o grupo de admins) **uma vez por dia** enquanto isso persistir (não repete toda hora). Enquanto não tiver responsável, pedidos de entrada nesse grupo são **aceitos automaticamente** (sem revisão manual, já que não tem quem revisar) — a rejeição automática de quem já está banido continua funcionando normalmente, é só a parte de "esperar revisão humana" que muda.
+Também não é um comando. A cada ciclo horário, o bot confere se algum grupo da comunidade está sem `$asb responsavel` definido — se estiver, avisa (categoria alerta, marcando todo o grupo de admins) **no máximo uma vez por dia, e só de um grupo por vez**, mesmo que vários grupos estejam pendentes ao mesmo tempo (rodízio: sempre avisa primeiro quem faz mais tempo não é avisado, ou nunca foi). Enquanto não tiver responsável, pedidos de entrada nesse grupo são **aceitos automaticamente** (sem revisão manual, já que não tem quem revisar) — a rejeição automática de quem já está banido continua funcionando normalmente, é só a parte de "esperar revisão humana" que muda.
 
 **Comportamento:** o aviso de pedido pendente marcando o admin responsável (roteado via [`$asb responsavel`](#asb-responsavel)) só existe quando **há** um responsável definido — sem isso, o pedido já é aceito na hora, sem essa notificação específica.
 

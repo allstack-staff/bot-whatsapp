@@ -4248,7 +4248,24 @@ export class MessageHandler {
     private static readonly UNASSIGNED_GROUP_ALERT_TYPE = 'sem_responsavel';
     private static readonly UNASSIGNED_GROUP_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
+    // Chave sintética (não é um JID de verdade) pro cooldown GLOBAL da
+    // feature inteira — GroupAlertState aceita qualquer string como groupJid.
+    private static readonly UNASSIGNED_GROUP_GLOBAL_KEY = '__unassigned_groups_global__';
+
     async checkUnassignedGroups(): Promise<void> {
+        // Cooldown é da feature inteira, não por grupo — sem isso, ter vários
+        // grupos pendentes ao mesmo tempo virava um alerta novo a cada ciclo
+        // horário (um grupo diferente por vez, mas um atrás do outro sem
+        // parar), o que na prática é a mesma rajada que o "um por ciclo"
+        // devia evitar. Só depois que o cooldown global passar é que escolhe
+        // qual grupo avisar dessa vez.
+        const shouldSend = await this.groupAlertStateService.shouldSend(
+            MessageHandler.UNASSIGNED_GROUP_GLOBAL_KEY,
+            MessageHandler.UNASSIGNED_GROUP_ALERT_TYPE,
+            MessageHandler.UNASSIGNED_GROUP_COOLDOWN_MS,
+        );
+        if (!shouldSend) return;
+
         let groups: Record<string, GroupMetadata>;
         try {
             groups = await this.getAllGroupsCached();
@@ -4259,39 +4276,50 @@ export class MessageHandler {
 
         const communityGroupIds = await this.getCommunityGroupIds();
 
-        // Manda no máximo um alerta por ciclo (não um por grupo pendente) —
-        // vários grupos sem responsável ao mesmo tempo não devem virar uma
-        // rajada de mensagens seguidas no grupo de admins.
+        // Entre os pendentes, escolhe o que faz mais tempo não é avisado (ou
+        // nunca foi) — rodízio justo quando há vários, sem precisar avisar
+        // todos de uma vez.
+        let candidateGid: string | undefined;
+        let candidateMeta: GroupMetadata | undefined;
+        let candidateLastSentAt: Date | null | undefined;
         for (const [gid, meta] of Object.entries(groups)) {
             if (!communityGroupIds.has(gid)) continue;
 
             const responsibleAdmins = await this.adminResponsibilityService.getResponsibleAdmins(gid);
             if (responsibleAdmins.length) continue;
 
-            const shouldSend = await this.groupAlertStateService.shouldSend(
-                gid,
-                MessageHandler.UNASSIGNED_GROUP_ALERT_TYPE,
-                MessageHandler.UNASSIGNED_GROUP_COOLDOWN_MS,
-            );
-            if (!shouldSend) continue;
-
-            const logJid = await this.getLogJid();
-            let mentions: string[] | undefined;
-            if (logJid) {
-                try {
-                    const logMeta = await this.sock.groupMetadata(logJid);
-                    mentions = logMeta.participants.map((p) => p.id);
-                } catch { /* segue sem marcar ninguém */ }
+            const lastSentAt = await this.groupAlertStateService.getLastSentAt(gid, MessageHandler.UNASSIGNED_GROUP_ALERT_TYPE);
+            if (candidateLastSentAt === undefined) {
+                candidateGid = gid;
+                candidateMeta = meta as GroupMetadata;
+                candidateLastSentAt = lastSentAt;
+                continue;
             }
-
-            await this.sendRecurringNotice(
-                'alerta',
-                MESSAGES.unassignedGroupAlert({ groupName: (meta as GroupMetadata).subject || gid }),
-                mentions,
-            );
-            await this.groupAlertStateService.markSent(gid, MessageHandler.UNASSIGNED_GROUP_ALERT_TYPE);
-            return;
+            const isOlder = candidateLastSentAt !== null && (lastSentAt === null || lastSentAt < candidateLastSentAt);
+            if (isOlder) {
+                candidateGid = gid;
+                candidateMeta = meta as GroupMetadata;
+                candidateLastSentAt = lastSentAt;
+            }
         }
+        if (!candidateGid) return;
+
+        const logJid = await this.getLogJid();
+        let mentions: string[] | undefined;
+        if (logJid) {
+            try {
+                const logMeta = await this.sock.groupMetadata(logJid);
+                mentions = logMeta.participants.map((p) => p.id);
+            } catch { /* segue sem marcar ninguém */ }
+        }
+
+        await this.sendRecurringNotice(
+            'alerta',
+            MESSAGES.unassignedGroupAlert({ groupName: candidateMeta?.subject || candidateGid }),
+            mentions,
+        );
+        await this.groupAlertStateService.markSent(candidateGid, MessageHandler.UNASSIGNED_GROUP_ALERT_TYPE);
+        await this.groupAlertStateService.markSent(MessageHandler.UNASSIGNED_GROUP_GLOBAL_KEY, MessageHandler.UNASSIGNED_GROUP_ALERT_TYPE);
     }
 
     /**
